@@ -10,3 +10,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = "0.21.1"
+ndarray = { version = "0.16.0", features = ["blas"] }
+blas-src = { version = "0.10", features = ["openblas"] }
+openblas-src = { version = "0.10", features = ["cblas", "system"] }
