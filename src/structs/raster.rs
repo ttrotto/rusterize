@@ -1,13 +1,10 @@
 /*
 Structure to contain information on raster data.
-PyO3 is incompatible with generic parameters, so will write a macro.
  */
 
 use std::error::Error;
-use pyo3::prelude::*;
 use ndarray::{Array2, Array3};
 
-#[pyclass]
 pub struct Raster {
     pub xmin: f64,
     pub xmax: f64,
@@ -15,21 +12,21 @@ pub struct Raster {
     pub ymax: f64,
     pub xres: f64,
     pub yres: f64,
-    pub nlyr: usize,
-    pub dtype: String,
+    pub nrows: usize,
+    pub ncols: usize,
+    pub nlyr: usize
 }
 
-#[pymethods]
 impl Raster {
-    #[new]
     pub fn new(xmin: f64,
                xmax: f64,
                ymin: f64,
                ymax: f64,
                xres: f64,
                yres: f64,
-               nlyr: usize,
-               dtype: String) -> Self {
+               nlyr: usize) -> Self {
+        let nrows = ((ymax - ymin) / yres) as usize;
+        let ncols = ((xmax - xmin) / xres) as usize;
         Self {
             xmin,
             xmax,
@@ -37,26 +34,51 @@ impl Raster {
             ymax,
             xres,
             yres,
-            nlyr,
-            dtype,
+            nrows,
+            ncols,
+            nlyr
         }
     }
 }
 
-// enumerate possible ndarrays
-pub enum NDArray {
-    Ax2(Array2<f64>),
-    Ax3(Array3<f64>),
+// construct 2d array
+pub fn build_2d_array(raster: &Raster) -> Result<Array2<f64>, &str> {
+    let shape_y = (raster.ymax - raster.ymin).ceil() as usize;
+    let shape_x = (raster.xmax - raster.xmin).ceil() as usize;
+    Ok(Array2::<f64>::zeros((shape_y, shape_x)))
 }
 
-// build ndarray
-pub fn build_ndarray(raster: &Raster) -> Result<NDArray, Box<dyn Error>> {
-    // get array dimension
-    let shape_y =  (raster.ymax - raster.ymin).ceil() as usize;
+pub fn build_3d_array(raster: &Raster) -> Result<Array3<f64>, &str> {
+    let shape_y = (raster.ymax - raster.ymin).ceil() as usize;
     let shape_x = (raster.xmax - raster.xmin).ceil() as usize;
-    // make
-    match raster.nlyr {
-        1 => Ok(NDArray::Ax2(Array2::<f64>::zeros((shape_y, shape_x)))),
-        _ => Ok(NDArray::Ax3(Array3::<f64>::zeros((raster.nlyr, shape_y, shape_x)))),
-    }
+    Ok(Array3::<f64>::zeros((raster.nlyr, shape_y, shape_x)))
 }
+
+// // possible ndarrays
+// pub enum NDArray {
+//     A2(Array2<f64>),
+//     A3(Array3<f64>),
+// }
+//
+// impl NDArray {
+//     pub fn build_array(raster: &Raster,
+//                        dim: &str) -> Result<NDArray, Box<dyn Error>> {
+//         // get array dimension
+//         let shape_y = (raster.ymax - raster.ymin).ceil() as usize;
+//         let shape_x = (raster.xmax - raster.xmin).ceil() as usize;
+//         // make
+//         match dim {
+//             "2" => Ok(NDArray::A2(Array2::<f64>::zeros((shape_y, shape_x)))),
+//             "3" => Ok(NDArray::A3(Array3::<f64>::zeros((raster.nlyr, shape_y, shape_x)))),
+//             _ => unimplemented!("Only 2 and 3-dimensional raster are supported.")
+//         }
+//     }
+//
+//     pub fn as_mut(&mut self) -> Result<&mut dyn std::any::Any, &str> {
+//         match self {
+//             NDArray::A2(array) => Ok(array),
+//             NDArray::A3(array) => Ok(array),
+//             _ => Err("Can not mutate array. Only 2d and 3d arrays are supported.")
+//         }
+//     }
+// }
