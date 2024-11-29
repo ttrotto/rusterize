@@ -2,6 +2,7 @@
 Rasterize a single polygon
  */
 
+use ndarray::Array2;
 use crate::structs::{edge::Edge, raster::Raster, raster};
 use crate::edgelist;
 use crate::pixel_functions::PixelFn;
@@ -10,10 +11,10 @@ use crate::structs::edge::{less_by_x, less_by_ystart};
 pub fn rasterize_polygon(raster: &Raster,
                          polygon: Vec<Vec<f64>>,
                          poly_value: &f64,
-                         // array: &NDArray,
+                         ndarray: &mut Array2<f64>,
                          pxfn: &PixelFn) -> () {
-    // build array from raster object
-    let mut ndarray = raster::build_2d_array(raster).unwrap();
+    // // build array from raster object
+    // let mut ndarray = raster::build_2d_array(raster).unwrap();
 
     // build edgelist and sort
     let mut edges = edgelist::build_edges(polygon, raster).unwrap();
@@ -23,10 +24,10 @@ pub fn rasterize_polygon(raster: &Raster,
     let mut active_edges: Vec<Edge> = Vec::new();
 
     // start with first y line
-    let yline = edges.first().unwrap().ystart;
+    let mut yline = edges.first().unwrap().ystart;
 
     // init loop objects
-    let (mut counter, mut xstart, mut xend, xpix): (usize, usize, usize, usize);
+    let (mut counter, mut xstart, mut xend): (usize, usize, usize);
     xstart = 0;
 
     // rasterize loop
@@ -44,26 +45,35 @@ pub fn rasterize_polygon(raster: &Raster,
 
         // even-odd polygon fill
         counter = 0;
-        for it in &active_edges {
+        for edge in &active_edges {
             counter += 1;
-            let x: usize;
-            if it.x < 0.0 {
-                x = 0;
-            } else if it.x > raster.ncols as f64 {
-                x = raster.ncols;
+            let x = if edge.x < 0.0 {
+                0.0
+            } else if edge.x > raster.ncols as f64 {
+                raster.ncols as f64
             } else {
-                x = it.x.ceil() as usize;
-            }
-            match counter % 2 {
-                0 => xstart = x,
-                1 => {
-                    xend = x;
-                    for xpix in xstart..xend {
-                        pxfn(&mut ndarray, yline, xpix, poly_value);
-                    }
-                },
-                _ => unreachable!()
+                edge.x
+            }.ceil() as usize;
+            if counter % 2 != 0 {
+                xstart = x;
+            } else {
+                xend = x;
+                for xpix in xstart..xend {
+                    pxfn(ndarray, yline, xpix, poly_value);
+                }
             }
         }
+        yline += 1;
+
+        active_edges.retain_mut(|edge| {
+            if edge.yend <= yline {
+                // drop edges above horizontal line
+                false
+            } else {
+                // update x-position of the next intercepts of edges for the next row
+                edge.x += edge.dxdy;
+                true
+            }
+        })
     }
 }

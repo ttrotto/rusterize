@@ -2,7 +2,6 @@
 Structure to contain information on raster data.
  */
 
-use std::error::Error;
 use ndarray::{Array2, Array3};
 
 pub struct Raster {
@@ -53,32 +52,3 @@ pub fn build_3d_array(raster: &Raster) -> Result<Array3<f64>, &str> {
     let shape_x = (raster.xmax - raster.xmin).ceil() as usize;
     Ok(Array3::<f64>::zeros((raster.nlyr, shape_y, shape_x)))
 }
-
-// // possible ndarrays
-// pub enum NDArray {
-//     A2(Array2<f64>),
-//     A3(Array3<f64>),
-// }
-//
-// impl NDArray {
-//     pub fn build_array(raster: &Raster,
-//                        dim: &str) -> Result<NDArray, Box<dyn Error>> {
-//         // get array dimension
-//         let shape_y = (raster.ymax - raster.ymin).ceil() as usize;
-//         let shape_x = (raster.xmax - raster.xmin).ceil() as usize;
-//         // make
-//         match dim {
-//             "2" => Ok(NDArray::A2(Array2::<f64>::zeros((shape_y, shape_x)))),
-//             "3" => Ok(NDArray::A3(Array3::<f64>::zeros((raster.nlyr, shape_y, shape_x)))),
-//             _ => unimplemented!("Only 2 and 3-dimensional raster are supported.")
-//         }
-//     }
-//
-//     pub fn as_mut(&mut self) -> Result<&mut dyn std::any::Any, &str> {
-//         match self {
-//             NDArray::A2(array) => Ok(array),
-//             NDArray::A3(array) => Ok(array),
-//             _ => Err("Can not mutate array. Only 2d and 3d arrays are supported.")
-//         }
-//     }
-// }
