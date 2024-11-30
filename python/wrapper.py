@@ -11,8 +11,9 @@ class Rusterize:
                  gdf: gpd.GeoDataFrame,
                  field: Optional[str],
                  by: Optional[str],
-                 res: Union[int, floor],
-                 pixel_fn: str = "max"):
+                 res: Union[int, float],
+                 pixel_fn: str = "last",
+                 background: Union[int, float] = 0):
         """
         Fast geopandas rusterization into xarray.DataArray
 
@@ -22,6 +23,7 @@ class Rusterize:
             field: field to rasterize
             by: column to rasterize, assigns each unique value to a layer in the stack.
                 Mutually exclusive with field.
+            background: background value in final raster
 
         Returns:
             Rasterized value into xr.DataArray
@@ -31,6 +33,7 @@ class Rusterize:
         self.by = by
         self.res = res
         self.pixel_fn = pixel_fn
+        self.bakground = background
 
         # type checks
         if not isinstance(self.gdf, gpd.GeoDataFrame):
@@ -43,9 +46,11 @@ class Rusterize:
             raise TypeError("Must pass a valid resolution type.")
         if not isinstance(self.pixel_fn, str):
             raise TypeError("Must pass a valid string to pixel_fn.")
+        if not isinstance(self.background, (int, float)):
+            raise TypeError("Must pass a valid background type.")
 
         # value check
-        if self.res < 0:
+        if self.res <= 0:
             raise ValueError("Must pass a valid resolution value.")
         if self.pixel_fn not in ["sum", "first", "last", "min", "max", "count", "any"]:
             raise ValueError("pixel_fn must be one of sum, first, last, min, max, count, or any.")

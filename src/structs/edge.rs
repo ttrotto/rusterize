@@ -2,25 +2,27 @@
 Structure to contain information on polygon edges.
  */
 
-use std::cmp::Ordering;
 use crate::structs::raster::Raster;
+use std::cmp::Ordering;
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct Edge {
-    pub ystart: usize,  // first row intersection
-    pub yend: usize,  // last row below intersection
-    pub x: f64,  // x location of ystart
-    pub dxdy: f64,  // step
+    pub ystart: usize, // first row intersection
+    pub yend: usize,   // last row below intersection
+    pub x: f64,        // x location of ystart
+    pub dxdy: f64,     // step
 }
 
 impl Edge {
-    pub fn new(mut x0: f64,
-               y0: f64,
-               mut x1: f64,
-               y1: f64,
-               y0c: f64,
-               y1c: f64,
-               raster: &Raster) -> Self {
+    pub fn new(
+        mut x0: f64,
+        y0: f64,
+        mut x1: f64,
+        y1: f64,
+        y0c: f64,
+        y1c: f64,
+        raster: &Raster,
+    ) -> Self {
         // get matrix rows and columns from resolution
         x0 = (x0 - raster.xmin) / raster.xres - 0.5;
         x1 = (x1 - raster.xmin) / raster.xres - 0.5;
@@ -50,12 +52,10 @@ impl Edge {
 }
 
 // compare on usize Y coordinate
-pub fn less_by_ystart(edge1: &Edge,
-                      edge2: &Edge) -> Ordering {
+pub fn less_by_ystart(edge1: &Edge, edge2: &Edge) -> Ordering {
     edge1.ystart.cmp(&edge2.ystart)
 }
 // partial compare on f64 X coordinate
-pub fn less_by_x(edge1: &Edge,
-                 edge2: &Edge) -> Ordering {
-    edge1.x.partial_cmp(&edge2.x).unwrap_or(Ordering::Equal)  // treat NaN as equal for sorting
+pub fn less_by_x(edge1: &Edge, edge2: &Edge) -> Ordering {
+    edge1.x.partial_cmp(&edge2.x).unwrap_or(Ordering::Equal) // treat NaN as equal for sorting
 }

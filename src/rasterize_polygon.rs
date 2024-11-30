@@ -2,17 +2,19 @@
 Rasterize a single polygon
  */
 
-use ndarray::Array2;
-use crate::structs::{edge::Edge, raster::Raster, raster};
 use crate::edgelist;
 use crate::pixel_functions::PixelFn;
 use crate::structs::edge::{less_by_x, less_by_ystart};
+use crate::structs::{edge::Edge, raster, raster::Raster};
+use ndarray::Array2;
 
-pub fn rasterize_polygon(raster: &Raster,
-                         polygon: Vec<Vec<f64>>,
-                         poly_value: &f64,
-                         ndarray: &mut Array2<f64>,
-                         pxfn: &PixelFn) -> () {
+pub fn rasterize_polygon(
+    raster: &Raster,
+    polygon: Vec<Vec<f64>>,
+    poly_value: &f64,
+    ndarray: &mut Array2<f64>,
+    pxfn: &PixelFn,
+) -> () {
     // // build array from raster object
     // let mut ndarray = raster::build_2d_array(raster).unwrap();
 
@@ -31,14 +33,18 @@ pub fn rasterize_polygon(raster: &Raster,
     xstart = 0;
 
     // rasterize loop
-    while yline < raster.nrows &&
-        !(active_edges.is_empty() && edges.is_empty()) {
+    while yline < raster.nrows && !(active_edges.is_empty() && edges.is_empty()) {
         // transfer current edges ref to active edges
+        // active_edges.extend(
+        //     edges
+        //         .iter()
+        //         .filter(|edge| edge.ystart <= yline)
+        //         .cloned()
+        // );
         active_edges.extend(
             edges
-                .iter()
-                .filter(|edge| edge.ystart <= yline)
-                .cloned()
+                .extract_if(|edge| edge.ystart <= yline) // experimental
+                .collect::<Vec<Edge>>(),
         );
         // sort active edges by x
         active_edges.sort_by(less_by_x);
@@ -53,7 +59,8 @@ pub fn rasterize_polygon(raster: &Raster,
                 raster.ncols as f64
             } else {
                 edge.x
-            }.ceil() as usize;
+            }
+            .ceil() as usize;
             if counter % 2 != 0 {
                 xstart = x;
             } else {

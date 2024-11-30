@@ -13,17 +13,19 @@ pub struct Raster {
     pub yres: f64,
     pub nrows: usize,
     pub ncols: usize,
-    pub nlyr: usize
+    pub nlyr: usize,
 }
 
 impl Raster {
-    pub fn new(xmin: f64,
-               xmax: f64,
-               ymin: f64,
-               ymax: f64,
-               xres: f64,
-               yres: f64,
-               nlyr: usize) -> Self {
+    pub fn new(
+        xmin: f64,
+        xmax: f64,
+        ymin: f64,
+        ymax: f64,
+        xres: f64,
+        yres: f64,
+        nlyr: usize,
+    ) -> Self {
         let nrows = ((ymax - ymin) / yres) as usize;
         let ncols = ((xmax - xmin) / xres) as usize;
         Self {
@@ -35,7 +37,7 @@ impl Raster {
             yres,
             nrows,
             ncols,
-            nlyr
+            nlyr,
         }
     }
 }
