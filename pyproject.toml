@@ -11,5 +11,8 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dynamic = ["version"]
+
 [tool.maturin]
+python-source = "python"
+module-name = "rusterize._lib_name"
 features = ["pyo3/extension-module"]

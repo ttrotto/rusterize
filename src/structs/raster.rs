@@ -26,8 +26,8 @@ impl Raster {
         yres: f64,
         nlyr: usize,
     ) -> Self {
-        let nrows = ((ymax - ymin) / yres) as usize;
-        let ncols = ((xmax - xmin) / xres) as usize;
+        let nrows = ((ymax - ymin) / yres).ceil() as usize;
+        let ncols = ((xmax - xmin) / xres).ceil() as usize;
         Self {
             xmin,
             xmax,
@@ -40,17 +40,14 @@ impl Raster {
             nlyr,
         }
     }
-}
 
-// construct 2d array
-pub fn build_2d_array(raster: &Raster) -> Result<Array2<f64>, &str> {
-    let shape_y = (raster.ymax - raster.ymin).ceil() as usize;
-    let shape_x = (raster.xmax - raster.xmin).ceil() as usize;
-    Ok(Array2::<f64>::zeros((shape_y, shape_x)))
-}
+    // build 2d array
+    pub fn build_2d_raster(&self) -> Array2<f64> {
+        Array2::<f64>::zeros((self.nrows, self.ncols))
+    }
 
-pub fn build_3d_array(raster: &Raster) -> Result<Array3<f64>, &str> {
-    let shape_y = (raster.ymax - raster.ymin).ceil() as usize;
-    let shape_x = (raster.xmax - raster.xmin).ceil() as usize;
-    Ok(Array3::<f64>::zeros((raster.nlyr, shape_y, shape_x)))
+    // build 3d array
+    pub fn build_3d_raster(&self) -> Array3<f64> {
+        Array3::<f64>::zeros((self.nlyr, self.nrows, self.ncols))
+    }
 }

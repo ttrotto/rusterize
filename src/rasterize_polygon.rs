@@ -5,19 +5,16 @@ Rasterize a single polygon
 use crate::edgelist;
 use crate::pixel_functions::PixelFn;
 use crate::structs::edge::{less_by_x, less_by_ystart};
-use crate::structs::{edge::Edge, raster, raster::Raster};
+use crate::structs::{edge::Edge, raster::Raster};
 use ndarray::Array2;
 
 pub fn rasterize_polygon(
     raster: &Raster,
-    polygon: Vec<Vec<f64>>,
+    polygon: Vec<f64>,
     poly_value: &f64,
     ndarray: &mut Array2<f64>,
     pxfn: &PixelFn,
 ) -> () {
-    // // build array from raster object
-    // let mut ndarray = raster::build_2d_array(raster).unwrap();
-
     // build edgelist and sort
     let mut edges = edgelist::build_edges(polygon, raster).unwrap();
     edges.sort_by(less_by_ystart);

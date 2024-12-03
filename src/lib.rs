@@ -9,7 +9,6 @@ mod edgelist;
 mod pixel_functions;
 mod rasterize_polygon;
 
-use std::ops::Deref;
 use geo::Geometry;
 use pyo3::{
     prelude::*,
@@ -20,6 +19,7 @@ use pyo3::{
 // #[pyo3(name = "_rusterize")]
 fn rusterize_py<'py>(
     py: Python<'py>,
+    raster: PyAny,  // Raster structure
     polygons_py: PyList,
     field_vals_py: PyList,
     by: PyString,
@@ -30,7 +30,5 @@ fn rusterize_py<'py>(
     // convert python shapes list into vector of geometries
     let shape_count = polygons_py.len();
     let mut shapes: Vec<Geometry<f64>> = Vec::with_capacity(shape_count);
-    for i in 0..shape_count {
-        let polygon_vals = polygons_py[i];
-    }
+
 }

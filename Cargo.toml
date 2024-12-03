@@ -9,9 +9,9 @@ name = "rusterize"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.23.2", features = ["extension-module"] }
+pyo3 = { version = "0.21.1", features = ["extension-module"] }
 ndarray = { version = "0.16.1", features = ["blas"] }
-numpy = { version = "0.23.0" }
+# numpy = { version = "0.23.0" }
 blas-src = { version = "0.10", features = ["openblas"] }
 openblas-src = { version = "0.10", features = ["cblas", "system"] }
 geo = "0.2.0"
