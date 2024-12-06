@@ -4,36 +4,52 @@ from geopandas import GeoDataFrame
 import polars as pl
 import xarray as xr
 
+# from .rusterize import _rusterize
+
 SUPPORTED_GEOM = {"Polygon", "Multipolygon"}
 
 
-class Rusterize:
-    """ Fast geopandas rusterization into xarray.DataArray """
+class _RasterInfo:
     def __init__(self,
                  gdf: GeoDataFrame,
+                 res: Union[Tuple[int, ...], Tuple[float, ...]]):
+        """
+        Contrains information to create a raster object
+
+        Args:
+        :param gdf: geopandas dataframe to rasterize
+        :param res: tuple of (xres, yres) for rasterized data
+        """
+        self.gdf = gdf
+        self.res = res
+        self.bounds = self.gdf.total_bounds
+
+        # attributes for passthrought
+        self.xres, self.yres = self.res
+        self.xmin, self.ymin, self.xmax, self.ymax = self.bounds
+
+
+class Rusterize(_RasterInfo):
+    def __init__(self,
                  field: Optional[str],
                  by: Optional[str],
-                 res: Union[Tuple[int, ...], Tuple[float, ...]],
                  pixel_fn: str = "last",
                  background: Union[int, float] = 0):
         """
         Fast geopandas rusterization into xarray.DataArray
 
         Args:
-            gdf: geopandas dataframe to rasterize
-            field: field to rasterize
-            by: column to rasterize, assigns each unique value to a layer in the stack based on field.
-            res: tuple of (xres, yres) for rasterized data
-            pixel_fn: pixel function to use, see fasterize for options
-            background: background value in final raster
+        :param field: field to rasterize
+        :param by: column to rasterize, assigns each unique value to a layer in the stack based on field.
+        :param pixel_fn: pixel function to use, see fasterize for options
+        :param background: background value in final raster
 
         Returns:
-            Rasterized value into xr.DataArray
+            Rasterized geometries into xr.DataArray
         """
-        self.gdf = gdf
+        super(_RasterInfo, self).__init__()
         self.field = field
         self.by = by
-        self.res = res
         self.pixel_fn = pixel_fn
         self.background = background
 
@@ -59,25 +75,20 @@ class Rusterize:
         if self.pixel_fn not in ["sum", "first", "last", "min", "max", "count", "any"]:
             raise ValueError("pixel_fn must be one of sum, first, last, min, max, count, or any.")
 
-        # geom type check
+        # geom check
         geom_types = set(self.gdf.geom_type)
         if geom_types > SUPPORTED_GEOM or len(geom_types & SUPPORTED_GEOM) != 1:
             raise NotImplementedError("Only Polygon and Multipolygon geometry types are supported.")
 
-    def __call__(self):
-        return self._rusterize()
-
     def _to_polars(self):
-        return pl.from_pandas(self.gdf)
+        """ Drop geometry and add it as list to a new column """
+        return (pl.from_pandas(self.gdf.drop(columns=["geometry"]))
+                .with_columns(pl.Series("geometry", self.gdf["geometry"].tolist())))
 
-    # def _pass_bounds(self) -> List:
-    #     """ Round down and up total bounds """
-    #     b = self.gdf.total_bounds
-    #     b[0], b[1] = floor(b[0]), floor(b[1])  # xmin, ymin
-    #     b[2], b[3] = ceil(b[2]), ceil(b[3])  # xmax, ymax
-    #     return b
-
-    def _rusterize(self) -> xr.DataArray:
+    def process(self) -> xr.DataArray:
         pdf = self._to_polars()
+
+
+
 
 

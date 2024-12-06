@@ -8,7 +8,7 @@ is built on top of that
 use crate::structs::edge::Edge;
 use crate::structs::raster::Raster;
 
-use ndarray::{Array, ShapeError};
+use numpy::ndarray::{Array, ShapeError};
 
 pub fn build_edges(
     polygon: Vec<f64>,

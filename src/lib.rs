@@ -9,26 +9,87 @@ mod edgelist;
 mod pixel_functions;
 mod rasterize_polygon;
 
+use crate::pixel_functions::{set_pixel_function, PixelFn};
 use geo::Geometry;
+use numpy::{
+    ndarray::{Array2, Array3},
+    PyArray3, ToPyArray,
+};
+use polars::prelude::*;
 use pyo3::{
     prelude::*,
-    types::{PyList, PyString, PyFloat, PyAny}
+    types::{PyAny, PyString},
 };
+use pyo3_polars::PyDataFrame;
+use structs::raster::Raster;
 
-// #[pyfunction]
-// #[pyo3(name = "_rusterize")]
+fn rusterize_rust(
+    df: DataFrame,
+    info: Raster,
+    pixel_fn: PixelFn,
+    background: f64,
+    field: String,
+    by: String,
+) -> Array3<f64> {
+    // extract geometries
+    let fgeom = df
+        .column("geometry").unwrap()
+        .
+
+    if by.is_empty() {
+        // no group by
+
+    } else {
+        // groyp by
+    }
+}
+
+#[pyfunction]
+#[pyo3(name = "_rusterize")]
 fn rusterize_py<'py>(
     py: Python<'py>,
-    raster: PyAny,  // Raster structure
-    polygons_py: PyList,
-    field_vals_py: PyList,
-    by: PyString,
-    res: PyAny,
-    pixel_fn: &PyString,
-    background: &PyFloat,
-) -> PyResult<&'py PyAny> {
-    // convert python shapes list into vector of geometries
-    let shape_count = polygons_py.len();
-    let mut shapes: Vec<Geometry<f64>> = Vec::with_capacity(shape_count);
+    pydf: PyDataFrame,
+    pyinfo: PyAny,
+    pypixel_fn: PyString,
+    pybackground: PyAny,
+    pyfield: Option<PyString>,
+    pyby: Option<PyString>,
+) -> PyResult<&'py PyArray3<f64>> {
+    // extract polars dataframe
+    let mut df = pydf.into();
 
+    // extract raster information
+    let (xmin, ymin, xmax, ymax, xres, yres): (f64, f64, f64, f64, f64, f64) = (
+        pyinfo.getattr("xmin")?.extract()?,
+        pyinfo.getattr("ymin")?.extract()?,
+        pyinfo.getattr("xmax")?.extract()?,
+        pyinfo.getattr("ymax")?.extract()?,
+        pyinfo.getattr("xres")?.extract()?,
+        pyinfo.getattr("yres")?.extract()?,
+    );
+    let raster_info = Raster::new(xmin, xmax, ymin, ymax, xres, yres);
+
+    // extract function arguments
+    let fun = pypixel_fn.to_str()?;
+    let pixel_fn = set_pixel_function(fun)?;
+    let background = pybackground.extract::<f64>()?;
+    let field = match pyfield {
+        Some(inner) => inner.to_string(),
+        None => String::new(),
+    };
+    let by = match pyby {
+        Some(inner) => inner.to_string(),
+        None => String::new(),
+    };
+
+    // rusterize
+    let output =
+        py.allow_threads(|| rusterize_rust(df, raster_info, pixel_fn, background, field, by));
+    let ret = output.to_pyarray(py);
+    Ok(ret)
+}
+
+fn rusterize(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(rusterize_py, m)?)?;
+    Ok(())
 }

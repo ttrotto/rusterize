@@ -9,10 +9,11 @@ name = "rusterize"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.21.1", features = ["extension-module"] }
-ndarray = { version = "0.16.1", features = ["blas"] }
-# numpy = { version = "0.23.0" }
-blas-src = { version = "0.10", features = ["openblas"] }
-openblas-src = { version = "0.10", features = ["cblas", "system"] }
-geo = "0.2.0"
-wkb = "0.7.1"
+pyo3 = { version = "0.21.2", features = ["extension-module"] }  # was 0.12.2
+numpy = { version = "0.21.0"}
+blas-src = { version = "0.10.0", features = ["openblas"] }
+openblas-src = { version = "0.10.9", features = ["cblas", "system"] }  # was 0.10
+polars = { version = "0.44.0" }
+pyo3-polars = { version = "0.18.0" }
+py_geo_interface = { version = "0.8.0" }
+geo = "0.29.3"

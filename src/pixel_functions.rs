@@ -2,7 +2,7 @@
 On-demand return functions for overlapping polygons
  */
 
-use ndarray::Array2;
+use numpy::ndarray::Array2;
 
 // declare a new type
 pub type PixelFn = fn(&mut Array2<f64>, usize, usize, &f64);

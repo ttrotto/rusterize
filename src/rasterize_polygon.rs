@@ -6,7 +6,7 @@ use crate::edgelist;
 use crate::pixel_functions::PixelFn;
 use crate::structs::edge::{less_by_x, less_by_ystart};
 use crate::structs::{edge::Edge, raster::Raster};
-use ndarray::Array2;
+use numpy::ndarray::Array2;
 
 pub fn rasterize_polygon(
     raster: &Raster,
