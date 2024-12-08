@@ -41,6 +41,7 @@ pub fn build_edges(
                 ));
             }
         }
+        break;
     }
     Ok(edges)
 }

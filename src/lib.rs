@@ -10,38 +10,39 @@ mod pixel_functions;
 mod rasterize_polygon;
 
 use crate::pixel_functions::{set_pixel_function, PixelFn};
-use geo::Geometry;
+use geo_types::Geometry as GtGeometry;
+use py_geo_interface::Geometry;
 use numpy::{
     ndarray::{Array2, Array3},
     PyArray3, ToPyArray,
 };
-use polars::prelude::*;
 use pyo3::{
     prelude::*,
-    types::{PyAny, PyString},
+    types::{PyAny, PyString, PyBytes},
 };
 use pyo3_polars::PyDataFrame;
+use polars::prelude::*;
+use py_geo_interface::wrappers::f64::AsGeometryVec;
 use structs::raster::Raster;
 
+fn process_df(df: &DataFrame) -> () {
+    let bad_geom = df.column("geometry").unwrap();
+    let good_geom = bad_geom
+        .into_iter()
+        .map(|polygon| polygon.into())
+        .collect();
+}
+
 fn rusterize_rust(
-    df: DataFrame,
+    mut df: DataFrame,
+    geom: Vec<Geometry>,
     info: Raster,
     pixel_fn: PixelFn,
     background: f64,
     field: String,
     by: String,
 ) -> Array3<f64> {
-    // extract geometries
-    let fgeom = df
-        .column("geometry").unwrap()
-        .
 
-    if by.is_empty() {
-        // no group by
-
-    } else {
-        // groyp by
-    }
 }
 
 #[pyfunction]
@@ -49,25 +50,21 @@ fn rusterize_rust(
 fn rusterize_py<'py>(
     py: Python<'py>,
     pydf: PyDataFrame,
+    pygeom: PyAny,
     pyinfo: PyAny,
     pypixel_fn: PyString,
     pybackground: PyAny,
     pyfield: Option<PyString>,
     pyby: Option<PyString>,
 ) -> PyResult<&'py PyArray3<f64>> {
-    // extract polars dataframe
-    let mut df = pydf.into();
+    // extract dataframe
+    let mut df = pydf.into()?;
+
+    // extract geometries
+    let geom = pygeom.as_geometry_vec()?.0;
 
     // extract raster information
-    let (xmin, ymin, xmax, ymax, xres, yres): (f64, f64, f64, f64, f64, f64) = (
-        pyinfo.getattr("xmin")?.extract()?,
-        pyinfo.getattr("ymin")?.extract()?,
-        pyinfo.getattr("xmax")?.extract()?,
-        pyinfo.getattr("ymax")?.extract()?,
-        pyinfo.getattr("xres")?.extract()?,
-        pyinfo.getattr("yres")?.extract()?,
-    );
-    let raster_info = Raster::new(xmin, xmax, ymin, ymax, xres, yres);
+    let raster_info = Raster::from(&pyinfo);
 
     // extract function arguments
     let fun = pypixel_fn.to_str()?;
@@ -84,7 +81,7 @@ fn rusterize_py<'py>(
 
     // rusterize
     let output =
-        py.allow_threads(|| rusterize_rust(df, raster_info, pixel_fn, background, field, by));
+        py.allow_threads(|| rusterize_rust(df, geom, raster_info, pixel_fn, background, field, by));
     let ret = output.to_pyarray(py);
     Ok(ret)
 }

@@ -12,8 +12,8 @@ crate-type = ["cdylib"]
 pyo3 = { version = "0.21.2", features = ["extension-module"] }  # was 0.12.2
 numpy = { version = "0.21.0"}
 blas-src = { version = "0.10.0", features = ["openblas"] }
-openblas-src = { version = "0.10.9", features = ["cblas", "system"] }  # was 0.10
-polars = { version = "0.44.0" }
+#openblas-src = { version = "0.10.9", features = ["cblas", "system"] }  # was 0.10
+polars = { version = "0.44.0", features = ["lazy"] }
 pyo3-polars = { version = "0.18.0" }
+geo-types = { version = "0.7.14" }
 py_geo_interface = { version = "0.8.0" }
-geo = "0.29.3"

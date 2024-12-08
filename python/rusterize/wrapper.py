@@ -81,12 +81,12 @@ class Rusterize(_RasterInfo):
             raise NotImplementedError("Only Polygon and Multipolygon geometry types are supported.")
 
     def _to_polars(self):
-        """ Drop geometry and add it as list to a new column """
-        return (pl.from_pandas(self.gdf.drop(columns=["geometry"]))
-                .with_columns(pl.Series("geometry", self.gdf["geometry"].tolist())))
+        """ Drop geometry and pass data as polars dataframe """
+        return pl.from_pandas(self.gdf.drop(columns=["geometry"]))
 
     def process(self) -> xr.DataArray:
         pdf = self._to_polars()
+        geometry = self.gpd.geometry
 
 
 
