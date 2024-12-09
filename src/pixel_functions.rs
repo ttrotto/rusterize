@@ -1,5 +1,5 @@
 /*
-On-demand return functions for overlapping polygons
+On-demand functions for overlapping polygons
  */
 
 use numpy::ndarray::Array2;

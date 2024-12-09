@@ -1,22 +1,24 @@
 /*
-Rasterize a single polygon
+Rasterize a single (multi)polygon
  */
 
 use crate::edgelist;
 use crate::pixel_functions::PixelFn;
 use crate::structs::edge::{less_by_x, less_by_ystart};
 use crate::structs::{edge::Edge, raster::Raster};
+use geo_types::Geometry;
 use numpy::ndarray::Array2;
 
 pub fn rasterize_polygon(
     raster: &Raster,
-    polygon: Vec<f64>,
+    polygon: Geometry,
     poly_value: &f64,
     ndarray: &mut Array2<f64>,
     pxfn: &PixelFn,
 ) -> () {
     // build edgelist and sort
-    let mut edges = edgelist::build_edges(polygon, raster).unwrap();
+    let mut edges: Vec<Edge> = Vec::new();
+    edgelist::build_edges(&mut edges, polygon, raster);
     edges.sort_by(less_by_ystart);
 
     // init active edges
@@ -25,9 +27,8 @@ pub fn rasterize_polygon(
     // start with first y line
     let mut yline = edges.first().unwrap().ystart;
 
-    // init loop objects
-    let (mut counter, mut xstart, mut xend): (usize, usize, usize);
-    xstart = 0;
+    // ranges for x coordinate
+    let (mut xstart, mut xend, mut counter): (usize, usize, usize) = (0, 0, 0);
 
     // rasterize loop
     while yline < raster.nrows && !(active_edges.is_empty() && edges.is_empty()) {
@@ -47,7 +48,6 @@ pub fn rasterize_polygon(
         active_edges.sort_by(less_by_x);
 
         // even-odd polygon fill
-        counter = 0;
         for edge in &active_edges {
             counter += 1;
             let x = if edge.x < 0.0 {

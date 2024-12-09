@@ -10,28 +10,19 @@ mod pixel_functions;
 mod rasterize_polygon;
 
 use crate::pixel_functions::{set_pixel_function, PixelFn};
-use geo_types::Geometry as GtGeometry;
-use py_geo_interface::Geometry;
+use geo_types::Geometry;
 use numpy::{
-    ndarray::{Array2, Array3},
+    ndarray::Array3,
     PyArray3, ToPyArray,
 };
-use pyo3::{
-    prelude::*,
-    types::{PyAny, PyString, PyBytes},
-};
-use pyo3_polars::PyDataFrame;
 use polars::prelude::*;
 use py_geo_interface::wrappers::f64::AsGeometryVec;
+use pyo3::{
+    prelude::*,
+    types::{PyAny, PyString},
+};
+use pyo3_polars::PyDataFrame;
 use structs::raster::Raster;
-
-fn process_df(df: &DataFrame) -> () {
-    let bad_geom = df.column("geometry").unwrap();
-    let good_geom = bad_geom
-        .into_iter()
-        .map(|polygon| polygon.into())
-        .collect();
-}
 
 fn rusterize_rust(
     mut df: DataFrame,
@@ -42,7 +33,6 @@ fn rusterize_rust(
     field: String,
     by: String,
 ) -> Array3<f64> {
-
 }
 
 #[pyfunction]
