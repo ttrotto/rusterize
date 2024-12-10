@@ -33,6 +33,10 @@ fn rusterize_rust(
     field: String,
     by: String,
 ) -> Array3<f64> {
+    if by.is_empty() {
+        // no group by
+
+    }
 }
 
 #[pyfunction]
