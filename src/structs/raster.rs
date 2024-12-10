@@ -31,7 +31,7 @@ impl Raster {
     }
 
     // build raster
-    pub fn build_raster(&self, nlyr: usize) -> Array3<f64> {
-        Array3::<f64>::zeros((nlyr, self.nrows, self.ncols))
+    pub fn build_raster(&self, bands: usize) -> Array3<f64> {
+        Array3::<f64>::zeros((bands, self.nrows, self.ncols))
     }
 }

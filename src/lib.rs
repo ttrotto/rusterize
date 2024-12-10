@@ -27,15 +27,28 @@ use structs::raster::Raster;
 fn rusterize_rust(
     mut df: DataFrame,
     geom: Vec<Geometry>,
-    info: Raster,
+    ras_info: Raster,
     pixel_fn: PixelFn,
     background: f64,
     field: String,
     by: String,
 ) -> Array3<f64> {
-    if by.is_empty() {
-        // no group by
+    // add geometry to dataframe
+    let series = Series::new("geometry".into(), geom);
+    let df_lazy = df
+        .lazy()
+        .with_column(series.lit());
 
+    if by.is_empty() {
+        // build raster
+        let raster = ras_info.build_raster(1);
+
+        // assign values to a single band
+        df_lazy.with_columns([
+                                 .map(cols([field, "geometry".to_string()]) )
+        ])
+    } else {
+        // build raster
     }
 }
 
