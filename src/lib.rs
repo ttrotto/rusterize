@@ -10,9 +10,10 @@ mod pixel_functions;
 mod rasterize_polygon;
 
 use crate::pixel_functions::{set_pixel_function, PixelFn};
+use crate::rasterize_polygon::rasterize_polygon;
 use geo_types::Geometry;
 use numpy::{
-    ndarray::Array3,
+    ndarray::{Array3, Axis},
     PyArray3, ToPyArray,
 };
 use polars::prelude::*;
@@ -25,28 +26,45 @@ use pyo3_polars::PyDataFrame;
 use structs::raster::Raster;
 
 fn rusterize_rust(
-    mut df: DataFrame,
-    geom: Vec<Geometry>,
+    df: DataFrame,
+    geometry: Vec<Geometry>,
     ras_info: Raster,
     pixel_fn: PixelFn,
     background: f64,
     field: String,
     by: String,
 ) -> Array3<f64> {
-    // add geometry to dataframe
-    let series = Series::new("geometry".into(), geom);
-    let df_lazy = df
-        .lazy()
-        .with_column(series.lit());
+    // add geometry to a lazyframe
+    // polars does not allow Geometry, so it is wrapped around ChunkedArray
+    let geom_series = Series::new("geometry".into(), ChunkedArray::from_vec("geometry".into(), geometry));
+    let df_lazy = df.lazy().with_column(geom_series.into());
 
     if by.is_empty() {
         // build raster
-        let raster = ras_info.build_raster(1);
+        let mut raster = ras_info.build_raster(1);
 
-        // assign values to a single band
-        df_lazy.with_columns([
-                                 .map(cols([field, "geometry".to_string()]) )
-        ])
+        // rasterize each polygon iteratively
+        df_lazy
+            .with_columns(cols([field, "geometry".to_string()]).map(
+                |series| {
+                    let s = series.struct_()?;
+                    let field_value = s.field_by_name(field.as_str())?.f64()?;
+                    let geometry = s.field_by_name("geometry")?;
+                    let result: ChunkedArray<bool> = field_value
+                        .into_iter()
+                        .zip(geometry.into_iter())
+                        .map(|(value, geom)| match (value, geom) {
+                            (Some(value), Some(geom)) => Some(rasterize_polygon(&ras_info, geom, &value, &raster, &pixel_fn))
+                        })
+                        .collect();
+                    Ok(result.into_series())
+                },
+                GetOutput::from_type(DataType::Boolean),
+            ))
+            .collect()
+            .expect("Rasterization unsuccessful");
+
+        raster
     } else {
         // build raster
     }
@@ -57,7 +75,7 @@ fn rusterize_rust(
 fn rusterize_py<'py>(
     py: Python<'py>,
     pydf: PyDataFrame,
-    pygeom: PyAny,
+    pygeometry: PyAny,
     pyinfo: PyAny,
     pypixel_fn: PyString,
     pybackground: PyAny,
@@ -65,10 +83,10 @@ fn rusterize_py<'py>(
     pyby: Option<PyString>,
 ) -> PyResult<&'py PyArray3<f64>> {
     // extract dataframe
-    let mut df = pydf.into()?;
+    let df = pydf.into()?;
 
     // extract geometries
-    let geom = pygeom.as_geometry_vec()?.0;
+    let geometry = pygeometry.as_geometry_vec()?.0;
 
     // extract raster information
     let raster_info = Raster::from(&pyinfo);
@@ -87,8 +105,9 @@ fn rusterize_py<'py>(
     };
 
     // rusterize
-    let output =
-        py.allow_threads(|| rusterize_rust(df, geom, raster_info, pixel_fn, background, field, by));
+    let output = py.allow_threads(|| {
+        rusterize_rust(df, geometry, raster_info, pixel_fn, background, field, by)
+    });
     let ret = output.to_pyarray(py);
     Ok(ret)
 }

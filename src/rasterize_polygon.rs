@@ -7,15 +7,15 @@ use crate::pixel_functions::PixelFn;
 use crate::structs::edge::{less_by_x, less_by_ystart};
 use crate::structs::{edge::Edge, raster::Raster};
 use geo_types::Geometry;
-use numpy::ndarray::Array2;
+use numpy::ndarray::ArrayViewMut2;
 
 pub fn rasterize_polygon(
     raster: &Raster,
     polygon: Geometry,
-    poly_value: &f64,
-    ndarray: &mut Array2<f64>,
+    field_value: &f64,
+    ndarray: &ArrayViewMut2<f64>,
     pxfn: &PixelFn,
-) -> () {
+) -> bool {
     // build edgelist and sort
     let mut edges: Vec<Edge> = Vec::new();
     edgelist::build_edges(&mut edges, polygon, raster);
@@ -63,7 +63,7 @@ pub fn rasterize_polygon(
             } else {
                 xend = x;
                 for xpix in xstart..xend {
-                    pxfn(ndarray, yline, xpix, poly_value);
+                    pxfn(ndarray, yline, xpix, field_value);
                 }
             }
         }
@@ -80,4 +80,5 @@ pub fn rasterize_polygon(
             }
         })
     }
+    true
 }
