@@ -1,8 +1,7 @@
 /*
-Build structured edge list from a (multi)polygon.
-If multipolygon, then iterates across every polygon.
-From the Geometry, the values are extracted and
-constructed as an array of nodes.
+Build structured edge list from a single (multi)polygon.
+If multipolygon, then iterates across every inner polygon.
+From the Geometry, the values are extracted and reconstructed as an array of nodes.
  */
 
 use crate::structs::edge::Edge;
@@ -14,11 +13,11 @@ use numpy::ndarray::Array2;
 
 pub fn build_edges(edges: &mut Vec<Edge>, polygon: Geometry, raster: &Raster) -> () {
     match polygon {
-        // single polygon
+        // polygon
         Geometry::Polygon(polygon) => {
             // build Nx2 array of nodes (x, y)
             let mut node_array = Array2::<f64>::zeros((polygon.coords_count(), 2));
-            polygon.coords_iter().enumerate().for_each(|(i, coord)| {
+            polygon.exterior().coords_iter().enumerate().for_each(|(i, coord)| {
                 node_array[[i, 0]] = coord.x;
                 node_array[[i, 1]] = coord.y;
             });
@@ -46,7 +45,7 @@ pub fn build_edges(edges: &mut Vec<Edge>, polygon: Geometry, raster: &Raster) ->
                 }
             }
         }
-        // single multipolygon - iterate over each polygon
+        // multipolygon - iterate over each inner polygon
         Geometry::MultiPolygon(polygon) => {
             for poly in polygon {
                 build_edges(edges, Geometry::Polygon(poly), raster);

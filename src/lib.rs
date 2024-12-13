@@ -24,6 +24,7 @@ use pyo3::{
 };
 use pyo3_polars::PyDataFrame;
 use structs::raster::Raster;
+use wkt::ToWkt;
 
 fn rusterize_rust(
     df: DataFrame,
@@ -34,35 +35,44 @@ fn rusterize_rust(
     field: String,
     by: String,
 ) -> Array3<f64> {
-    // add geometry to a lazyframe
-    // polars does not allow Geometry, so it is wrapped around ChunkedArray
-    let geom_series = Series::new("geometry".into(), ChunkedArray::from_vec("geometry".into(), geometry));
-    let df_lazy = df.lazy().with_column(geom_series.into());
+    // add geometry to a lazyframe - polars does not allow Geometry, so it is converted into WKT String
+    let geom_series = Series::new(
+        "geometry".into(),
+        geometry.into_iter().map(|geom| geom.wkt_string()).collect(),
+    );
+    let df_lazy = df.lazy().with_column(geom_series.lit());
 
     if by.is_empty() {
         // build raster
         let mut raster = ras_info.build_raster(1);
 
         // rasterize each polygon iteratively
-        df_lazy
-            .with_columns(cols([field, "geometry".to_string()]).map(
-                |series| {
-                    let s = series.struct_()?;
-                    let field_value = s.field_by_name(field.as_str())?.f64()?;
-                    let geometry = s.field_by_name("geometry")?;
-                    let result: ChunkedArray<bool> = field_value
+        let rtest = df_lazy
+            .with_columns([
+                cols([field, "geometry".to_string()]).map(|s| {
+                    let sc = s.struct_()?;
+                    let fc = sc.field_by_name(field.as_str())?.f64()?;
+                    let gc = sc.field_by_name("geometry")?.str()?;
+                    let result: Vec<Option<bool>> = fc
                         .into_iter()
-                        .zip(geometry.into_iter())
-                        .map(|(value, geom)| match (value, geom) {
-                            (Some(value), Some(geom)) => Some(rasterize_polygon(&ras_info, geom, &value, &raster, &pixel_fn))
+                        .zip(gc.into_iter())
+                        .map(|(field_value, geom)| match (field_value, geom) {
+                            (Some(field_value), Some(geom)) => Some(rasterize_polygon(
+                                &ras_info,
+                                geom,
+                                &field_value,
+                                &raster.index_axis_mut(Axis(0), 0),
+                                &pixel_fn,
+                            )),
+                            _ => None,
                         })
                         .collect();
-                    Ok(result.into_series())
+                    Ok(Some(Column::new("success".into(), result)))
                 },
-                GetOutput::from_type(DataType::Boolean),
-            ))
+                GetOutput::from_type(DataType::Boolean)),
+            ])
             .collect()
-            .expect("Rasterization unsuccessful");
+            .map_err(PolarsError::from).unwrap();
 
         raster
     } else {

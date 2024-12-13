@@ -18,7 +18,7 @@ pub struct Raster {
 }
 
 impl Raster {
-    // map Raster with PyAny information
+    // map PyAny information to Raster
     pub fn from(pyinfo: &PyAny) -> Self {
         let raster_info: Raster = pyinfo.extract().expect("Failed to extract raster information");
         let nrows = ((raster_info.ymax - raster_info.ymin) / raster_info.yres).ceil() as usize;
