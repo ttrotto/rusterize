@@ -6,23 +6,19 @@ use crate::edgelist;
 use crate::pixel_functions::PixelFn;
 use crate::structs::edge::{less_by_x, less_by_ystart};
 use crate::structs::{edge::Edge, raster::Raster};
-// use geo_types::Geometry;
+use geo_types::Geometry;
 use numpy::ndarray::ArrayViewMut2;
-use wkt::TryFromWkt;
 
 pub fn rasterize_polygon(
     raster: &Raster,
-    polygon: &str,
+    polygon: &Geometry,
     field_value: &f64,
     ndarray: &ArrayViewMut2<f64>,
     pxfn: &PixelFn,
 ) -> bool {
-    // from WKT to Geometry
-    let geom = TryFromWkt::try_from_wkt_str(polygon).unwrap();
-
     // build edgelist and sort
     let mut edges: Vec<Edge> = Vec::new();
-    edgelist::build_edges(&mut edges, geom, raster);
+    edgelist::build_edges(&mut edges, polygon, raster);
     edges.sort_by(less_by_ystart);
 
     // init active edges

@@ -16,6 +16,7 @@ use numpy::{
     ndarray::{Array3, Axis},
     PyArray3, ToPyArray,
 };
+use polars::export::arrow::array::BooleanArray;
 use polars::prelude::*;
 use py_geo_interface::wrappers::f64::AsGeometryVec;
 use pyo3::{
@@ -26,6 +27,53 @@ use pyo3_polars::PyDataFrame;
 use structs::raster::Raster;
 use wkt::ToWkt;
 
+fn plexpr(
+    geometry: &Vec<Geometry>,
+    raster: &mut Array3<f64>,
+    ras_info: &Raster,
+    pixel_fn: &PixelFn,
+    field: &String,
+    band_idx: &mut usize,
+    by: &String,
+) -> Expr {
+    as_struct(vec![col(field.clone()), col("gidx")]).map(
+        |s| {
+            let sc = s.struct_()?;
+            let gidx_sc = sc.field_by_name("gidx")?.u64()?;
+            let field_sc = sc.field_by_name(field.as_str())?.f64()?;
+            // apply function to each field-idx pair
+            let _ = field_sc
+                .into_iter()
+                .zip(gidx_sc.into_iter())
+                .map(|(field_value, idx)| match field_value {
+                    Some(field_value) => {
+                        // field_value not empty
+                        let uidx = idx.unwrap() as usize;
+                        rasterize_polygon(
+                            &ras_info,
+                            &geometry[uidx],
+                            &field_value,
+                            &raster.index_axis_mut(Axis(0), *band_idx),
+                            &pixel_fn,
+                        )
+                    }
+                    _ => false,
+                })
+                .collect::<Vec<bool>>();
+            // band index for group by
+            if !by.is_empty() {
+                *band_idx += 1
+            }
+            Ok(Some(s))
+        },
+        // define output type
+        GetOutput::from_type(DataType::Struct(vec![
+            Field::new(PlSmallStr::from(field), DataType::Float64),
+            Field::new(PlSmallStr::from("gidx"), DataType::UInt64),
+        ])),
+    )
+}
+
 fn rusterize_rust(
     df: DataFrame,
     geometry: Vec<Geometry>,
@@ -35,48 +83,65 @@ fn rusterize_rust(
     field: String,
     by: String,
 ) -> Array3<f64> {
-    // add geometry to a lazyframe - polars does not allow Geometry, so it is converted into WKT String
-    let geom_series = Series::new(
-        "geometry".into(),
-        geometry.into_iter().map(|geom| geom.wkt_string()).collect(),
-    );
-    let df_lazy = df.lazy().with_column(geom_series.lit());
+    // polars does not allow Geometry, so add index for later query
+    let range: Vec<u64> = (0..=geometry.len() as u64).collect();
+    let geom_idx = Series::from_vec(PlSmallStr::from_str("gidx"), range);
+    let df_lazy = df.lazy().with_column(geom_idx.lit());
+
+    // index for building multiband raster
+    let mut band_idx: usize = 0;
 
     if by.is_empty() {
         // build raster
         let mut raster = ras_info.build_raster(1);
 
         // rasterize each polygon iteratively
-        let rtest = df_lazy
-            .with_columns([
-                cols([field, "geometry".to_string()]).map(|s| {
-                    let sc = s.struct_()?;
-                    let fc = sc.field_by_name(field.as_str())?.f64()?;
-                    let gc = sc.field_by_name("geometry")?.str()?;
-                    let result: Vec<Option<bool>> = fc
-                        .into_iter()
-                        .zip(gc.into_iter())
-                        .map(|(field_value, geom)| match (field_value, geom) {
-                            (Some(field_value), Some(geom)) => Some(rasterize_polygon(
-                                &ras_info,
-                                geom,
-                                &field_value,
-                                &raster.index_axis_mut(Axis(0), 0),
-                                &pixel_fn,
-                            )),
-                            _ => None,
-                        })
-                        .collect();
-                    Ok(Some(Column::new("success".into(), result)))
-                },
-                GetOutput::from_type(DataType::Boolean)),
-            ])
+        df_lazy
+            .with_columns([plexpr(
+                &geometry,
+                &mut raster,
+                &ras_info,
+                &pixel_fn,
+                &field,
+                &mut band_idx,
+                &by,
+            )])
             .collect()
-            .map_err(PolarsError::from).unwrap();
+            .map_err(PolarsError::from)
+            .unwrap();
 
+        // return
         raster
     } else {
+        // determine groups
+        let groups = df_lazy.group_by([col(by.clone())]);
+        let bands = groups
+            .clone()
+            .agg([])
+            .collect()
+            .map(|df| df.height())
+            .unwrap();
+
         // build raster
+        let mut raster = ras_info.build_raster(bands);
+
+        // rasterize each polygon iteratively by group
+        groups
+            .agg([plexpr(
+                &geometry,
+                &mut raster,
+                &ras_info,
+                &pixel_fn,
+                &field,
+                &mut band_idx,
+                &by,
+            )])
+            .collect()
+            .map_err(PolarsError::from)
+            .unwrap();
+
+        // return
+        raster
     }
 }
 
@@ -103,7 +168,7 @@ fn rusterize_py<'py>(
 
     // extract function arguments
     let fun = pypixel_fn.to_str()?;
-    let pixel_fn = set_pixel_function(fun)?;
+    let pixel_fn = set_pixel_function(fun).unwrap();
     let background = pybackground.extract::<f64>()?;
     let field = match pyfield {
         Some(inner) => inner.to_string(),
