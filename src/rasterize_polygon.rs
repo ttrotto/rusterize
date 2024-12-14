@@ -13,7 +13,7 @@ pub fn rasterize_polygon(
     raster: &Raster,
     polygon: &Geometry,
     field_value: &f64,
-    ndarray: &ArrayViewMut2<f64>,
+    ndarray: &mut ArrayViewMut2<f64>,
     pxfn: &PixelFn,
 ) -> bool {
     // build edgelist and sort

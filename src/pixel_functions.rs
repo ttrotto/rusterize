@@ -1,14 +1,14 @@
 /*
-On-demand functions for overlapping polygons
+On-demand functions for polygon rasterizetion.
  */
 
 use numpy::ndarray::ArrayViewMut2;
 
 // declare a new type
-pub type PixelFn = fn(&ArrayViewMut2<f64>, usize, usize, &f64);
+pub type PixelFn = fn(&mut ArrayViewMut2<f64>, usize, usize, &f64);
 
 // sum values or NA
-fn sum_values(array: &ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
+fn sum_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
     if array[[y, x]].is_nan() || value.is_nan() {
         array[[y, x]] = *value;
     } else {
@@ -17,33 +17,33 @@ fn sum_values(array: &ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> ()
 }
 
 // set first value only if currently NA
-fn first_values(array: &ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
+fn first_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
     if array[[y, x]].is_nan() {
         array[[y, x]] = *value;
     }
 }
 
 // always set last value
-fn last_values(array: &ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
+fn last_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
     array[[y, x]] = *value;
 }
 
 // set value if smaller than current
-fn min_values(array: &ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
+fn min_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
     if array[[y, x]].is_nan() || array[[y, x]] > *value {
         array[[y, x]] = *value;
     }
 }
 
 // set value if larger than current
-fn max_values(array: &ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
+fn max_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
     if array[[y, x]].is_nan() || array[[y, x]] < *value {
         array[[y, x]] = *value;
     }
 }
 
 // count values at index
-fn count_values(array: &ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
+fn count_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
     if array[[y, x]].is_nan() {
         array[[y, x]] = 1.0;
     } else {
@@ -52,20 +52,20 @@ fn count_values(array: &ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> 
 }
 
 // mark value presence
-fn any_values(array: &ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
+fn any_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
     array[[y, x]] = 1.0;
 }
 
 // function call
-pub fn set_pixel_function(fstr: &str) -> Result<PixelFn, String> {
+pub fn set_pixel_function(fstr: &str) -> PixelFn {
     match fstr {
-        "sum" => Ok(sum_values),
-        "first" => Ok(first_values),
-        "last" => Ok(last_values),
-        "min" => Ok(min_values),
-        "max" => Ok(max_values),
-        "count" => Ok(count_values),
-        "any" => Ok(any_values),
-        _ => Err(format!("'fun' has an invalid value: {}.", fstr)),
+        "sum" => sum_values,
+        "first" => first_values,
+        "last" => last_values,
+        "min" => min_values,
+        "max" => max_values,
+        "count" => count_values,
+        "any" => any_values,
+        _ => panic!("'fun' has an invalid value: {}.", fstr),
     }
 }
