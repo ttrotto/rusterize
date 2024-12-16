@@ -26,6 +26,7 @@ use pyo3_polars::PyDataFrame;
 use structs::raster::Raster;
 
 struct Rusterize {
+    df: DataFrame,
     geometry: Vec<Geometry>,
     ras_info: Raster,
     pixel_fn: PixelFn,
@@ -35,7 +36,8 @@ struct Rusterize {
 }
 
 impl Rusterize {
-    pub fn new(
+    fn new(
+        df: DataFrame,
         geometry: Vec<Geometry>,
         ras_info: Raster,
         pixel_fn: PixelFn,
@@ -44,6 +46,7 @@ impl Rusterize {
         by: String,
     ) -> Self {
         Self {
+            df,
             geometry,
             ras_info,
             pixel_fn,
@@ -53,82 +56,60 @@ impl Rusterize {
         }
     }
 
-    // polars expression
-    fn map_col_rusterize(
-        &self,
-        raster: &mut Array3<f64>,
-        band_idx: &mut usize,
-    ) -> Expr {
-        as_struct(vec![col(&self.field), col("idx")]).map(
-            |s| {
-                let sc = s.struct_()?;
-                let idx_sc = sc.field_by_name("idx")?.u32()?;
-                let field_sc = sc.field_by_name(self.field.as_str())?.f64()?;
-                // apply function to each field-idx pair
-                let result: BooleanChunked = field_sc
-                    .into_no_null_iter()
-                    .zip(idx_sc.into_no_null_iter())
-                    .map(|(field_value, idx)| {
-                        // let uidx = idx as usize;
-                        rasterize_polygon(
-                            &self.ras_info,
-                            &self.geometry[idx as usize],
-                            &field_value,
-                            &mut raster.index_axis_mut(Axis(0), *band_idx),
-                            &self.pixel_fn,
-                        )
-                    })
-                    .collect();
-                 // band index for group by
-                if !self.by.is_empty() {
-                    *band_idx += 1
-                }
-                Ok(Some(Column::from(result.into_series())))
-            },
-            // define output type
-            GetOutput::from_type(DataType::Boolean),
-        )
-    }
-
-    fn rusterize_rust(
-        self,
-        df: DataFrame,
-    ) -> Array3<f64> {
-        // polars does not allow Geometry, so add index for query
-        let df_lazy = df.lazy().with_row_index(PlSmallStr::from("idx"), None);
-
-        // index for building multiband raster
-        let mut band_idx: usize = 0;
+   fn rusterize_sequential(self) -> Array3<f64> {
+        // extract field values as iterator - except null
+        let field_iter = self.df
+            .column(&self.field.as_str())
+            .as_ref()
+            .unwrap()
+            .f64()
+            .unwrap();
 
         if self.by.is_empty() {
-            // build raster
+            // init raster
             let mut raster = self.ras_info.build_raster(1);
 
-            // rasterize each polygon iteratively
-            df_lazy
-                .with_columns([self.map_col_rusterize(&mut raster, &mut band_idx)])
-                .collect()
-                .map_err(PolarsError::from)
-                .unwrap();
-
-            // return
+            // iter rasterize
+            field_iter
+                .into_no_null_iter()
+                .zip(self.geometry.iter())
+                .for_each(|(field_value, geom)| {
+                    rasterize_polygon(
+                        &self.ras_info,
+                        geom,
+                        &field_value,
+                        &mut raster.index_axis_mut(Axis(0), 0),
+                        &self.pixel_fn,
+                    )
+                });
             raster
         } else {
-            // determine groups while keeping order
-            let groups = df_lazy.group_by_stable([col(&self.by)]);
-            let bands = groups.clone().head(Some(1)).collect().unwrap().height();
+            // get number of groups for multiband raster
+            let bands = self.df
+                .lazy()
+                .group_by(self.by)
+                .head(Some(1))  // extract 1st row of each for proxy
+                .collect()
+                .unwrap()
+                .height();
 
-            // build raster
+            // init raster
             let mut raster = self.ras_info.build_raster(bands);
 
-            // rasterize each polygon iteratively by group
-            groups
-                .agg([self.map_col_rusterize(&mut raster, &mut band_idx)])
-                .collect()
-                .map_err(PolarsError::from)
-                .unwrap();
-
-            // return
+            // iter rasterize
+            field_iter
+                .into_no_null_iter()
+                .zip(self.geometry.iter())
+                .enumerate()
+                .for_each(|(idx, (field_value, geom))| {
+                    rasterize_polygon(
+                        &self.ras_info,
+                        &geom,
+                        &field_value,
+                        &mut raster.index_axis_mut(Axis(0), idx),
+                        &self.pixel_fn,
+                    )
+                });
             raster
         }
     }
@@ -169,8 +150,10 @@ fn rusterize_py<'py>(
     };
 
     // rusterize
-    let rclass = Rusterize::new(geometry, raster_info, pixel_fn, background, field, by);
-    let ret = rclass.rusterize_rust(df);
+    let ret = py.allow_threads(|| {
+        let rclass = Rusterize::new(df, geometry, raster_info, pixel_fn, background, field, by);
+        rclass.rusterize_sequential();
+    });
     Ok(ret.to_pyarray(py))
 }
 

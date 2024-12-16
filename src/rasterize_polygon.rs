@@ -15,7 +15,7 @@ pub fn rasterize_polygon(
     field_value: &f64,
     ndarray: &mut ArrayViewMut2<f64>,
     pxfn: &PixelFn,
-) -> bool {
+) -> () {
     // build edgelist and sort
     let mut edges: Vec<Edge> = Vec::new();
     edgelist::build_edges(&mut edges, polygon, raster);
@@ -80,5 +80,4 @@ pub fn rasterize_polygon(
             }
         })
     }
-    true
 }
