@@ -27,14 +27,14 @@ use pyo3::{
 use pyo3_polars::PyDataFrame;
 use structs::raster::Raster;
 
-struct Rusterize {
+struct Rusterize<'r> {
     df: DataFrame,
     geometry: Vec<Geometry>,
     ras_info: Raster,
     pixel_fn: PixelFn,
     background: f64,
-    field: String,
-    by: String,
+    vfield: &'r Float64Chunked,
+    vby: Option<Vec<String>>,
 }
 
 impl Rusterize {
@@ -47,117 +47,95 @@ impl Rusterize {
         field: String,
         by: String,
     ) -> Self {
+        // extract field and by
+        let (vfield, vby): (&Float64Chunked, Option<Vec<String>>);
+        if field.is_empty() {
+            // by also empty
+            (vfield, vby) = (Series::new(PlSmallStr::from("field_f64"), vec![1; df.height()]).f64().unwrap(), None)
+        }
+
+        // casting and extraction
+        let field_name= field.as_str();
+        let (vfield, vby) = if !by.is_empty() {
+            // handle field and by
+            let by_name = by.as_str();
+            match (
+                df.schema().get(field_name),
+                df.schema().get(by_name)
+            ) {
+                // correct dtype
+                (Some(&DataType::Float64), Some(&DataType::String)) => {
+                    (df.column(field_name).unwrap().f64().unwrap(),
+                     df.column(by_name).unwrap().str().unwrap().into_iter().collect())
+                },
+                _ => {
+                    // needs casting
+                    let casted = df
+                        .lazy()
+                        .select([col(field_name)
+                            .cast(DataType::Float64),
+                            col(by_name).cast(DataType::String)])?
+                        .collect();
+                    (casted.column(field_name)?.f64().unwrap(),
+                     casted.column(by_name).unwrap().str().unwrap().into_iter().collect())
+                },
+            };
+        } else {
+            // handle only field
+            match df.schema().get(field_name) {
+                // correct type
+                Some(DataType::Float64) => {
+                    (df.column(field_name).unwrap().f64().unwrap(), None)
+                }
+                // needs casting
+                _ => {
+                    let casted = df
+                        .lazy()
+                        .select([col(field_name).cast(DataType::Float64)])
+                        .collect()
+                        .unwrap();
+                    (casted.column(field_name).unwrap().f64().unwrap(), None)
+                }
+            }
+        };
         Self {
             df,
             geometry,
             ras_info,
             pixel_fn,
             background,
-            field,
-            by,
+            vfield,
+            vby,
         }
     }
 
     fn rusterize_sequential(self) -> Array3<f64> {
-        // extract field and by
-        let (field, by): (&Float64Chunked, Vec<String>);
-        if self.field.is_empty() {
-            // by also empty
-            let field = Series::new(PlSmallStr::from("field_f64"), vec![1; self.df.height()]).f64()?
+        if Some(self.vby) {
+            // multiband raster
+            let bands
         } else {
-            if !self.by.is_empty() {
-                // cast field and by if necessary
-                let field_str = self.field.as_str();
-                let by_str = self.by.as_str();
-                let casted = match (self.df.schema().get(field_str), self.df.schema().get(by_str) {  // get dtype of column
-                    (Some(&DataType::Float64), Some(&DataType::String)) => {
-                        self.df
-                            .lazy()
-                            .select([col(field_str)
-                                .cast(DataType::Float64)
-                                .alias("field_f64"),
-                                        col(by_str).alias("by")])?
-                            .collect()?
-                    }
-                    _ => {
-                        self.df
-                            .lazy()
-                            .with_columns([col(field_str)
-                                .cast(DataType::Float64)
-                                .alias("field_f64"),
-                            col(self.by.as_str()).cast(DataType::String).alias("by")])?
-                            .collect()?
-                    }
-                };
-            }
-        }
-
-        // init raster
-        let mut raster = self.ras_info.build_raster(1);
-
-        // iter rasterize
-        field
-            .into_iter()
-            .zip(self.geometry.into_iter())
-            .for_each(|(field_value, geom)| match field_value {
-                Some(field_value) => {
-                    // process only non-empty field values
-                    rasterize_polygon(
-                        &self.ras_info,
-                        &geom,
-                        &field_value,
-                        &mut raster.index_axis_mut(Axis(0), 0),
-                        &self.pixel_fn,
-                    )
-                },
-                None => {}
-            });
-
-        // return
-        raster
-
-        } else {
-
-
-            // get vector of by column as anyvalue
-            let vby = self.df
-                .lazy()
-                .select(col(self.by.as_str())
-                    .cast(DataType::Float64)
-                    .alias("field_f64"))
-                .collect()?
-                .column("field_f64")?
-                .f64()?;
-
-
-
-
-            // get number of groups for multiband raster
-            let bands = self.df
-                .lazy()
-                .group_by(self.by)
-                .head(Some(1))  // extract 1st row of each for proxy
-                .collect()
-                .unwrap()
-                .height();
-
-            // init raster
-            let mut raster = self.ras_info.build_raster(bands);
+            // singleband raster
+            let mut raster = self.ras_info.build_raster(1);
 
             // iter rasterize
-            field_iter
-                .into_no_null_iter()
-                .zip(self.geometry.iter())
-                .enumerate()
-                .for_each(|(idx, (field_value, geom))| {
-                    rasterize_polygon(
-                        &self.ras_info,
-                        &geom,
-                        &field_value,
-                        &mut raster.index_axis_mut(Axis(0), idx),
-                        &self.pixel_fn,
-                    )
+            self.vfield
+                .into_iter()
+                .zip(self.geometry.into_iter())
+                .for_each(|(field_value, geom)| match field_value {
+                    Some(field_value) => {
+                        // process only non-empty field values
+                        rasterize_polygon(
+                            &self.ras_info,
+                            &geom,
+                            &field_value,
+                            &mut raster.index_axis_mut(Axis(0), 0),
+                            &self.pixel_fn,
+                        )
+                    },
+                    None => {}
                 });
+
+            // return
             raster
         }
     }
