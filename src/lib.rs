@@ -12,10 +12,12 @@ mod rasterize_polygon;
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
 use geo_types::Geometry;
+use itertools::Itertools;
 use numpy::{
     ndarray::{Array3, Axis},
     PyArray3, ToPyArray,
 };
+use polars::export::num::Float;
 use polars::prelude::*;
 use py_geo_interface::wrappers::f64::AsGeometryVec;
 use pyo3::{
@@ -56,34 +58,80 @@ impl Rusterize {
         }
     }
 
-   fn rusterize_sequential(self) -> Array3<f64> {
-        // extract field values as iterator - except null
-        let field_iter = self.df
-            .column(&self.field.as_str())
-            .as_ref()
-            .unwrap()
-            .f64()
-            .unwrap();
+    fn rusterize_sequential(self) -> Array3<f64> {
+        // extract field and by
+        let (field, by): (&Float64Chunked, Vec<String>);
+        if self.field.is_empty() {
+            // by also empty
+            let field = Series::new(PlSmallStr::from("field_f64"), vec![1; self.df.height()]).f64()?
+        } else {
+            if !self.by.is_empty() {
+                // cast field and by if necessary
+                let field_str = self.field.as_str();
+                let by_str = self.by.as_str();
+                let casted = match (self.df.schema().get(field_str), self.df.schema().get(by_str) {  // get dtype of column
+                    (Some(&DataType::Float64), Some(&DataType::String)) => {
+                        self.df
+                            .lazy()
+                            .select([col(field_str)
+                                .cast(DataType::Float64)
+                                .alias("field_f64"),
+                                        col(by_str).alias("by")])?
+                            .collect()?
+                    }
+                    _ => {
+                        self.df
+                            .lazy()
+                            .with_columns([col(field_str)
+                                .cast(DataType::Float64)
+                                .alias("field_f64"),
+                            col(self.by.as_str()).cast(DataType::String).alias("by")])?
+                            .collect()?
+                    }
+                };
+            }
+        }
 
-        if self.by.is_empty() {
-            // init raster
-            let mut raster = self.ras_info.build_raster(1);
+        // init raster
+        let mut raster = self.ras_info.build_raster(1);
 
-            // iter rasterize
-            field_iter
-                .into_no_null_iter()
-                .zip(self.geometry.iter())
-                .for_each(|(field_value, geom)| {
+        // iter rasterize
+        field
+            .into_iter()
+            .zip(self.geometry.into_iter())
+            .for_each(|(field_value, geom)| match field_value {
+                Some(field_value) => {
+                    // process only non-empty field values
                     rasterize_polygon(
                         &self.ras_info,
-                        geom,
+                        &geom,
                         &field_value,
                         &mut raster.index_axis_mut(Axis(0), 0),
                         &self.pixel_fn,
                     )
-                });
-            raster
+                },
+                None => {}
+            });
+
+        // return
+        raster
+
         } else {
+
+
+            // get vector of by column as anyvalue
+            let vby = self.df
+                .lazy()
+                .select(col(self.by.as_str())
+                    .cast(DataType::Float64)
+                    .alias("field_f64"))
+                .collect()?
+                .column("field_f64")?
+                .f64()?;
+
+
+
+
             // get number of groups for multiband raster
             let bands = self.df
                 .lazy()
