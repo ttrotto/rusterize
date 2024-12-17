@@ -36,7 +36,7 @@ class Rusterize(_RasterInfo):
                  pixel_fn: str = "last",
                  background: Union[int, float] = 0):
         """
-        Fast geopandas rusterization into xarray.DataArray
+        Fast geopandas rasterization into xarray.DataArray
 
         Args:
         :param field: field to rasterize
@@ -75,7 +75,7 @@ class Rusterize(_RasterInfo):
         if self.pixel_fn not in ["sum", "first", "last", "min", "max", "count", "any"]:
             raise ValueError("pixel_fn must be one of sum, first, last, min, max, count, or any.")
 
-        # geom check
+        # geom check (slow for large dataframes)
         geom_types = set(self.gdf.geom_type)
         if geom_types > SUPPORTED_GEOM or len(geom_types & SUPPORTED_GEOM) != 1:
             raise NotImplementedError("Only Polygon and Multipolygon geometry types are supported.")

@@ -12,12 +12,11 @@ mod rasterize_polygon;
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
 use geo_types::Geometry;
-use itertools::Itertools;
+use gxhash::{HashSet, HashSetExt};
 use numpy::{
     ndarray::{Array3, Axis},
     PyArray3, ToPyArray,
 };
-use polars::export::num::Float;
 use polars::prelude::*;
 use py_geo_interface::wrappers::f64::AsGeometryVec;
 use pyo3::{
@@ -39,54 +38,107 @@ struct Rusterize<'r> {
 
 impl Rusterize {
     fn new(
-        df: DataFrame,
-        geometry: Vec<Geometry>,
+        mut df: DataFrame,
+        mut geometry: Vec<Geometry>,
         ras_info: Raster,
         pixel_fn: PixelFn,
         background: f64,
         field: String,
         by: String,
     ) -> Self {
+        // build default geometry hasher
+        let mut geomset_default: HashSet<&str> = HashSet::with_capacity(2);
+        geomset_default.insert("Polygon");
+        geomset_default.insert("MultiPolygon");
+
+        // pass geometry to hashset and check it is subset of default
+        let mut geomset: HashSet<&str> = HashSet::new();
+        let good_geom: Vec<bool> = geometry
+            .iter()
+            .enumerate()
+            .map(|(i, geom)| match geom {
+                &Geometry::Polygon(_) => {
+                    geomset.insert("Polygon");
+                    true
+                },
+                &Geometry::MultiPolygon(_) => {
+                    geomset.insert("Polygon");
+                    true
+                },
+                _ => {
+                    geomset.insert("Bad");
+                    false
+                }
+            })
+            .collect();
+
+        // filter dataframe if bad geometries
+        if !geomset.is_subset(&geomset_default) {
+            println!("Detected unsupported geometries, will be removed");
+            // keep good geometries based on row index
+            df = df.lazy()
+                .with_row_index(PlSmallStr::from("idx"), None)
+                .filter(col("idx").is_in(good_geom))
+                .collect()
+                .unwrap();
+            let mut iter = good_geom.iter();
+            geometry.retain(|_| *iter.next().unwrap());
+        }
+
         // extract field and by
         let (vfield, vby): (&Float64Chunked, Option<Vec<String>>);
         if field.is_empty() {
             // by also empty
-            (vfield, vby) = (Series::new(PlSmallStr::from("field_f64"), vec![1; df.height()]).f64().unwrap(), None)
+            (vfield, vby) = (
+                Series::new(PlSmallStr::from("field_f64"), vec![1; df.height()])
+                    .f64()
+                    .unwrap(),
+                None,
+            )
         }
 
         // casting and extraction
-        let field_name= field.as_str();
+        let field_name = field.as_str();
         let (vfield, vby) = if !by.is_empty() {
             // handle field and by
             let by_name = by.as_str();
-            match (
-                df.schema().get(field_name),
-                df.schema().get(by_name)
-            ) {
+            match (df.schema().get(field_name), df.schema().get(by_name)) {
                 // correct dtype
-                (Some(&DataType::Float64), Some(&DataType::String)) => {
-                    (df.column(field_name).unwrap().f64().unwrap(),
-                     df.column(by_name).unwrap().str().unwrap().into_iter().collect())
-                },
+                (Some(&DataType::Float64), Some(&DataType::String)) => (
+                    df.column(field_name).unwrap().f64().unwrap(),
+                    df.column(by_name)
+                        .unwrap()
+                        .str()
+                        .unwrap()
+                        .into_iter()
+                        .collect(),
+                ),
                 _ => {
                     // needs casting
                     let casted = df
                         .lazy()
-                        .select([col(field_name)
-                            .cast(DataType::Float64),
-                            col(by_name).cast(DataType::String)])?
+                        .select([
+                            col(field_name).cast(DataType::Float64),
+                            col(by_name).cast(DataType::String),
+                        ])?
                         .collect();
-                    (casted.column(field_name)?.f64().unwrap(),
-                     casted.column(by_name).unwrap().str().unwrap().into_iter().collect())
-                },
+                    (
+                        casted.column(field_name)?.f64().unwrap(),
+                        casted
+                            .column(by_name)
+                            .unwrap()
+                            .str()
+                            .unwrap()
+                            .into_iter()
+                            .collect(),
+                    )
+                }
             };
         } else {
             // handle only field
             match df.schema().get(field_name) {
                 // correct type
-                Some(DataType::Float64) => {
-                    (df.column(field_name).unwrap().f64().unwrap(), None)
-                }
+                Some(DataType::Float64) => (df.column(field_name).unwrap().f64().unwrap(), None),
                 // needs casting
                 _ => {
                     let casted = df
@@ -131,7 +183,7 @@ impl Rusterize {
                             &mut raster.index_axis_mut(Axis(0), 0),
                             &self.pixel_fn,
                         )
-                    },
+                    }
                     None => {}
                 });
 
@@ -154,10 +206,10 @@ fn rusterize_py<'py>(
     pyby: Option<&PyString>,
 ) -> PyResult<&'py PyArray3<f64>> {
     // extract dataframe
-    let df: DataFrame = pydf.into();
+    let mut df: DataFrame = pydf.into();
 
     // extract geometries
-    let geometry = pygeometry.as_geometry_vec()?.0;
+    let mut geometry = pygeometry.as_geometry_vec()?.0;
 
     // extract raster information
     let raster_info = Raster::from(&pyinfo);

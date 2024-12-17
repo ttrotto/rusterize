@@ -13,13 +13,13 @@ crate-type = ["cdylib"]
 pyo3 = { version = "0.21.2", features = ["extension-module", "nightly", "abi3-py310"] }
 numpy = "0.21.0"
 blas-src = { version = "0.10.0", features = ["openblas"] }
-#openblas-src = { version = "0.10.9", features = ["cblas", "system"] }  # was 0.10
-polars = { version = "0.44.2", features = ["lazy", "object", "dtype-struct", "simd", "performant", "unique_counts"] }
+polars = { version = "0.44.2", features = ["lazy", "object", "dtype-struct", "simd", "performant", "is_in"] }
 pyo3-polars = { version = "0.18.0", features = ["lazy", "object", "dtype-struct"] }
 itertools = "0.13.0"
 geo = "0.29.3"
 geo-types = "0.7.14"
 py_geo_interface = "0.8.0"
+gxhash = { version = "3.4.1", features = ["hybrid"] }
 
 [target.'cfg(all(any(not(target_family = "unix"), allocator = "mimalloc"), not(allocator = "default")))'.dependencies]
 mimalloc = { version = "0.1", default-features = false }
