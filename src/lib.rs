@@ -27,7 +27,6 @@ use pyo3_polars::PyDataFrame;
 use structs::raster::Raster;
 
 struct Rusterize<'r> {
-    df: DataFrame,
     geometry: Vec<Geometry>,
     ras_info: Raster,
     pixel_fn: PixelFn,
@@ -51,18 +50,17 @@ impl Rusterize {
         geomset_default.insert("Polygon");
         geomset_default.insert("MultiPolygon");
 
-        // pass geometry to hashset and check it is subset of default
+        // insert geometry into hashset and check if subset of default
         let mut geomset: HashSet<&str> = HashSet::new();
-        let good_geom: Vec<bool> = geometry
+        let mut good_geom: Vec<bool> = geometry
             .iter()
-            .enumerate()
-            .map(|(i, geom)| match geom {
+            .map(|geom| match geom {
                 &Geometry::Polygon(_) => {
                     geomset.insert("Polygon");
                     true
                 },
                 &Geometry::MultiPolygon(_) => {
-                    geomset.insert("Polygon");
+                    geomset.insert("MultiPolygon");
                     true
                 },
                 _ => {
@@ -72,17 +70,14 @@ impl Rusterize {
             })
             .collect();
 
-        // filter dataframe if bad geometries
+        // retain only good geometries
         if !geomset.is_subset(&geomset_default) {
-            println!("Detected unsupported geometries, will be removed");
-            // keep good geometries based on row index
-            df = df.lazy()
-                .with_row_index(PlSmallStr::from("idx"), None)
-                .filter(col("idx").is_in(good_geom))
-                .collect()
-                .unwrap();
+            println!("Detected unsupported geometries, will be removed.");
             let mut iter = good_geom.iter();
             geometry.retain(|_| *iter.next().unwrap());
+            df = df
+                .filter(&ChunkedArray::from_vec(PlSmallStr::from("good_geom"), good_geom))
+                .unwrap();
         }
 
         // extract field and by
@@ -151,7 +146,6 @@ impl Rusterize {
             }
         };
         Self {
-            df,
             geometry,
             ras_info,
             pixel_fn,
@@ -178,7 +172,7 @@ impl Rusterize {
                         // process only non-empty field values
                         rasterize_polygon(
                             &self.ras_info,
-                            &geom,
+                            geom,
                             &field_value,
                             &mut raster.index_axis_mut(Axis(0), 0),
                             &self.pixel_fn,
@@ -215,8 +209,8 @@ fn rusterize_py<'py>(
     let raster_info = Raster::from(&pyinfo);
 
     // extract function arguments
-    let fun = pypixel_fn.to_str()?;
-    let pixel_fn = set_pixel_function(fun);
+    let f = pypixel_fn.to_str()?;
+    let pixel_fn = set_pixel_function(f);
     let background = pybackground.extract::<f64>()?;
     let field = match pyfield {
         Some(inner) => inner.to_string(),

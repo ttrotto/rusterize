@@ -11,7 +11,7 @@ use geo::prelude::*;
 use geo_types::Geometry;
 use numpy::ndarray::Array2;
 
-pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster: &Raster) -> () {
+pub fn build_edges(edges: &mut Vec<Edge>, polygon: Geometry, raster: &Raster) -> () {
     match polygon {
         // polygon
         Geometry::Polygon(polygon) => {
@@ -48,7 +48,7 @@ pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster: &Raster) -
         // multipolygon - iterate over each inner polygon
         Geometry::MultiPolygon(polygon) => {
             for poly in polygon {
-                build_edges(edges, &Geometry::Polygon(poly.clone()), raster);
+                build_edges(edges, Geometry::Polygon(poly), raster);
             }
         }
         _ => unimplemented!("Only Polygon and MultiPolygon geometries are supported."),

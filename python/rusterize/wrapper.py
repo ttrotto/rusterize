@@ -6,8 +6,6 @@ import xarray as xr
 
 # from .rusterize import _rusterize
 
-SUPPORTED_GEOM = {"Polygon", "Multipolygon"}
-
 
 class _RasterInfo:
     def __init__(self,
@@ -21,12 +19,8 @@ class _RasterInfo:
         :param res: tuple of (xres, yres) for rasterized data
         """
         self.gdf = gdf
-        self.res = res
-        self.bounds = self.gdf.total_bounds
-
-        # attributes for passthrought
-        self.xres, self.yres = self.res
-        self.xmin, self.ymin, self.xmax, self.ymax = self.bounds
+        self.xres, self.yres = res
+        self.xmin, self.ymin, self.xmax, self.ymax = self.gdf.total_bounds
 
 
 class Rusterize(_RasterInfo):
@@ -60,8 +54,10 @@ class Rusterize(_RasterInfo):
             raise TypeError("Must pass a valid string to field.")
         if not isinstance(self.by, (str, type(None))):
             raise TypeError("Must pass a valid string to by.")
-        if not isinstance(self.res, (Tuple[int, ...], Tuple[float, ...])):
-            raise TypeError("Must pass a valid resolution tuple.")
+        if not isinstance(self.xres, (int, float)):
+            raise TypeError("Must pass a valid x resolution.")
+        if not isinstance(self.yres, (int, float)):
+            raise TypeError("Must pass a valid y resolution.")
         if not isinstance(self.pixel_fn, str):
             raise TypeError("Must pass a valid string to pixel_fn.")
         if not isinstance(self.background, (int, float)):
@@ -70,18 +66,11 @@ class Rusterize(_RasterInfo):
         # value check
         if by and not field:
             raise ValueError("If by is specified, field must also be specified.")
-        if len(self.res) < 2 or any(self.res) <= 0 or any(not isinstance(x, (int, float)) for x in self.res):
-            raise ValueError("Must pass valid resolution tuple values.")
-        if self.pixel_fn not in ["sum", "first", "last", "min", "max", "count", "any"]:
-            raise ValueError("pixel_fn must be one of sum, first, last, min, max, count, or any.")
-
-        # geom check (slow for large dataframes)
-        geom_types = set(self.gdf.geom_type)
-        if geom_types > SUPPORTED_GEOM or len(geom_types & SUPPORTED_GEOM) != 1:
-            raise NotImplementedError("Only Polygon and Multipolygon geometry types are supported.")
+        if any((self.xres, self.yres)) <= 0 or (type(self.xres) != type(self.yres)):
+            raise ValueError("Must pass valid resolution tuple of values of consistent dtype.")
 
     def _to_polars(self):
-        """ Drop geometry and pass data as polars dataframe """
+        """ Drop geometry and pass data as polars dataframe. Slow for large datasets. """
         return pl.from_pandas(self.gdf.drop(columns=["geometry"]))
 
     def process(self) -> xr.DataArray:

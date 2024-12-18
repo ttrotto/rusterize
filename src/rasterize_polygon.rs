@@ -11,7 +11,7 @@ use numpy::ndarray::ArrayViewMut2;
 
 pub fn rasterize_polygon(
     raster: &Raster,
-    polygon: &Geometry,
+    polygon: Geometry,
     field_value: &f64,
     ndarray: &mut ArrayViewMut2<f64>,
     pxfn: &PixelFn,
