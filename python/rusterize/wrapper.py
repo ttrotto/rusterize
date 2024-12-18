@@ -4,6 +4,7 @@ from geopandas import GeoDataFrame
 import polars as pl
 import xarray as xr
 
+
 # from .rusterize import _rusterize
 
 
@@ -66,7 +67,7 @@ class Rusterize(_RasterInfo):
         # value check
         if by and not field:
             raise ValueError("If by is specified, field must also be specified.")
-        if any((self.xres, self.yres)) <= 0 or (type(self.xres) != type(self.yres)):
+        if any((self.xres, self.yres)) <= 0 or not isinstance(self.xres, type(self.yres)):
             raise ValueError("Must pass valid resolution tuple of values of consistent dtype.")
 
     def _to_polars(self):
@@ -75,9 +76,4 @@ class Rusterize(_RasterInfo):
 
     def process(self) -> xr.DataArray:
         pdf = self._to_polars()
-        geometry = self.gpd.geometry
-
-
-
-
-
+        geometry = self.gdf.geometry

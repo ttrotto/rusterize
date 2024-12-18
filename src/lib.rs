@@ -12,7 +12,6 @@ mod rasterize_polygon;
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
 use geo_types::Geometry;
-use gxhash::{HashSet, HashSetExt};
 use numpy::{
     ndarray::{Array3, Axis},
     PyArray3, ToPyArray,
@@ -45,33 +44,22 @@ impl Rusterize {
         field: String,
         by: String,
     ) -> Self {
-        // build default geometry hasher
-        let mut geomset_default: HashSet<&str> = HashSet::with_capacity(2);
-        geomset_default.insert("Polygon");
-        geomset_default.insert("MultiPolygon");
-
-        // insert geometry into hashset and check if subset of default
-        let mut geomset: HashSet<&str> = HashSet::new();
+        // check if any bad geometry
+        let mut bad: usize = 0;
         let mut good_geom: Vec<bool> = geometry
             .iter()
             .map(|geom| match geom {
-                &Geometry::Polygon(_) => {
-                    geomset.insert("Polygon");
-                    true
-                },
-                &Geometry::MultiPolygon(_) => {
-                    geomset.insert("MultiPolygon");
-                    true
-                },
+                &Geometry::Polygon(_) => true,
+                &Geometry::MultiPolygon(_) => true,
                 _ => {
-                    geomset.insert("Bad");
+                    bad += 1;  // keep track of wrong geometries
                     false
-                }
+                },
             })
             .collect();
 
         // retain only good geometries
-        if !geomset.is_subset(&geomset_default) {
+        if bad > 0 {
             println!("Detected unsupported geometries, will be removed.");
             let mut iter = good_geom.iter();
             geometry.retain(|_| *iter.next().unwrap());
@@ -82,69 +70,70 @@ impl Rusterize {
 
         // extract field and by
         let (vfield, vby): (&Float64Chunked, Option<Vec<String>>);
-        if field.is_empty() {
+        (vfield, vby) = if field.is_empty() {
             // by also empty
-            (vfield, vby) = (
+            (
                 Series::new(PlSmallStr::from("field_f64"), vec![1; df.height()])
                     .f64()
                     .unwrap(),
                 None,
             )
-        }
-
-        // casting and extraction
-        let field_name = field.as_str();
-        let (vfield, vby) = if !by.is_empty() {
-            // handle field and by
-            let by_name = by.as_str();
-            match (df.schema().get(field_name), df.schema().get(by_name)) {
-                // correct dtype
-                (Some(&DataType::Float64), Some(&DataType::String)) => (
-                    df.column(field_name).unwrap().f64().unwrap(),
-                    df.column(by_name)
-                        .unwrap()
-                        .str()
-                        .unwrap()
-                        .into_iter()
-                        .collect(),
-                ),
-                _ => {
-                    // needs casting
-                    let casted = df
-                        .lazy()
-                        .select([
-                            col(field_name).cast(DataType::Float64),
-                            col(by_name).cast(DataType::String),
-                        ])?
-                        .collect();
-                    (
-                        casted.column(field_name)?.f64().unwrap(),
-                        casted
-                            .column(by_name)
+        } else {
+            // casting and extraction
+            let field_name = field.as_str();
+            if !by.is_empty() {
+                // handle field and by
+                let by_name = by.as_str();
+                match (df.schema().get(field_name), df.schema().get(by_name)) {
+                    // correct dtype
+                    (Some(&DataType::Float64), Some(&DataType::String)) => (
+                        df.column(field_name).unwrap().f64().unwrap(),
+                        df.column(by_name)
                             .unwrap()
                             .str()
                             .unwrap()
                             .into_iter()
                             .collect(),
-                    )
-                }
-            };
-        } else {
-            // handle only field
-            match df.schema().get(field_name) {
-                // correct type
-                Some(DataType::Float64) => (df.column(field_name).unwrap().f64().unwrap(), None),
-                // needs casting
-                _ => {
-                    let casted = df
-                        .lazy()
-                        .select([col(field_name).cast(DataType::Float64)])
-                        .collect()
-                        .unwrap();
-                    (casted.column(field_name).unwrap().f64().unwrap(), None)
+                    ),
+                    _ => {
+                        // needs casting
+                        let casted = df
+                            .lazy()
+                            .select([
+                                col(field_name).cast(DataType::Float64),
+                                col(by_name).cast(DataType::String),
+                            ])?
+                            .collect();
+                        (
+                            casted.column(field_name)?.f64().unwrap(),
+                            casted
+                                .column(by_name)
+                                .unwrap()
+                                .str()
+                                .unwrap()
+                                .into_iter()
+                                .collect(),
+                        )
+                    }
+                };
+            } else {
+                // handle only field
+                match df.schema().get(field_name) {
+                    // correct type
+                    Some(DataType::Float64) => (df.column(field_name).unwrap().f64().unwrap(), None),
+                    // needs casting
+                    _ => {
+                        let casted = df
+                            .lazy()
+                            .select([col(field_name).cast(DataType::Float64)])
+                            .collect()
+                            .unwrap();
+                        (casted.column(field_name).unwrap().f64().unwrap(), None)
+                    }
                 }
             }
         };
+
         Self {
             geometry,
             ras_info,
@@ -158,7 +147,7 @@ impl Rusterize {
     fn rusterize_sequential(self) -> Array3<f64> {
         if Some(self.vby) {
             // multiband raster
-            let bands
+            let bands =
         } else {
             // singleband raster
             let mut raster = self.ras_info.build_raster(1);
@@ -200,10 +189,10 @@ fn rusterize_py<'py>(
     pyby: Option<&PyString>,
 ) -> PyResult<&'py PyArray3<f64>> {
     // extract dataframe
-    let mut df: DataFrame = pydf.into();
+    let df: DataFrame = pydf.into();
 
     // extract geometries
-    let mut geometry = pygeometry.as_geometry_vec()?.0;
+    let geometry = pygeometry.as_geometry_vec()?.0;
 
     // extract raster information
     let raster_info = Raster::from(&pyinfo);

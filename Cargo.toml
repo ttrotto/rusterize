@@ -19,7 +19,6 @@ itertools = "0.13.0"
 geo = "0.29.3"
 geo-types = "0.7.14"
 py_geo_interface = "0.8.0"
-gxhash = { version = "3.4.1", features = ["hybrid"] }
 
 [target.'cfg(all(any(not(target_family = "unix"), allocator = "mimalloc"), not(allocator = "default")))'.dependencies]
 mimalloc = { version = "0.1", default-features = false }
