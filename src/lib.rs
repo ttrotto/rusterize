@@ -35,31 +35,23 @@ struct Rusterize<'r> {
 }
 
 impl Rusterize<'_> {
-    fn new(
-        mut df: Option<DataFrame>,
-        mut geometry: Vec<Geometry>,
-        ras_info: Raster,
-        pixel_fn: PixelFn,
-        background: f64,
-        field_name: Option<&str>,
-        by_name: Option<&str>,
+    fn new(&self,
+           mut geometry: Vec<Geometry>,
+           ras_info: Raster,
+           pixel_fn: PixelFn,
+           background: f64,
+           mut df: Option<DataFrame>,
+           field_name: Option<&str>,
+           by_name: Option<&str>,
     ) -> Self {
         // check if any bad geometry
-        let mut bad: usize = 0;
-        let mut good_geom: Vec<bool> = geometry
+        let good_geom: Vec<bool> = geometry
             .iter()
-            .map(|geom| match geom {
-                &Geometry::Polygon(_) => true,
-                &Geometry::MultiPolygon(_) => true,
-                _ => {
-                    bad += 1; // keep track of wrong geometries
-                    false
-                }
-            })
+            .map(|geom| matches!(geom, Geometry::Polygon(_) | Geometry::MultiPolygon(_)))
             .collect();
 
         // retain only good geometries
-        if bad > 0 {
+        if good_geom.iter().any(|&valid| !valid)  {
             println!("Detected unsupported geometries, will be removed.");
             let mut iter = good_geom.iter();
             geometry.retain(|_| *iter.next().unwrap());
@@ -78,11 +70,7 @@ impl Rusterize<'_> {
             None => {
                 // case 1: no DataFrame, return dummy field and None for `by`
                 (
-                    Some(
-                        Series::new(PlSmallStr::from("field_f64"), vec![1; geometry.len()])
-                            .f64()
-                            .unwrap(),
-                    ),
+                    Some(self.make_dummy_field()),
                     None,
                 )
             }
@@ -139,9 +127,10 @@ impl Rusterize<'_> {
                         // case 4: only `by` is present
                         match df.schema().get(by_name) {
                             // correct type
-                            Some(&DataType::String) => {
-                                (None, Some(df.column(by_name).unwrap().str().unwrap()))
-                            }
+                            Some(&DataType::String) => (
+                                Some(self.make_dummy_field()),
+                                Some(df.column(by_name).unwrap().str().unwrap()),
+                            ),
                             // needs casting
                             _ => {
                                 let casted = df
@@ -149,7 +138,10 @@ impl Rusterize<'_> {
                                     .select([col(by_name).cast(DataType::String)])
                                     .collect()
                                     .unwrap();
-                                (None, Some(casted.column(by_name).unwrap().str().unwrap()))
+                                (
+                                    Some(self.make_dummy_field()),
+                                    Some(casted.column(by_name).unwrap().str().unwrap()),
+                                )
                             }
                         }
                     }
@@ -171,35 +163,39 @@ impl Rusterize<'_> {
         }
     }
 
+    fn make_dummy_field(&self) -> &Float64Chunked {
+        &Float64Chunked::from_vec(PlSmallStr::from("dummy"), vec![1.0; self.geometry.len()])
+    }
+
     fn rusterize_sequential(self) -> Array3<f64> {
-        if self.by.is_some() {
-            // multiband raster
-            // let bands =
-        } else {
-            // main singleband raster
-            let mut raster = self.ras_info.build_raster(1);
+        let vfield: Option<Vec<f64>> = self.field.and_then(|inner| inner.into_iter().collect());
+        let vby: Option<Vec<String>> = self.by.and_then(|inner| inner.into_iter().collect());
 
-            let vfield: Option<Vec<f64>> = self.field.and_then(|inner| inner.into_iter().collect());
+        match vby {
+            Some(vby) => {}
+            None => {
+                // singleband raster
+                let mut raster = self.ras_info.build_raster(1);
 
-            self.field
-                .into_iter()
-                .zip(self.geometry.into_iter())
-                .for_each(|(field_value, geom)| match field_value {
-                    Some(field_value) => {
-                        // process only non-empty field values
-                        rasterize_polygon(
-                            &self.ras_info,
-                            geom,
-                            &field_value,
-                            &mut raster.index_axis_mut(Axis(0), 0),
-                            &self.pixel_fn,
-                        )
-                    }
-                    None => {}
-                });
+                vfield.into_iter().zip(self.geometry.into_iter()).for_each(
+                    |(field_value, geom)| match field_value {
+                        Some(field_value) => {
+                            // process only non-empty field values
+                            rasterize_polygon(
+                                &self.ras_info,
+                                geom,
+                                &field_value,
+                                &mut raster.index_axis_mut(Axis(0), 0),
+                                &self.pixel_fn,
+                            )
+                        }
+                        None => {}
+                    },
+                );
 
-            // return
-            raster
+                // return
+                raster
+            }
         }
     }
 }
