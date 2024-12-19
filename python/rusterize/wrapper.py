@@ -26,8 +26,8 @@ class _RasterInfo:
 
 class Rusterize(_RasterInfo):
     def __init__(self,
-                 field: Optional[str],
-                 by: Optional[str],
+                 field: Optional[str] = None,
+                 by: Optional[str] = None,
                  pixel_fn: str = "last",
                  background: Union[int, float] = 0):
         """
@@ -71,9 +71,10 @@ class Rusterize(_RasterInfo):
             raise ValueError("Must pass valid resolution tuple of values of consistent dtype.")
 
     def _to_polars(self):
-        """ Drop geometry and pass data as polars dataframe. Slow for large datasets. """
-        return pl.from_pandas(self.gdf.drop(columns=["geometry"]))
+        """ Extracts columns of interest and convert to polars """
+        cols = [col for col in (self.field, self.by) if col]
+        return pl.from_pandas(self.gdf[cols]) if cols else None
 
     def process(self) -> xr.DataArray:
-        pdf = self._to_polars()
-        geometry = self.gdf.geometry
+        pf = self._to_polars()
+

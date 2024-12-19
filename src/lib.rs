@@ -30,19 +30,19 @@ struct Rusterize<'r> {
     ras_info: Raster,
     pixel_fn: PixelFn,
     background: f64,
-    vfield: &'r Float64Chunked,
-    vby: Option<Vec<String>>,
+    field: Option<&'r Float64Chunked>,
+    by: Option<&'r StringChunked>,
 }
 
-impl Rusterize {
+impl Rusterize<'_> {
     fn new(
-        mut df: DataFrame,
+        mut df: Option<DataFrame>,
         mut geometry: Vec<Geometry>,
         ras_info: Raster,
         pixel_fn: PixelFn,
         background: f64,
-        field: String,
-        by: String,
+        field_name: Option<&str>,
+        by_name: Option<&str>,
     ) -> Self {
         // check if any bad geometry
         let mut bad: usize = 0;
@@ -52,9 +52,9 @@ impl Rusterize {
                 &Geometry::Polygon(_) => true,
                 &Geometry::MultiPolygon(_) => true,
                 _ => {
-                    bad += 1;  // keep track of wrong geometries
+                    bad += 1; // keep track of wrong geometries
                     false
-                },
+                }
             })
             .collect();
 
@@ -63,72 +63,99 @@ impl Rusterize {
             println!("Detected unsupported geometries, will be removed.");
             let mut iter = good_geom.iter();
             geometry.retain(|_| *iter.next().unwrap());
-            df = df
-                .filter(&ChunkedArray::from_vec(PlSmallStr::from("good_geom"), good_geom))
-                .unwrap();
+            df = df.and_then(|inner| {
+                inner
+                    .filter(&BooleanChunked::from_iter_values(
+                        PlSmallStr::from("good_geom"),
+                        good_geom.into_iter(),
+                    ))
+                    .ok()
+            });
         }
 
         // extract field and by
-        let (vfield, vby): (&Float64Chunked, Option<Vec<String>>);
-        (vfield, vby) = if field.is_empty() {
-            // by also empty
-            (
-                Series::new(PlSmallStr::from("field_f64"), vec![1; df.height()])
-                    .f64()
-                    .unwrap(),
-                None,
-            )
-        } else {
-            // casting and extraction
-            let field_name = field.as_str();
-            if !by.is_empty() {
-                // handle field and by
-                let by_name = by.as_str();
-                match (df.schema().get(field_name), df.schema().get(by_name)) {
-                    // correct dtype
-                    (Some(&DataType::Float64), Some(&DataType::String)) => (
-                        df.column(field_name).unwrap().f64().unwrap(),
-                        df.column(by_name)
-                            .unwrap()
-                            .str()
-                            .unwrap()
-                            .into_iter()
-                            .collect(),
+        let (field, by): (Option<&Float64Chunked>, Option<&StringChunked>) = match df {
+            None => {
+                // case 1: no DataFrame, return dummy field and None for `by`
+                (
+                    Some(
+                        Series::new(PlSmallStr::from("field_f64"), vec![1; geometry.len()])
+                            .f64()
+                            .unwrap(),
                     ),
-                    _ => {
-                        // needs casting
-                        let casted = df
-                            .lazy()
-                            .select([
-                                col(field_name).cast(DataType::Float64),
-                                col(by_name).cast(DataType::String),
-                            ])?
-                            .collect();
-                        (
-                            casted.column(field_name)?.f64().unwrap(),
-                            casted
-                                .column(by_name)
-                                .unwrap()
-                                .str()
-                                .unwrap()
-                                .into_iter()
-                                .collect(),
-                        )
+                    None,
+                )
+            }
+            Some(df) => {
+                // casting and extraction
+                match (field_name, by_name) {
+                    (Some(field_name), Some(by_name)) => {
+                        // case 2: both `field` and `by` are present
+                        match (df.schema().get(field_name), df.schema().get(by_name)) {
+                            // correct dtype
+                            (Some(&DataType::Float64), Some(&DataType::String)) => (
+                                Some(df.column(field_name).unwrap().f64().unwrap()),
+                                Some(df.column(by_name).unwrap().str().unwrap()),
+                            ),
+                            // needs casting
+                            _ => {
+                                let casted = df
+                                    .lazy()
+                                    .select([
+                                        col(field_name).cast(DataType::Float64),
+                                        col(by_name).cast(DataType::String),
+                                    ])
+                                    .collect()
+                                    .unwrap();
+                                (
+                                    Some(casted.column(field_name).unwrap().f64().unwrap()),
+                                    Some(casted.column(by_name).unwrap().str().unwrap()),
+                                )
+                            }
+                        }
                     }
-                };
-            } else {
-                // handle only field
-                match df.schema().get(field_name) {
-                    // correct type
-                    Some(DataType::Float64) => (df.column(field_name).unwrap().f64().unwrap(), None),
-                    // needs casting
-                    _ => {
-                        let casted = df
-                            .lazy()
-                            .select([col(field_name).cast(DataType::Float64)])
-                            .collect()
-                            .unwrap();
-                        (casted.column(field_name).unwrap().f64().unwrap(), None)
+                    (Some(field_name), None) => {
+                        // case 3: only `field` is present
+                        match df.schema().get(field_name) {
+                            // correct type
+                            Some(&DataType::Float64) => {
+                                (Some(df.column(field_name).unwrap().f64().unwrap()), None)
+                            }
+                            // needs casting
+                            _ => {
+                                let casted = df
+                                    .lazy()
+                                    .select([col(field_name).cast(DataType::Float64)])
+                                    .collect()
+                                    .unwrap();
+                                (
+                                    Some(casted.column(field_name).unwrap().f64().unwrap()),
+                                    None,
+                                )
+                            }
+                        }
+                    }
+                    (None, Some(by_name)) => {
+                        // case 4: only `by` is present
+                        match df.schema().get(by_name) {
+                            // correct type
+                            Some(&DataType::String) => {
+                                (None, Some(df.column(by_name).unwrap().str().unwrap()))
+                            }
+                            // needs casting
+                            _ => {
+                                let casted = df
+                                    .lazy()
+                                    .select([col(by_name).cast(DataType::String)])
+                                    .collect()
+                                    .unwrap();
+                                (None, Some(casted.column(by_name).unwrap().str().unwrap()))
+                            }
+                        }
+                    }
+                    (None, None) => {
+                        // neither `field` nor `by` is specified, invalid case
+                        panic!("Both `field` and `by` cannot be None with a DataFrame present.");
                     }
                 }
             }
@@ -139,21 +166,22 @@ impl Rusterize {
             ras_info,
             pixel_fn,
             background,
-            vfield,
-            vby,
+            field,
+            by,
         }
     }
 
     fn rusterize_sequential(self) -> Array3<f64> {
-        if Some(self.vby) {
+        if self.by.is_some() {
             // multiband raster
-            let bands =
+            // let bands =
         } else {
-            // singleband raster
+            // main singleband raster
             let mut raster = self.ras_info.build_raster(1);
 
-            // iter rasterize
-            self.vfield
+            let vfield: Option<Vec<f64>> = self.field.and_then(|inner| inner.into_iter().collect());
+
+            self.field
                 .into_iter()
                 .zip(self.geometry.into_iter())
                 .for_each(|(field_value, geom)| match field_value {
@@ -180,19 +208,19 @@ impl Rusterize {
 #[pyo3(name = "_rusterize")]
 fn rusterize_py<'py>(
     py: Python<'py>,
-    pydf: PyDataFrame,
     pygeometry: &PyAny,
     pyinfo: &PyAny,
     pypixel_fn: &PyString,
     pybackground: &PyAny,
+    pydf: Option<PyDataFrame>,
     pyfield: Option<&PyString>,
     pyby: Option<&PyString>,
 ) -> PyResult<&'py PyArray3<f64>> {
     // extract dataframe
-    let df: DataFrame = pydf.into();
+    let df: Option<DataFrame> = pydf.and_then(|inner| Some(inner.into()));
 
-    // extract geometries
-    let geometry = pygeometry.as_geometry_vec()?.0;
+    // extract
+    let geometry: Vec<Geometry> = pygeometry.as_geometry_vec()?.0;
 
     // extract raster information
     let raster_info = Raster::from(&pyinfo);
@@ -201,14 +229,8 @@ fn rusterize_py<'py>(
     let f = pypixel_fn.to_str()?;
     let pixel_fn = set_pixel_function(f);
     let background = pybackground.extract::<f64>()?;
-    let field = match pyfield {
-        Some(inner) => inner.to_string(),
-        None => String::new(),
-    };
-    let by = match pyby {
-        Some(inner) => inner.to_string(),
-        None => String::new(),
-    };
+    let field = pyfield.and_then(|inner| Some(inner.to_str().unwrap()));
+    let by = pyby.and_then(|inner| Some(inner.to_str().unwrap()));
 
     // rusterize
     let ret = py.allow_threads(|| {
