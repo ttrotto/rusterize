@@ -3,7 +3,7 @@ extern crate blas_src;
 
 mod allocator;
 mod structs {
-    mod edge;
+    pub mod edge;
     pub mod raster;
 }
 mod edgelist;
@@ -13,11 +13,16 @@ mod rasterize_polygon;
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
 use geo_types::Geometry;
+use itertools::Itertools;
 use numpy::{
     ndarray::{Array3, Axis},
     PyArray3, ToPyArray,
 };
-use polars::prelude::*;
+use polars::{
+    prelude::*,
+    export::rayon::{
+        iter::ParallelIterator,
+    prelude::IntoParallelIterator}};
 use py_geo_interface::wrappers::f64::AsGeometryVec;
 use pyo3::{
     prelude::*,
@@ -105,7 +110,7 @@ impl Rusterize<'_> {
                         let casted = df
                             .lazy()
                             .with_columns([
-                                lit(1.0).alias("field_f64"),
+                                lit(1.0).alias("field_f64"), // dummy field
                                 col(by_name).cast(DataType::String).alias("by_str"),
                             ])
                             .collect()
@@ -134,19 +139,34 @@ impl Rusterize<'_> {
     }
 
     fn rusterize_sequential(self) -> Array3<f64> {
-        let vfield: Vec<Option<f64>> = self.field.and_then(|inner| inner.into_iter().collect());
-        let vby: Option<Vec<Option<String>>> =
-            self.by.and_then(|inner| inner.into_iter().collect());
+        // // extract vectors and retain None to match geometry length
+        // let vfield: Vec<Option<f64>> = self.field.into_iter().collect();
+        // let vby: Option<Vec<Option<String>>> = self.by.and_then(|inner| {
+        //     inner
+        //         .into_iter()
+        //         .map(|s| s.iter().map(|opt_s| opt_s).collect())
+        // });
 
-        match vby {
-            Some(vby) => {}
+        match self.by {
+            Some(by) => {
+                // multiband raster
+                let groups = by.group_tuples(true, true).unwrap();
+                let mut raster = self.ras_info.build_raster(groups.len());
+
+                // parallel iterator of (group_idx: IdxSize = u32, idxs: IdxVec = Vec<u32>)
+                groups.into_idx().into_par_iter().for_each(|(group_idx, idxs)| {
+
+                });
+
+                raster
+            }
             None => {
                 // singleband raster
                 let mut raster = self.ras_info.build_raster(1);
 
                 vfield.into_iter().zip(self.geometry.into_iter()).for_each(
-                    |(field_value, geom)| match field_value {
-                        Some(field_value) => {
+                    |(field_value, geom)| {
+                        if let Some(field_value) = field_value {
                             // process only non-empty field values
                             rasterize_polygon(
                                 &self.ras_info,
@@ -156,7 +176,6 @@ impl Rusterize<'_> {
                                 &self.pixel_fn,
                             )
                         }
-                        None => {}
                     },
                 );
 
