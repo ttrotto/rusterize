@@ -12,19 +12,19 @@ crate-type = ["cdylib"]
 pyo3 = { version = "0.21.2", features = ["extension-module", "nightly", "abi3-py310"] }
 numpy = "0.21.0"
 blas-src = { version = "0.10.0", features = ["openblas"] }
-polars = { version = "0.44.2", features = ["lazy", "object", "simd", "performant", "nightly"] }
-pyo3-polars = { version = "0.18.0", features = ["lazy", "object"] }
+polars = { version = "0.44.2", features = ["lazy", "object", "dtype-struct", "simd", "performant", "nightly"] }
+pyo3-polars = { version = "0.18.0", features = ["lazy", "object", "dtype-struct"] }
 itertools = "0.13.0"
 geo = "0.29.3"
 geo-types = "0.7.14"
 py_geo_interface = "0.8.0"
 
 # OS-specific allocators
-[target.'cfg(all(any(not(target_family = "unix"), allocator = "mimalloc")))'.dependencies]
+[target.'cfg(all(any(not(target_family = "unix"), allocator = "mimalloc"), not(allocator = "default")))'.dependencies]
 mimalloc = { version = "*", default-features = false }
 
-[target.'cfg(all(target_family = "unix", not(target_os = "macos"), not(allocator = "mimalloc")))'.dependencies]
+[target.'cfg(all(target_family = "unix", not(target_os = "macos"), not(allocator = "mimalloc"), not(allocator = "default")))'.dependencies]
 jemallocator = { version = "*", features = ["disable_initial_exec_tls", "background_threads"] }
 
-[target.'cfg(all(target_family = "unix", target_os = "macos", not(allocator = "mimalloc")))'.dependencies]
+[target.'cfg(all(target_family = "unix", target_os = "macos", not(allocator = "mimalloc"), not(allocator = "default")))'.dependencies]
 jemallocator = { version = "*", features = ["disable_initial_exec_tls"] }

@@ -2,8 +2,8 @@
 Structure to contain information on raster data.
  */
 
-use pyo3::prelude::*;
 use numpy::ndarray::Array3;
+use pyo3::prelude::*;
 
 #[derive(FromPyObject)]
 pub struct Raster {
@@ -20,7 +20,9 @@ pub struct Raster {
 impl Raster {
     // map PyAny information to Raster
     pub fn from(pyinfo: &PyAny) -> Self {
-        let raster_info: Raster = pyinfo.extract().expect("Failed to extract raster information");
+        let raster_info: Raster = pyinfo
+            .extract()
+            .expect("Failed to extract raster information");
         let nrows = ((raster_info.ymax - raster_info.ymin) / raster_info.yres).ceil() as usize;
         let ncols = ((raster_info.xmax - raster_info.xmin) / raster_info.xres).ceil() as usize;
         Self {

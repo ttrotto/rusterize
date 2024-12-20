@@ -17,12 +17,16 @@ pub fn build_edges(edges: &mut Vec<Edge>, polygon: Geometry, raster: &Raster) ->
         Geometry::Polygon(polygon) => {
             // build Nx2 array of nodes (x, y)
             let mut node_array = Array2::<f64>::zeros((polygon.coords_count(), 2));
-            polygon.exterior().coords_iter().enumerate().for_each(|(i, coord)| {
-                node_array[[i, 0]] = coord.x;
-                node_array[[i, 1]] = coord.y;
-            });
+            polygon
+                .exterior()
+                .coords_iter()
+                .enumerate()
+                .for_each(|(i, coord)| {
+                    node_array[[i, 0]] = coord.x;
+                    node_array[[i, 1]] = coord.y;
+                });
             let nrows = node_array.nrows() - 1; // drop last entry because duplicate of first
-            // add Edge to edges vector
+                                                // add Edge to edges vector
             for i in 0..nrows {
                 let y0 = (raster.ymax - node_array[[i, 1]]) / raster.yres - 0.5;
                 let y1 = (raster.ymax - node_array[[i + 1, 1]]) / raster.yres - 0.5;

@@ -1,30 +1,9 @@
 #![feature(extract_if)]
-
-#[cfg(all(any(not(target_family = "unix"), allocator = "mimalloc")))]
-use mimalloc::MiMalloc;
-
-#[cfg(all(any(not(target_family = "unix"), allocator = "mimalloc")))]
-#[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
-
-#[cfg(all(target_family = "unix", not(target_os = "macos"), not(allocator = "mimalloc")))]
-use jemallocator::Jemalloc;
-
-#[cfg(all(target_family = "unix", not(target_os = "macos"), not(allocator = "mimalloc")))]
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
-
-#[cfg(all(target_family = "unix", target_os = "macos", not(allocator = "mimalloc")))]
-use jemallocator::Jemalloc;
-
-#[cfg(all(target_family = "unix", target_os = "macos", not(allocator = "mimalloc")))]
-#[global_allocator]
-static GLOBAL: Jemalloc = Jemalloc;
-
 extern crate blas_src;
 
+mod allocator;
 mod structs {
-    pub mod edge;
+    mod edge;
     pub mod raster;
 }
 mod edgelist;
@@ -91,7 +70,7 @@ impl Rusterize<'_> {
         let (field, by) = match df {
             None => (
                 // case 1: make dummy variables
-                &Float64Chunked::from_vec(PlSmallStr::from("dummy"), vec![1.0; geometry.len()]),
+                &Float64Chunked::from_vec(PlSmallStr::from("field_f64"), vec![1.0; geometry.len()]),
                 None,
             ),
             Some(df) => {
@@ -125,15 +104,15 @@ impl Rusterize<'_> {
                         // case 4: only `by` is present
                         let casted = df
                             .lazy()
-                            .with_column(col(by_name).cast(DataType::String))
+                            .with_columns([
+                                lit(1.0).alias("field_f64"),
+                                col(by_name).cast(DataType::String).alias("by_str"),
+                            ])
                             .collect()
                             .unwrap();
                         (
-                            &Float64Chunked::from_vec(
-                                PlSmallStr::from("dummy"),
-                                vec![1.0; geometry.len()],
-                            ),
-                            Some(casted.column(by_name).unwrap().str().unwrap()),
+                            casted.column("field_64").unwrap().f64().unwrap(),
+                            Some(casted.column("by_str").unwrap().str().unwrap()),
                         )
                     }
                     (None, None) => {
@@ -155,8 +134,9 @@ impl Rusterize<'_> {
     }
 
     fn rusterize_sequential(self) -> Array3<f64> {
-        let vfield: Option<Vec<f64>> = self.field.and_then(|inner| inner.into_iter().collect());
-        let vby: Option<Vec<String>> = self.by.and_then(|inner| inner.into_iter().collect());
+        let vfield: Vec<Option<f64>> = self.field.and_then(|inner| inner.into_iter().collect());
+        let vby: Option<Vec<Option<String>>> =
+            self.by.and_then(|inner| inner.into_iter().collect());
 
         match vby {
             Some(vby) => {}
