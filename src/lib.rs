@@ -19,10 +19,9 @@ use numpy::{
     PyArray3, ToPyArray,
 };
 use polars::{
+    export::rayon::{iter::ParallelIterator, prelude::IntoParallelIterator},
     prelude::*,
-    export::rayon::{
-        iter::ParallelIterator,
-    prelude::IntoParallelIterator}};
+};
 use py_geo_interface::wrappers::f64::AsGeometryVec;
 use pyo3::{
     prelude::*,
@@ -139,24 +138,40 @@ impl Rusterize<'_> {
     }
 
     fn rusterize_sequential(self) -> Array3<f64> {
-        // // extract vectors and retain None to match geometry length
-        // let vfield: Vec<Option<f64>> = self.field.into_iter().collect();
-        // let vby: Option<Vec<Option<String>>> = self.by.and_then(|inner| {
-        //     inner
-        //         .into_iter()
-        //         .map(|s| s.iter().map(|opt_s| opt_s).collect())
-        // });
-
+        // main
         match self.by {
             Some(by) => {
                 // multiband raster
                 let groups = by.group_tuples(true, true).unwrap();
                 let mut raster = self.ras_info.build_raster(groups.len());
 
-                // parallel iterator of (group_idx: IdxSize = u32, idxs: IdxVec = Vec<u32>)
-                groups.into_idx().into_par_iter().for_each(|(group_idx, idxs)| {
+                // parallel iterator of (group_idx := IdxSize = u32, idxs := IdxVec = Vec<u32>)
+                groups
+                    .into_idx()
+                    .into_par_iter()
+                    .for_each(|(group_idx, idxs)| {
+                        // group field values and geometries
+                        let grouped_geom: Vec<Geometry> =
+                            idxs.iter().map(|&i| self.geometry[i as usize]).collect();
+                        let grouped_values: Vec<Option<f64>> =
+                            idxs.iter().map(|&i| self.field.get(i as usize)).collect();
 
-                });
+                        grouped_values
+                            .into_iter()
+                            .zip(grouped_geom.into_iter())
+                            .for_each(|(field_value, geom)| {
+                                if let Some(field_value) = field_value {
+                                    // process only non-empty field values
+                                    rasterize_polygon(
+                                        &self.ras_info,
+                                        geom,
+                                        &field_value,
+                                        &mut raster.index_axis_mut(Axis(0), group_idx as usize),
+                                        &self.pixel_fn,
+                                    )
+                                }
+                            });
+                    });
 
                 raster
             }

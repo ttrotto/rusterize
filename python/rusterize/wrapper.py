@@ -1,6 +1,7 @@
+from __future__ import annotations
 from typing import Optional, Tuple, Union
 
-from geopandas import GeoDataFrame
+from pandas import DataFrame
 import polars as pl
 import xarray as xr
 
@@ -10,7 +11,7 @@ import xarray as xr
 
 class _RasterInfo:
     def __init__(self,
-                 gdf: GeoDataFrame,
+                 gdf: DataFrame,
                  res: Union[Tuple[int, ...], Tuple[float, ...]]):
         """
         Contrains information to create a raster object
@@ -49,7 +50,7 @@ class Rusterize(_RasterInfo):
         self.background = background
 
         # type checks
-        if not isinstance(self.gdf, GeoDataFrame):
+        if not isinstance(self.gdf, DataFrame):
             raise TypeError("Must pass a valid geopandas dataframe.")
         if not isinstance(self.field, (str, type(None))):
             raise TypeError("Must pass a valid string to field.")
