@@ -145,20 +145,24 @@ impl Rusterize<'_> {
                 let groups = by.group_tuples(true, true).unwrap();
                 let mut raster = self.ras_info.build_raster(groups.len());
 
-                // parallel iterator of (group_idx := IdxSize = u32, idxs := IdxVec = Vec<u32>)
+                // parallel iterator of (group_idx: IdxSize (u32), idxs: IdxVec (Vec<u32>))
                 groups
                     .into_idx()
                     .into_par_iter()
                     .for_each(|(group_idx, idxs)| {
                         // group field values and geometries
-                        let grouped_geom: Vec<Geometry> =
-                            idxs.iter().map(|&i| self.geometry[i as usize]).collect();
-                        let grouped_values: Vec<Option<f64>> =
-                            idxs.iter().map(|&i| self.field.get(i as usize)).collect();
+                        let grouped: Vec<(Option<f64>, &Geometry)> = idxs
+                            .iter()
+                            .map(|&i| {
+                                let geom = &self.geometry[i as usize];
+                                let field_value = self.field.get(i as usize);
+                                (field_value, geom)
+                            })
+                            .collect();
 
-                        grouped_values
+                        // call function
+                        grouped
                             .into_iter()
-                            .zip(grouped_geom.into_iter())
                             .for_each(|(field_value, geom)| {
                                 if let Some(field_value) = field_value {
                                     // process only non-empty field values
@@ -179,7 +183,8 @@ impl Rusterize<'_> {
                 // singleband raster
                 let mut raster = self.ras_info.build_raster(1);
 
-                vfield.into_iter().zip(self.geometry.into_iter()).for_each(
+                // call function
+                self.field.into_iter().zip(self.geometry.into_iter()).for_each(
                     |(field_value, geom)| {
                         if let Some(field_value) = field_value {
                             // process only non-empty field values
