@@ -13,7 +13,6 @@ mod rasterize_polygon;
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
 use geo_types::Geometry;
-use itertools::Itertools;
 use numpy::{
     ndarray::{Array3, Axis},
     PyArray3, ToPyArray,
@@ -39,7 +38,7 @@ struct Rusterize<'r> {
     by: Option<&'r StringChunked>,
 }
 
-impl Rusterize<'_> {
+impl<'r> Rusterize<'r> {
     fn new(
         mut geometry: Vec<Geometry>,
         ras_info: Raster,
@@ -70,60 +69,50 @@ impl Rusterize<'_> {
             });
         }
 
-        // extract field and by
+        // extract `field` and `by`
         let (field, by) = match df {
             None => (
-                // case 1: make dummy variables
-                &Float64Chunked::from_vec(PlSmallStr::from("field_f64"), vec![1.0; geometry.len()]),
+                // case 1: create a dummy `field`
+                Float64Chunked::from_vec(PlSmallStr::from("field_f64"), vec![1.0; geometry.len()]),
                 None,
             ),
             Some(df) => {
-                // casting and extraction
+                let mut lazy_df = df.lazy();
                 match (field_name, by_name) {
                     (Some(field_name), Some(by_name)) => {
-                        // case 2: both `field` and `by` are present
-                        let casted = df
-                            .lazy()
-                            .with_columns([
-                                col(field_name).cast(DataType::Float64).alias("field_f64"),
-                                col(by_name).cast(DataType::String).alias("by_str"),
-                            ])
-                            .collect()
-                            .unwrap();
-                        (
-                            casted.column("field_f64").unwrap().f64().unwrap(),
-                            Some(casted.column("by_str").unwrap().str().unwrap()),
-                        )
+                        // case 2: both `field` and `by` specified
+                        lazy_df = lazy_df.with_columns([
+                            col(field_name).cast(DataType::Float64).alias("field_f64"),
+                            col(by_name).cast(DataType::String).alias("by_str"),
+                        ]);
                     }
                     (Some(field_name), None) => {
-                        // case 3: only `field` is present
-                        let casted = df
-                            .lazy()
-                            .with_column(col(field_name).cast(DataType::Float64).alias("field_f64"))
-                            .collect()
-                            .unwrap();
-                        (casted.column("field_f64").unwrap().f64().unwrap(), None)
+                        // case 3: only `field` specified
+                        lazy_df = lazy_df.with_column(
+                            col(field_name).cast(DataType::Float64).alias("field_f64"),
+                        );
                     }
                     (None, Some(by_name)) => {
-                        // case 4: only `by` is present
-                        let casted = df
-                            .lazy()
-                            .with_columns([
-                                lit(1.0).alias("field_f64"), // dummy field
-                                col(by_name).cast(DataType::String).alias("by_str"),
-                            ])
-                            .collect()
-                            .unwrap();
-                        (
-                            casted.column("field_64").unwrap().f64().unwrap(),
-                            Some(casted.column("by_str").unwrap().str().unwrap()),
-                        )
+                        // case 4: only `by` specified
+                        lazy_df = lazy_df.with_columns([
+                            lit(1.0).alias("field_f64"), // dummy `field`
+                            col(by_name).cast(DataType::String).alias("by_str"),
+                        ]);
                     }
                     (None, None) => {
-                        // neither `field` nor `by` is present
-                        panic!("Both `field` and `by` cannot be None with a DataFrame present.");
+                        // case 5: neither `field` nor `by` specified
+                        panic!("Either `field` or `by` must be specified.");
                     }
                 }
+
+                // collect the result
+                let casted = lazy_df.collect().unwrap();
+
+                // extract `field` and `by`
+                (
+                    casted.column("field_f64").unwrap().f64().unwrap().clone(),
+                    Some(casted.column("by_str").unwrap().str().unwrap().clone()),
+                )
             }
         };
 
@@ -137,7 +126,7 @@ impl Rusterize<'_> {
         }
     }
 
-    fn rusterize_sequential(self) -> Array3<f64> {
+    fn rusterize(self) -> Array3<f64> {
         // main
         match self.by {
             Some(by) => {
@@ -161,20 +150,18 @@ impl Rusterize<'_> {
                             .collect();
 
                         // call function
-                        grouped
-                            .into_iter()
-                            .for_each(|(field_value, geom)| {
-                                if let Some(field_value) = field_value {
-                                    // process only non-empty field values
-                                    rasterize_polygon(
-                                        &self.ras_info,
-                                        geom,
-                                        &field_value,
-                                        &mut raster.index_axis_mut(Axis(0), group_idx as usize),
-                                        &self.pixel_fn,
-                                    )
-                                }
-                            });
+                        grouped.into_iter().for_each(|(field_value, geom)| {
+                            if let Some(field_value) = field_value {
+                                // process only non-empty field values
+                                rasterize_polygon(
+                                    &self.ras_info,
+                                    geom,
+                                    &field_value,
+                                    &mut raster.index_axis_mut(Axis(0), group_idx as usize),
+                                    &self.pixel_fn,
+                                )
+                            }
+                        });
                     });
 
                 raster
@@ -184,20 +171,21 @@ impl Rusterize<'_> {
                 let mut raster = self.ras_info.build_raster(1);
 
                 // call function
-                self.field.into_iter().zip(self.geometry.into_iter()).for_each(
-                    |(field_value, geom)| {
+                self.field
+                    .into_iter()
+                    .zip(self.geometry.into_iter())
+                    .for_each(|(field_value, geom)| {
                         if let Some(field_value) = field_value {
                             // process only non-empty field values
                             rasterize_polygon(
                                 &self.ras_info,
-                                geom,
+                                &geom,
                                 &field_value,
                                 &mut raster.index_axis_mut(Axis(0), 0),
                                 &self.pixel_fn,
                             )
                         }
-                    },
-                );
+                    });
 
                 // return
                 raster
@@ -236,8 +224,8 @@ fn rusterize_py<'py>(
 
     // rusterize
     let ret = py.allow_threads(|| {
-        let rclass = Rusterize::new(geometry, raster_info, pixel_fn, background, df, field, by);
-        rclass.rusterize_sequential();
+        let r = Rusterize::new(geometry, raster_info, pixel_fn, background, df, field, by);
+        r.rusterize_sequential()
     });
     Ok(ret.to_pyarray(py))
 }

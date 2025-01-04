@@ -52,7 +52,7 @@ pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster: &Raster) -
         // multipolygon - iterate over each inner polygon
         Geometry::MultiPolygon(polygon) => {
             for poly in polygon {
-                build_edges(edges, Geometry::Polygon(*poly.clone()), raster);
+                build_edges(edges, &Geometry::Polygon(poly.clone()), raster);
             }
         }
         _ => unimplemented!("Only Polygon and MultiPolygon geometries are supported."),
