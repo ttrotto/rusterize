@@ -60,31 +60,32 @@ fn rusterize_rust(
     }
 
     // extract `field` and `by`
+    let casted: DataFrame;
     let (field, by) = match df {
         None => (
             // case 1: create a dummy `field`
-            Float64Chunked::from_vec(PlSmallStr::from("field_f64"), vec![1.0; geometry.len()]),
+            &Float64Chunked::from_vec(PlSmallStr::from("field_f64"), vec![1.0; geometry.len()]),
             None,
         ),
         Some(df) => {
-            let mut lazy_df = df.lazy();
+            let mut lf = df.lazy();
             match (field_name, by_name) {
                 (Some(field_name), Some(by_name)) => {
                     // case 2: both `field` and `by` specified
-                    lazy_df = lazy_df.with_columns([
+                    lf = lf.with_columns([
                         col(field_name).cast(DataType::Float64).alias("field_f64"),
                         col(by_name).cast(DataType::String).alias("by_str"),
                     ]);
                 }
                 (Some(field_name), None) => {
                     // case 3: only `field` specified
-                    lazy_df = lazy_df.with_column(
+                    lf = lf.with_column(
                         col(field_name).cast(DataType::Float64).alias("field_f64"),
                     );
                 }
                 (None, Some(by_name)) => {
                     // case 4: only `by` specified
-                    lazy_df = lazy_df.with_columns([
+                    lf = lf.with_columns([
                         lit(1.0).alias("field_f64"), // dummy `field`
                         col(by_name).cast(DataType::String).alias("by_str"),
                     ]);
@@ -96,12 +97,11 @@ fn rusterize_rust(
             }
 
             // collect the result
-            let casted = lazy_df.collect().unwrap();
+            casted = lf.collect().unwrap();
 
-            // extract `field` and `by`
             (
-                casted.column("field_f64").unwrap().f64().unwrap().clone(),
-                Some(casted.column("by_str").unwrap().str().unwrap().clone()),
+                casted.column("field_f64").unwrap().f64().unwrap(),
+                Some(casted.column("by_str").unwrap().str().unwrap()),
             )
         }
     };
@@ -122,20 +122,21 @@ fn rusterize_rust(
                     let grouped: Vec<(Option<f64>, &Geometry)> = idxs
                         .iter()
                         .map(|&i| {
-                            let geom = &geometry[i as usize];
-                            let field_value = field.get(i as usize);
-                            (field_value, geom)
+                            (
+                                field.get(i as usize),
+                                &geometry[i as usize],
+                            )
                         })
                         .collect();
 
                     // call function
                     grouped.into_iter().for_each(|(field_value, geom)| {
-                        if let Some(field_value) = field_value {
+                        if let Some(fv) = field_value {
                             // process only non-empty field values
                             rasterize_polygon(
                                 &ras_info,
                                 geom,
-                                &field_value,
+                                &fv,
                                 &mut raster.index_axis_mut(Axis(0), group_idx as usize),
                                 &pixel_fn,
                             )
@@ -154,12 +155,12 @@ fn rusterize_rust(
                 .into_iter()
                 .zip(geometry.into_iter())
                 .for_each(|(field_value, geom)| {
-                    if let Some(field_value) = field_value {
+                    if let Some(fv) = field_value {
                         // process only non-empty field values
                         rasterize_polygon(
                             &ras_info,
                             &geom,
-                            &field_value,
+                            &fv,
                             &mut raster.index_axis_mut(Axis(0), 0),
                             &pixel_fn,
                         )
