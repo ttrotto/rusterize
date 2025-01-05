@@ -18,9 +18,10 @@ use numpy::{
     PyArray3, ToPyArray,
 };
 use polars::{
-    export::rayon::{iter::ParallelIterator, prelude::IntoParallelIterator},
+    export::rayon::{iter::{ParallelIterator, IntoParallelRefMutIterator}, prelude::IntoParallelIterator},
     prelude::*,
 };
+use polars::export::num::Float;
 use py_geo_interface::wrappers::f64::AsGeometryVec;
 use pyo3::{
     prelude::*,
@@ -101,7 +102,7 @@ fn rusterize_rust(
 
             (
                 casted.column("field_f64").unwrap().f64().unwrap(),
-                Some(casted.column("by_str").unwrap().str().unwrap()),
+                casted.column("by_str").ok().and_then(|col| col.str().ok()),
             )
         }
     };
@@ -137,7 +138,7 @@ fn rusterize_rust(
                                 &ras_info,
                                 geom,
                                 &fv,
-                                &mut raster.index_axis_mut(Axis(0), group_idx as usize),
+                                &raster.index_axis_mut(Axis(0), group_idx as usize),
                                 &pixel_fn,
                             )
                         }
