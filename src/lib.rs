@@ -29,16 +29,16 @@ use pyo3::{
 use pyo3_polars::PyDataFrame;
 use structs::raster::Raster;
 
-struct Rusterize<'r> {
+struct Rusterize {
     geometry: Vec<Geometry>,
     ras_info: Raster,
     pixel_fn: PixelFn,
     background: f64,
-    field: &'r Float64Chunked,
-    by: Option<&'r StringChunked>,
+    field: Float64Chunked,
+    by: Option<StringChunked>,
 }
 
-impl<'r> Rusterize<'r> {
+impl Rusterize {
     fn new(
         mut geometry: Vec<Geometry>,
         ras_info: Raster,
@@ -223,10 +223,8 @@ fn rusterize_py<'py>(
     let by = pyby.and_then(|inner| Some(inner.to_str().unwrap()));
 
     // rusterize
-    let ret = py.allow_threads(|| {
-        let r = Rusterize::new(geometry, raster_info, pixel_fn, background, df, field, by);
-        r.rusterize_sequential()
-    });
+    let r = Rusterize::new(geometry, raster_info, pixel_fn, background, df, field, by);
+    let ret = r.rusterize();
     Ok(ret.to_pyarray(py))
 }
 
