@@ -14,14 +14,13 @@ use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
 use geo_types::Geometry;
 use numpy::{
-    ndarray::{Array3, Axis},
+    ndarray::{Array3, ArrayViewMut2, Axis},
     PyArray3, ToPyArray,
 };
 use polars::{
-    export::rayon::{iter::{ParallelIterator, IntoParallelRefMutIterator}, prelude::IntoParallelIterator},
+    export::rayon::iter::{IntoParallelIterator, ParallelIterator},
     prelude::*,
 };
-use polars::export::num::Float;
 use py_geo_interface::wrappers::f64::AsGeometryVec;
 use pyo3::{
     prelude::*,
@@ -80,9 +79,7 @@ fn rusterize_rust(
                 }
                 (Some(field_name), None) => {
                     // case 3: only `field` specified
-                    lf = lf.with_column(
-                        col(field_name).cast(DataType::Float64).alias("field_f64"),
-                    );
+                    lf = lf.with_column(col(field_name).cast(DataType::Float64).alias("field_f64"));
                 }
                 (None, Some(by_name)) => {
                     // case 4: only `by` specified
@@ -113,38 +110,30 @@ fn rusterize_rust(
             // multiband raster
             let groups = by.group_tuples(true, true).unwrap();
             let mut raster = ras_info.build_raster(groups.len());
+            let group_indices = groups.into_idx();
 
-            // parallel iterator of (group_idx: IdxSize (u32), idxs: IdxVec (Vec<u32>))
-            groups
-                .into_idx()
+            // parallel iterator along bands, zipped with the corresponding group
+            raster
+                .outer_iter_mut()
                 .into_par_iter()
-                .for_each(|(group_idx, idxs)| {
-                    // group field values and geometries
-                    let grouped: Vec<(Option<f64>, &Geometry)> = idxs
-                        .iter()
-                        .map(|&i| {
-                            (
-                                field.get(i as usize),
-                                &geometry[i as usize],
-                            )
-                        })
-                        .collect();
+                .zip(group_indices.into_par_iter())
+                .for_each(
+                    |(mut band, (_, idxs)): (ArrayViewMut2<f64>, (_, &[IdxSize]))| {
+                        // group field values and geometries
+                        let pairs: Vec<(Option<f64>, &Geometry)> = idxs
+                            .iter()
+                            .map(|&i| (field.get(i as usize), &geometry[i as usize]))
+                            .collect();
 
-                    // call function
-                    grouped.into_iter().for_each(|(field_value, geom)| {
-                        if let Some(fv) = field_value {
-                            // process only non-empty field values
-                            rasterize_polygon(
-                                &ras_info,
-                                geom,
-                                &fv,
-                                &raster.index_axis_mut(Axis(0), group_idx as usize),
-                                &pixel_fn,
-                            )
-                        }
-                    });
-                });
-
+                        // call function
+                        pairs.into_iter().for_each(|(field_value, geom)| {
+                            if let Some(fv) = field_value {
+                                // only non-empty field values
+                                rasterize_polygon(&ras_info, geom, &fv, &mut band, &pixel_fn);
+                            }
+                        });
+                    },
+                );
             raster
         }
         None => {
@@ -206,6 +195,7 @@ fn rusterize_py<'py>(
     Ok(ret.to_pyarray(py))
 }
 
+#[pymodule]
 fn rusterize(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(rusterize_py, m)?)?;
     Ok(())

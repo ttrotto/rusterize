@@ -28,7 +28,7 @@ pub fn rasterize_polygon(
     let mut yline = edges.first().unwrap().ystart;
 
     // ranges for x coordinate
-    let (mut xstart, mut xend, mut counter): (usize, usize, usize) = (0, 0, 0);
+    let (mut xstart, mut counter): (usize, usize) = (0, 0);
 
     // rasterize loop
     while yline < raster.nrows && !(active_edges.is_empty() && edges.is_empty()) {
@@ -61,7 +61,7 @@ pub fn rasterize_polygon(
             if counter % 2 != 0 {
                 xstart = x;
             } else {
-                xend = x;
+                let xend = x;
                 for xpix in xstart..xend {
                     pxfn(ndarray, yline, xpix, field_value);
                 }
