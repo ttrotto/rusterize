@@ -16,12 +16,12 @@ use geo_types::Geometry;
 use numpy::{
     ndarray::{
         parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
-        {Array3, ArrayViewMut2, Axis},
+        {Array3, Axis},
     },
     PyArray3, ToPyArray,
 };
 use polars::prelude::*;
-use py_geo_interface::wrappers::f64::AsGeometryVec;
+use py_geo_interface::from_py::AsGeometryVec;
 use pyo3::{
     prelude::*,
     types::{PyAny, PyString},
@@ -162,22 +162,22 @@ fn rusterize_rust(
 #[pyo3(name = "_rusterize")]
 fn rusterize_py<'py>(
     py: Python<'py>,
-    pygeometry: &PyAny,
-    pyinfo: &PyAny,
-    pypixel_fn: &PyString,
-    pybackground: &PyAny,
+    pygeometry: &Bound<'py, PyAny>,
+    pyinfo: &Bound<'py, PyAny>,
+    pypixel_fn: &Bound<'py, PyString>,
+    pybackground: &Bound<'py, PyAny>,
     pydf: Option<PyDataFrame>,
-    pyfield: Option<&PyString>,
-    pyby: Option<&PyString>,
-) -> PyResult<&'py PyArray3<f64>> {
+    pyfield: Option<&Bound<'py, PyString>>,
+    pyby: Option<&Bound<'py, PyString>>,
+) -> PyResult<Bound<'py, PyArray3<f64>>> {
     // extract dataframe
     let df: Option<DataFrame> = pydf.and_then(|inner| Some(inner.into()));
 
     // extract
-    let geometry: Vec<Geometry> = pygeometry.as_geometry_vec()?.0;
+    let geometry = pygeometry.as_geometry_vec()?;
 
     // extract raster information
-    let raster_info = Raster::from(&pyinfo);
+    let raster_info = Raster::from(pyinfo);
 
     // extract function arguments
     let f = pypixel_fn.to_str()?;
@@ -188,7 +188,7 @@ fn rusterize_py<'py>(
 
     // rusterize
     let ret = rusterize_rust(geometry, raster_info, pixel_fn, background, df, field, by);
-    Ok(ret.to_pyarray(py))
+    Ok(ret.to_pyarray_bound(py))
 }
 
 #[pymodule]

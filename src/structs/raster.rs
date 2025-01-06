@@ -19,7 +19,7 @@ pub struct Raster {
 
 impl Raster {
     // map PyAny information to Raster
-    pub fn from(pyinfo: &PyAny) -> Self {
+    pub fn from(pyinfo: &Bound<PyAny>) -> Self {
         let raster_info: Raster = pyinfo
             .extract()
             .expect("Failed to extract raster information");
