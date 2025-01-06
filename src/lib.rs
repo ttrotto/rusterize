@@ -14,13 +14,13 @@ use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
 use geo_types::Geometry;
 use numpy::{
-    ndarray::{Array3, ArrayViewMut2, Axis},
+    ndarray::{
+        parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
+        {Array3, ArrayViewMut2, Axis},
+    },
     PyArray3, ToPyArray,
 };
-use polars::{
-    export::rayon::iter::{IntoParallelIterator, ParallelIterator},
-    prelude::*,
-};
+use polars::prelude::*;
 use py_geo_interface::wrappers::f64::AsGeometryVec;
 use pyo3::{
     prelude::*,
@@ -110,30 +110,27 @@ fn rusterize_rust(
             // multiband raster
             let groups = by.group_tuples(true, true).unwrap();
             let mut raster = ras_info.build_raster(groups.len());
-            let group_indices = groups.into_idx();
 
             // parallel iterator along bands, zipped with the corresponding group
             raster
                 .outer_iter_mut()
                 .into_par_iter()
-                .zip(group_indices.into_par_iter())
-                .for_each(
-                    |(mut band, (_, idxs)): (ArrayViewMut2<f64>, (_, &[IdxSize]))| {
-                        // group field values and geometries
-                        let pairs: Vec<(Option<f64>, &Geometry)> = idxs
-                            .iter()
-                            .map(|&i| (field.get(i as usize), &geometry[i as usize]))
-                            .collect();
+                .zip(groups.into_idx().into_par_iter())
+                .for_each(|(mut band, (_, idxs))| {
+                    // group field values and geometries
+                    let pairs: Vec<(Option<f64>, &Geometry)> = idxs
+                        .iter()
+                        .map(|&i| (field.get(i as usize), &geometry[i as usize]))
+                        .collect();
 
-                        // call function
-                        pairs.into_iter().for_each(|(field_value, geom)| {
-                            if let Some(fv) = field_value {
-                                // only non-empty field values
-                                rasterize_polygon(&ras_info, geom, &fv, &mut band, &pixel_fn);
-                            }
-                        });
-                    },
-                );
+                    // call function
+                    pairs.into_iter().for_each(|(field_value, geom)| {
+                        if let Some(fv) = field_value {
+                            // only non-empty field values
+                            rasterize_polygon(&ras_info, geom, &fv, &mut band, &pixel_fn);
+                        }
+                    });
+                });
             raster
         }
         None => {
@@ -156,7 +153,6 @@ fn rusterize_rust(
                         )
                     }
                 });
-
             raster
         }
     }

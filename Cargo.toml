@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 [dependencies]
 pyo3 = { version = "0.21.2", features = ["extension-module", "nightly", "abi3-py310"] }
 numpy = "0.21.0"
+ndarray = { version = "0.15.6", features = ["rayon", "blas"] }
 blas-src = { version = "0.10.0", features = ["openblas"] }
 polars = { version = "0.44.2", features = ["lazy", "object", "dtype-struct", "simd", "performant", "nightly"] }
 pyo3-polars = { version = "0.18.0", features = ["lazy", "object", "dtype-struct"] }
