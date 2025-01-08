@@ -16,6 +16,8 @@ Cargo.lock
 # IDE stuff
 .idea
 
-# My stuff
-old
-.env
+# Virtual environment
+.venv
+
+# Simple objects
+**/*.so
