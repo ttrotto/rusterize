@@ -21,3 +21,6 @@ Cargo.lock
 
 # Simple objects
 **/*.so
+
+# Pycache
+**/__pycache__
