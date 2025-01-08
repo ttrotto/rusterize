@@ -18,6 +18,7 @@ Cargo.lock
 
 # Virtual environment
 .venv
+.env
 
 # Simple objects
 **/*.so
