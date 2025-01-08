@@ -17,6 +17,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dynamic = ["version"]
+dependencies = [
+    "pandas>=2.2.3",
+    "polars>=1.19.0",
+    "xarray>=2025.1.0"
+]
 
 [tool.maturin]
 python-source = "python"

@@ -5,8 +5,7 @@ from pandas import DataFrame
 import polars as pl
 import xarray as xr
 
-
-# from .rusterize import _rusterize
+from .rusterize import _rusterize
 
 
 class _RasterInfo:
@@ -78,4 +77,3 @@ class Rusterize(_RasterInfo):
 
     def process(self) -> xr.DataArray:
         pf = self._to_polars()
-

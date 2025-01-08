@@ -43,7 +43,7 @@ fn max_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -
 }
 
 // count values at index
-fn count_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
+fn count_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, _value: &f64) -> () {
     if array[[y, x]].is_nan() {
         array[[y, x]] = 1.0;
     } else {
@@ -52,7 +52,7 @@ fn count_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, value: &f64)
 }
 
 // mark value presence
-fn any_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, value: &f64) -> () {
+fn any_values(array: &mut ArrayViewMut2<f64>, x: usize, y: usize, _value: &f64) -> () {
     array[[y, x]] = 1.0;
 }
 

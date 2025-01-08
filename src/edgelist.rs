@@ -1,6 +1,6 @@
 /*
 Build structured edge list from a single (multi)polygon.
-If multipolygon, then iterates across every inner polygon.
+If multipolygon, then iterates over each inner polygon.
 From the Geometry, the values are extracted and reconstructed as an array of nodes.
  */
 
@@ -26,7 +26,7 @@ pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster: &Raster) -
                     node_array[[i, 1]] = coord.y;
                 });
             let nrows = node_array.nrows() - 1; // drop last entry because duplicate of first
-                                                // add Edge to edges vector
+            // add Edge to edges vector
             for i in 0..nrows {
                 let y0 = (raster.ymax - node_array[[i, 1]]) / raster.yres - 0.5;
                 let y1 = (raster.ymax - node_array[[i + 1, 1]]) / raster.yres - 0.5;

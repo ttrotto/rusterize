@@ -192,6 +192,7 @@ fn rusterize_py<'py>(
 }
 
 #[pymodule]
+#[pyo3(name="_lib_name")]
 fn rusterize(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(rusterize_py, m)?)?;
     Ok(())
