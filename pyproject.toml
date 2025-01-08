@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=1.6,<2.0"]
+requires = ["maturin>=1.6,<2.0", "patchelf>=0.17"]
 build-backend = "maturin"
 
 [project]
@@ -11,10 +11,6 @@ classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
-    "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
 ]
 dynamic = ["version"]
 dependencies = [
@@ -25,5 +21,5 @@ dependencies = [
 
 [tool.maturin]
 python-source = "python"
-module-name = "rusterize._lib_name"
+module-name = "rusterize"
 features = ["pyo3/extension-module"]

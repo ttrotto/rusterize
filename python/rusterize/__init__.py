@@ -1,1 +1,1 @@
-from wrapper import Rusterize
+from .wrapper import *
