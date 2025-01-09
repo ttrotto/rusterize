@@ -20,8 +20,11 @@ Cargo.lock
 .venv
 .env
 
-# Simple objects
+# Shared object
 **/*.so
 
 # Pycache
 **/__pycache__
+
+# Tests
+tests/
