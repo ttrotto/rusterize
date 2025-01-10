@@ -6,7 +6,7 @@ use numpy::ndarray::Array3;
 use pyo3::prelude::*;
 
 #[derive(FromPyObject)]
-pub struct Raster {
+pub struct RasterInfo {
     pub nrows: usize,
     pub ncols: usize,
     pub xmin: f64,
@@ -17,12 +17,12 @@ pub struct Raster {
     pub yres: f64,
 }
 
-impl Raster {
+impl RasterInfo {
     // map PyAny information to Raster
     pub fn from(pyinfo: &Bound<PyAny>) -> Self {
-        let raster_info: Raster = pyinfo
+        let raster_info: RasterInfo = pyinfo
             .extract()
-            .expect("Failed to extract raster information");
+            .expect("Wrong mapping passed to Raster object");
         let nrows = ((raster_info.ymax - raster_info.ymin) / raster_info.yres).ceil() as usize;
         let ncols = ((raster_info.xmax - raster_info.xmin) / raster_info.xres).ceil() as usize;
         Self {

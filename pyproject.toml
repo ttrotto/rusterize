@@ -14,7 +14,9 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
+    "geopandas>=1.0.1",
     "pandas>=2.2.3",
+    "pyarrow>=18.1.0",
     "polars>=1.19.0",
     "xarray>=2025.1.0"
 ]
@@ -23,3 +25,4 @@ dependencies = [
 python-source = "python"
 module-name = "rusterize"
 features = ["pyo3/extension-module"]
+include = [{ path = "rust-toolchain.toml", format = "sdist" }]

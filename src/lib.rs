@@ -27,11 +27,11 @@ use pyo3::{
     types::{PyAny, PyString},
 };
 use pyo3_polars::PyDataFrame;
-use structs::raster::Raster;
+use structs::raster::RasterInfo;
 
 fn rusterize_rust(
     mut geometry: Vec<Geometry>,
-    ras_info: Raster,
+    raster_info: RasterInfo,
     pixel_fn: PixelFn,
     background: f64,
     mut df: Option<DataFrame>,
@@ -109,7 +109,7 @@ fn rusterize_rust(
         Some(by) => {
             // multiband raster
             let groups = by.group_tuples(true, true).unwrap();
-            let mut raster = ras_info.build_raster(groups.len());
+            let mut raster = raster_info.build_raster(groups.len());
 
             // parallel iterator along bands, zipped with the corresponding group
             raster
@@ -127,7 +127,7 @@ fn rusterize_rust(
                     pairs.into_iter().for_each(|(field_value, geom)| {
                         if let Some(fv) = field_value {
                             // only non-empty field values
-                            rasterize_polygon(&ras_info, geom, &fv, &mut band, &pixel_fn);
+                            rasterize_polygon(&raster_info, geom, &fv, &mut band, &pixel_fn);
                         }
                     });
                 });
@@ -135,7 +135,7 @@ fn rusterize_rust(
         }
         None => {
             // singleband raster
-            let mut raster = ras_info.build_raster(1);
+            let mut raster = raster_info.build_raster(1);
 
             // call function
             field
@@ -145,7 +145,7 @@ fn rusterize_rust(
                     if let Some(fv) = field_value {
                         // process only non-empty field values
                         rasterize_polygon(
-                            &ras_info,
+                            &raster_info,
                             &geom,
                             &fv,
                             &mut raster.index_axis_mut(Axis(0), 0),
@@ -173,11 +173,11 @@ fn rusterize_py<'py>(
     // extract dataframe
     let df: Option<DataFrame> = pydf.and_then(|inner| Some(inner.into()));
 
-    // extract
+    // extract geometries
     let geometry = pygeometry.as_geometry_vec()?;
 
     // extract raster information
-    let raster_info = Raster::from(pyinfo);
+    let raster_info = RasterInfo::from(pyinfo);
 
     // extract function arguments
     let f = pypixel_fn.to_str()?;

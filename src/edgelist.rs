@@ -5,13 +5,13 @@ From the Geometry, the values are extracted and reconstructed as an array of nod
  */
 
 use crate::structs::edge::Edge;
-use crate::structs::raster::Raster;
+use crate::structs::raster::RasterInfo;
 
 use geo::prelude::*;
 use geo_types::Geometry;
 use numpy::ndarray::Array2;
 
-pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster: &Raster) -> () {
+pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster_info: &RasterInfo) -> () {
     match polygon {
         // polygon
         Geometry::Polygon(polygon) => {
@@ -28,8 +28,8 @@ pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster: &Raster) -
             let nrows = node_array.nrows() - 1; // drop last entry because duplicate of first
             // add Edge to edges vector
             for i in 0..nrows {
-                let y0 = (raster.ymax - node_array[[i, 1]]) / raster.yres - 0.5;
-                let y1 = (raster.ymax - node_array[[i + 1, 1]]) / raster.yres - 0.5;
+                let y0 = (raster_info.ymax - node_array[[i, 1]]) / raster_info.yres - 0.5;
+                let y1 = (raster_info.ymax - node_array[[i + 1, 1]]) / raster_info.yres - 0.5;
                 // only add edges that are inside the raster
                 if y0 > 0.0 || y1 > 0.0 {
                     let y0c = y0.ceil();
@@ -43,7 +43,7 @@ pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster: &Raster) -
                             y1,
                             y0c,
                             y1c,
-                            raster,
+                            raster_info,
                         ));
                     }
                 }
@@ -52,7 +52,7 @@ pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster: &Raster) -
         // multipolygon - iterate over each inner polygon
         Geometry::MultiPolygon(polygon) => {
             for poly in polygon {
-                build_edges(edges, &Geometry::Polygon(poly.clone()), raster);
+                build_edges(edges, &Geometry::Polygon(poly.clone()), raster_info);
             }
         }
         _ => unimplemented!("Only Polygon and MultiPolygon geometries are supported."),
