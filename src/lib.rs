@@ -105,11 +105,12 @@ fn rusterize_rust(
     };
 
     // main
+    let mut raster: Array3<f64>;
     match by {
         Some(by) => {
             // multiband raster
             let groups = by.group_tuples(true, true).unwrap();
-            let mut raster = raster_info.build_raster(groups.len());
+            raster = raster_info.build_raster(groups.len());
 
             // parallel iterator along bands, zipped with the corresponding group
             raster
@@ -131,11 +132,10 @@ fn rusterize_rust(
                         }
                     });
                 });
-            raster
         }
         None => {
             // singleband raster
-            let mut raster = raster_info.build_raster(1);
+            raster = raster_info.build_raster(1);
 
             // call function
             field
@@ -153,9 +153,13 @@ fn rusterize_rust(
                         )
                     }
                 });
-            raster
         }
     }
+    // replace NaN with background
+    if !background.is_nan() {
+        raster.mapv_inplace(|x| if x.is_nan() { background } else { x });
+    }
+    raster
 }
 
 #[pyfunction]
