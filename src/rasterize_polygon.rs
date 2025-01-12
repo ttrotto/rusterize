@@ -25,7 +25,10 @@ pub fn rasterize_polygon(
     let mut active_edges: Vec<Edge> = Vec::new();
 
     // start with first y line
-    let mut yline = edges.first().unwrap().ystart;
+    let mut yline = match edges.first() {
+        Some(e) => e.ystart,
+        None => return,  // handle case when no edge to rasterize
+    };
 
     // ranges for x coordinate
     let (mut xstart, mut counter): (usize, usize) = (0, 0);
@@ -33,12 +36,6 @@ pub fn rasterize_polygon(
     // rasterize loop
     while yline < raster_info.nrows && !(active_edges.is_empty() && edges.is_empty()) {
         // transfer current edges ref to active edges
-        // active_edges.extend(
-        //     edges
-        //         .iter()
-        //         .filter(|edge| edge.ystart <= yline)
-        //         .cloned()
-        // );
         active_edges.extend(
             edges
                 .extract_if(|edge| edge.ystart <= yline) // experimental

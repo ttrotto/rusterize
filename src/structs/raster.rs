@@ -23,8 +23,8 @@ impl RasterInfo {
         let raster_info: RasterInfo = pyinfo
             .extract()
             .expect("Wrong mapping passed to Raster object");
-        let nrows = ((raster_info.ymax - raster_info.ymin) / raster_info.yres).ceil() as usize;
-        let ncols = ((raster_info.xmax - raster_info.xmin) / raster_info.xres).ceil() as usize;
+        let nrows = ((raster_info.ymax - raster_info.ymin) / raster_info.yres).round() as usize;
+        let ncols = ((raster_info.xmax - raster_info.xmin) / raster_info.xres).round() as usize;
         Self {
             nrows,
             ncols,

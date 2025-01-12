@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, Tuple, Union
 
 import polars as pl
-import xarray as xr
+from xarray.core.dataarray import DataArray
 from pandas import DataFrame
 from .rusterize import _rusterize
 
@@ -12,7 +12,7 @@ class _RasterInfo:
     def __init__(self,
                  bounds: Tuple[float,...],
                  res: Union[Tuple[int, ...], Tuple[float, ...]]):
-        """ Mirror RasterInfo class in Rust """
+        """ Mirrors RasterInfo class in Rust """
         self.xmin, self.ymin, self.xmax, self.ymax = bounds
         self.xres, self.yres = res
         self.nrows, self.ncols = 0, 0
@@ -23,7 +23,8 @@ def rusterize(gdf: DataFrame,
               field: Optional[str] = None,
               by: Optional[str] = None,
               pixel_fn: str = "last",
-              background: Union[int, float] = 0):
+              background: Union[int, float] = 0
+              ) -> DataArray:
     """
     Fast geopandas rasterization into xarray.DataArray
 
@@ -57,6 +58,8 @@ def rusterize(gdf: DataFrame,
         raise ValueError("If by is specified, field must also be specified.")
     if len(res) != 2 or any((res[0], res[1])) <= 0 or not isinstance(res[0], type(res[1])):
         raise ValueError("Must pass valid resolution tuple of values of consistent dtype.")
+    if not gdf.crs.is_projected:
+        raise NotImplementedError("Only projected CRS are supported.")
 
     # RasterInfo
     raster_info = _RasterInfo(gdf.total_bounds, res)
@@ -65,6 +68,7 @@ def rusterize(gdf: DataFrame,
     cols = [col for col in (field, by) if col]
     pf = pl.from_pandas(gdf[cols]) if cols else None
 
+    # rusterize
     return _rusterize(
         gdf.geometry,
         raster_info,
