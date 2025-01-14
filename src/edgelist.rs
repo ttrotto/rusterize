@@ -11,7 +11,7 @@ use geo::prelude::*;
 use geo_types::Geometry;
 use numpy::ndarray::Array2;
 
-pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster_info: &RasterInfo) -> () {
+pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster_info: &RasterInfo) {
     match polygon {
         // polygon
         Geometry::Polygon(polygon) => {

@@ -15,7 +15,7 @@ pub fn rasterize_polygon(
     field_value: &f64,
     ndarray: &mut ArrayViewMut2<f64>,
     pxfn: &PixelFn,
-) -> () {
+) {
     // build edgelist and sort
     let mut edges: Vec<Edge> = Vec::new();
     edgelist::build_edges(&mut edges, polygon, raster_info);
@@ -27,7 +27,7 @@ pub fn rasterize_polygon(
     // start with first y line
     let mut yline = match edges.first() {
         Some(e) => e.ystart,
-        None => return,  // handle case when no edge to rasterize
+        None => return, // handle case when no edge to rasterize
     };
 
     // ranges for x coordinate

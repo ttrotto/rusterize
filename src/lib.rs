@@ -140,7 +140,7 @@ fn rusterize_rust(
             // call
             field
                 .into_iter()
-                .zip(geometry.into_iter())
+                .zip(geometry)
                 .for_each(|(field_value, geom)| {
                     if let Some(fv) = field_value {
                         // process only non-empty field values
@@ -184,7 +184,7 @@ fn rusterize_py<'py>(
     };
 
     // extract dataframe
-    let df: Option<DataFrame> = pydf.and_then(|inner| Some(inner.into()));
+    let df = pydf.map(|inner| {inner.into()});
 
     // extract geometries
     let geometry = pygeometry.as_geometry_vec()?;
@@ -198,8 +198,8 @@ fn rusterize_py<'py>(
     let background = pybackground
         .and_then(|inner| inner.extract::<f64>().ok())
         .unwrap_or(f64::NAN);
-    let field = pyfield.and_then(|inner| Some(inner.to_str().unwrap()));
-    let by = pyby.and_then(|inner| Some(inner.to_str().unwrap()));
+    let field = pyfield.map(|inner| inner.to_str().unwrap());
+    let by = pyby.map(|inner| inner.to_str().unwrap());
 
     // rusterize
     let ret = rusterize_rust(
