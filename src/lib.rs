@@ -34,6 +34,7 @@ fn rusterize_rust(
     raster_info: RasterInfo,
     pixel_fn: PixelFn,
     background: f64,
+    threads: usize,
     mut df: Option<DataFrame>,
     field_name: Option<&str>,
     by_name: Option<&str>,
@@ -109,35 +110,34 @@ fn rusterize_rust(
     match by {
         Some(by) => {
             // multiband raster
-            let groups = by.group_tuples(true, true).unwrap();
+            let groups = by.group_tuples(true, true).expect("No groups found!");
             raster = raster_info.build_raster(groups.len());
 
             // parallel iterator along bands, zipped with the corresponding group
-            raster
-                .outer_iter_mut()
-                .into_par_iter()
-                .zip(groups.into_idx().into_par_iter())
-                .for_each(|(mut band, (_, idxs))| {
-                    // group field values and geometries
-                    let pairs: Vec<(Option<f64>, &Geometry)> = idxs
-                        .iter()
-                        .map(|&i| (field.get(i as usize), &geometry[i as usize]))
-                        .collect();
-
-                    // call function
-                    pairs.into_iter().for_each(|(field_value, geom)| {
-                        if let Some(fv) = field_value {
-                            // only non-empty field values
-                            rasterize_polygon(&raster_info, geom, &fv, &mut band, &pixel_fn);
+            let pool = rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap();
+            pool.install(|| {
+                raster
+                    .outer_iter_mut()
+                    .into_par_iter()
+                    .zip(groups.into_idx().into_par_iter())
+                    .for_each(|(mut band, (_, idxs))| {
+                        // call
+                        for &i in idxs.into_iter() {
+                            if let (Some(fv), Some(geom)) = (field.get(i as usize), geometry.get(i as usize)) {
+                                rasterize_polygon(&raster_info, geom, &fv, &mut band, &pixel_fn);
+                            }
                         }
-                    });
-                });
+                    })
+            });
         }
         None => {
             // singleband raster
             raster = raster_info.build_raster(1);
 
-            // call function
+            // call
             field
                 .into_iter()
                 .zip(geometry.into_iter())
@@ -157,8 +157,8 @@ fn rusterize_rust(
     }
     // replace NaN with background
     if !background.is_nan() {
-        raster.mapv_inplace(|x| if x.is_nan() { background } else { x });
-    }
+        raster.mapv_inplace(|x| if x.is_nan() { background } else { x })
+    };
     raster
 }
 
@@ -169,11 +169,20 @@ fn rusterize_py<'py>(
     pygeometry: &Bound<'py, PyAny>,
     pyinfo: &Bound<'py, PyAny>,
     pypixel_fn: &Bound<'py, PyString>,
-    pybackground: &Bound<'py, PyAny>,
+    pythreads: &Bound<'py, PyAny>,
     pydf: Option<PyDataFrame>,
     pyfield: Option<&Bound<'py, PyString>>,
     pyby: Option<&Bound<'py, PyString>>,
+    pybackground: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyArray3<f64>>> {
+    // get number of threads
+    let op_threads = pythreads.extract::<isize>()?;
+    let threads = if op_threads <= 0 {
+        std::thread::available_parallelism()?.get()
+    } else {
+        op_threads as usize
+    };
+
     // extract dataframe
     let df: Option<DataFrame> = pydf.and_then(|inner| Some(inner.into()));
 
@@ -186,12 +195,23 @@ fn rusterize_py<'py>(
     // extract function arguments
     let f = pypixel_fn.to_str()?;
     let pixel_fn = set_pixel_function(f);
-    let background = pybackground.extract::<f64>()?;
+    let background = pybackground
+        .and_then(|inner| inner.extract::<f64>().ok())
+        .unwrap_or(f64::NAN);
     let field = pyfield.and_then(|inner| Some(inner.to_str().unwrap()));
     let by = pyby.and_then(|inner| Some(inner.to_str().unwrap()));
 
     // rusterize
-    let ret = rusterize_rust(geometry, raster_info, pixel_fn, background, df, field, by);
+    let ret = rusterize_rust(
+        geometry,
+        raster_info,
+        pixel_fn,
+        background,
+        threads,
+        df,
+        field,
+        by,
+    );
     Ok(ret.to_pyarray_bound(py))
 }
 

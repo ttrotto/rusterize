@@ -51,11 +51,13 @@ impl Edge {
 }
 
 // compare on usize Y coordinate
+#[inline]
 pub fn less_by_ystart(edge1: &Edge, edge2: &Edge) -> Ordering {
     edge1.ystart.cmp(&edge2.ystart)
 }
 
 // partial compare on f64 X coordinate
+#[inline]
 pub fn less_by_x(edge1: &Edge, edge2: &Edge) -> Ordering {
     edge1.x.partial_cmp(&edge2.x).unwrap_or(Ordering::Equal) // treat NaN as equal for sorting
 }
