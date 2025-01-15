@@ -22,10 +22,10 @@ impl Edge {
         y1c: f64,
         raster_info: &RasterInfo,
     ) -> Self {
-        // get matrix rows and columns from resolution
+        // get matrix rows and columns from raster info
         x0 = (x0 - raster_info.xmin) / raster_info.xres - 0.5;
         x1 = (x1 - raster_info.xmin) / raster_info.xres - 0.5;
-        // init struct keys
+
         let (fystart, dxdy, x, yend): (f64, f64, f64, usize);
         // assert edges run from top to bottom of the matrix
         if y1c > y0c {

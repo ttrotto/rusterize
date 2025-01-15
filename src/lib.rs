@@ -12,22 +12,31 @@ mod rasterize_polygon;
 
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
+use crossbeam_channel::unbounded;
 use geo_types::Geometry;
 use numpy::{
     ndarray::{
         parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
-        {Array3, Axis},
+        {Array, Array3, Axis},
     },
-    PyArray3, ToPyArray,
+    PyArray1, PyArray3, ToPyArray,
 };
 use polars::prelude::*;
 use py_geo_interface::from_py::AsGeometryVec;
 use pyo3::{
     prelude::*,
-    types::{PyAny, PyString},
+    types::{PyAny, PyList, PyString},
 };
 use pyo3_polars::PyDataFrame;
+use std::convert::From;
 use structs::raster::RasterInfo;
+
+type TupleToPython<'py> = PyResult<(
+    Bound<'py, PyArray3<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyArray1<f64>>,
+    Bound<'py, PyList>,
+)>;
 
 fn rusterize_rust(
     mut geometry: Vec<Geometry>,
@@ -38,7 +47,7 @@ fn rusterize_rust(
     mut df: Option<DataFrame>,
     field_name: Option<&str>,
     by_name: Option<&str>,
-) -> Array3<f64> {
+) -> (Array3<f64>, Vec<String>) {
     // check if any bad geometry
     let good_geom: Vec<bool> = geometry
         .iter()
@@ -107,10 +116,11 @@ fn rusterize_rust(
 
     // main
     let mut raster: Array3<f64>;
+    let (sender, receiver) = unbounded::<String>();
     match by {
         Some(by) => {
             // multiband raster
-            let groups = by.group_tuples(true, true).expect("No groups found!");
+            let groups = by.group_tuples(true, false).expect("No groups found!");
             raster = raster_info.build_raster(groups.len());
 
             // parallel iterator along bands, zipped with the corresponding group
@@ -123,10 +133,19 @@ fn rusterize_rust(
                     .outer_iter_mut()
                     .into_par_iter()
                     .zip(groups.into_idx().into_par_iter())
-                    .for_each(|(mut band, (_, idxs))| {
-                        // call
+                    .for_each(|(mut band, (group_idx, idxs))| {
+                        // send band names to channel
+                        let sender = sender.clone();
+                        if let Some(name) = by.get(group_idx as usize) {
+                            println!("{:?}", name);
+                            sender.send(name.to_string()).unwrap()
+                        }
+
+                        // rasterize polygons
                         for &i in idxs.into_iter() {
-                            if let (Some(fv), Some(geom)) = (field.get(i as usize), geometry.get(i as usize)) {
+                            if let (Some(fv), Some(geom)) =
+                                (field.get(i as usize), geometry.get(i as usize))
+                            {
                                 rasterize_polygon(&raster_info, geom, &fv, &mut band, &pixel_fn);
                             }
                         }
@@ -137,7 +156,7 @@ fn rusterize_rust(
             // singleband raster
             raster = raster_info.build_raster(1);
 
-            // call
+            // rasterize polygons
             field
                 .into_iter()
                 .zip(geometry)
@@ -155,11 +174,19 @@ fn rusterize_rust(
                 });
         }
     }
+
+    // get band names
+    let band_names = if !receiver.is_empty() {
+        receiver.iter().collect()
+    } else {
+        vec![String::from("band1")]
+    };
+
     // replace NaN with background
     if !background.is_nan() {
         raster.mapv_inplace(|x| if x.is_nan() { background } else { x })
     };
-    raster
+    (raster, band_names)
 }
 
 #[pyfunction]
@@ -174,7 +201,7 @@ fn rusterize_py<'py>(
     pyfield: Option<&Bound<'py, PyString>>,
     pyby: Option<&Bound<'py, PyString>>,
     pybackground: Option<&Bound<'py, PyAny>>,
-) -> PyResult<Bound<'py, PyArray3<f64>>> {
+) -> TupleToPython<'py> {
     // get number of threads
     let op_threads = pythreads.extract::<isize>()?;
     let threads = if op_threads <= 0 {
@@ -184,7 +211,7 @@ fn rusterize_py<'py>(
     };
 
     // extract dataframe
-    let df = pydf.map(|inner| {inner.into()});
+    let df = pydf.map(|inner| inner.into());
 
     // extract geometries
     let geometry = pygeometry.as_geometry_vec()?;
@@ -201,8 +228,22 @@ fn rusterize_py<'py>(
     let field = pyfield.map(|inner| inner.to_str().unwrap());
     let by = pyby.map(|inner| inner.to_str().unwrap());
 
+    // construct coordinates
+    let x_coords = Array::range(
+        raster_info.xmin,
+        raster_info.xmin + raster_info.ncols as f64 * raster_info.xres,
+        raster_info.xres,
+    )
+    .to_pyarray_bound(py);
+    let y_coords = Array::range(
+        raster_info.ymax,
+        raster_info.ymax - raster_info.nrows as f64 * raster_info.yres,
+        -raster_info.yres,
+    )
+    .to_pyarray_bound(py);
+
     // rusterize
-    let ret = rusterize_rust(
+    let (ret, band_names) = rusterize_rust(
         geometry,
         raster_info,
         pixel_fn,
@@ -212,7 +253,9 @@ fn rusterize_py<'py>(
         field,
         by,
     );
-    Ok(ret.to_pyarray_bound(py))
+    let pyret = ret.to_pyarray_bound(py);
+    let pynames = PyList::new_bound(py, band_names);
+    Ok((pyret, x_coords, y_coords, pynames))
 }
 
 #[pymodule]
