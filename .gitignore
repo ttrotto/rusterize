@@ -28,3 +28,6 @@ Cargo.lock
 
 # Tests
 tests/
+
+# Publish script
+./publish.sh
