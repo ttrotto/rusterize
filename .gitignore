@@ -29,5 +29,5 @@ Cargo.lock
 # Tests
 tests/
 
-# Publish script
-./publish.sh
+# local build script
+./build.sh
