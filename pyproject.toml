@@ -24,5 +24,4 @@ dependencies = [
 [tool.maturin]
 python-source = "python"
 module-name = "rusterize"
-features = ["pyo3/extension-module"]
 include = [{ path = "rust-toolchain.toml", format = "sdist" }]

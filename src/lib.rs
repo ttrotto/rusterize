@@ -55,7 +55,7 @@ fn rusterize_rust(
 
     // retain only good geometries
     if good_geom.iter().any(|&valid| !valid) {
-        println!("Detected unsupported geometries, will be removed.");
+        println!("Detected unsupported geometries, will be dropped.");
         let mut iter = good_geom.iter();
         geometry.retain(|_| *iter.next().unwrap());
         df = df.and_then(|inner| {
@@ -138,7 +138,6 @@ fn rusterize_rust(
                     .for_each_with(sender, |sendr, (mut band, (group_idx, idxs))| {
                         // send band names to receiver
                         if let Some(name) = by.get(group_idx as usize) {
-                            println!("{:?}", name);
                             sendr.send(name.to_string()).unwrap()
                         }
 
