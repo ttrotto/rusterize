@@ -1,3 +1,5 @@
+cargo-features = ["profile-rustflags"]
+
 [package]
 name = "rusterize"
 version = "0.1.0"
@@ -19,7 +21,6 @@ geo = "0.29.3"
 geo-types = "0.7.14"
 py_geo_interface = { version = "0.8.0"}
 rayon = "1.10.0"
-crossbeam-channel = "0.5.14"
 
 # OS-specific allocators
 [target.'cfg(not(target_family = "unix"))'.dependencies]
@@ -36,10 +37,9 @@ lto = "thin"
 debug = "line-tables-only"
 
 [profile.dist-release]
+opt-level = 3
+rustflags = ["-C", "target-cpu=native"]
 inherits = "release"
 codegen-units = 1
 debug = false
 lto = "fat"
-
-[build]
-rustflags = ["-C", "target-cpu=native"]

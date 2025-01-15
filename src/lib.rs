@@ -12,7 +12,6 @@ mod rasterize_polygon;
 
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
-use crossbeam_channel::unbounded;
 use geo_types::Geometry;
 use numpy::{
     ndarray::{
@@ -28,7 +27,7 @@ use pyo3::{
     types::{PyAny, PyList, PyString},
 };
 use pyo3_polars::PyDataFrame;
-use std::convert::From;
+use std::sync::mpsc::channel;
 use structs::raster::RasterInfo;
 
 type TupleToPython<'py> = PyResult<(
@@ -116,14 +115,17 @@ fn rusterize_rust(
 
     // main
     let mut raster: Array3<f64>;
-    let (sender, receiver) = unbounded::<String>();
+    let mut band_names: Vec<String> = vec![String::from("band1")];
     match by {
         Some(by) => {
-            // multiband raster
+            // open channel for sending and receiving band names
+            let (sender, receiver) = channel();
+
+            // multiband raster on by groups
             let groups = by.group_tuples(true, false).expect("No groups found!");
             raster = raster_info.build_raster(groups.len());
 
-            // parallel iterator along bands, zipped with the corresponding group
+            // parallel iterator along bands, zipped with the corresponding groups
             let pool = rayon::ThreadPoolBuilder::new()
                 .num_threads(threads)
                 .build()
@@ -133,16 +135,15 @@ fn rusterize_rust(
                     .outer_iter_mut()
                     .into_par_iter()
                     .zip(groups.into_idx().into_par_iter())
-                    .for_each(|(mut band, (group_idx, idxs))| {
-                        // send band names to channel
-                        let sender = sender.clone();
+                    .for_each_with(sender, |sendr, (mut band, (group_idx, idxs))| {
+                        // send band names to receiver
                         if let Some(name) = by.get(group_idx as usize) {
                             println!("{:?}", name);
-                            sender.send(name.to_string()).unwrap()
+                            sendr.send(name.to_string()).unwrap()
                         }
 
                         // rasterize polygons
-                        for &i in idxs.into_iter() {
+                        for &i in idxs.iter() {
                             if let (Some(fv), Some(geom)) =
                                 (field.get(i as usize), geometry.get(i as usize))
                             {
@@ -151,6 +152,8 @@ fn rusterize_rust(
                         }
                     })
             });
+            // collect band names
+            band_names = receiver.iter().collect();
         }
         None => {
             // singleband raster
@@ -174,13 +177,6 @@ fn rusterize_rust(
                 });
         }
     }
-
-    // get band names
-    let band_names = if !receiver.is_empty() {
-        receiver.iter().collect()
-    } else {
-        vec![String::from("band1")]
-    };
 
     // replace NaN with background
     if !background.is_nan() {
@@ -234,13 +230,13 @@ fn rusterize_py<'py>(
         raster_info.xmin + raster_info.ncols as f64 * raster_info.xres,
         raster_info.xres,
     )
-    .to_pyarray_bound(py);
+        .to_pyarray_bound(py);
     let y_coords = Array::range(
         raster_info.ymax,
         raster_info.ymax - raster_info.nrows as f64 * raster_info.yres,
         -raster_info.yres,
     )
-    .to_pyarray_bound(py);
+        .to_pyarray_bound(py);
 
     // rusterize
     let (ret, band_names) = rusterize_rust(

@@ -25,7 +25,8 @@ pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster_info: &Rast
                     node_array[[i, 0]] = coord.x;
                     node_array[[i, 1]] = coord.y;
                 });
-            let nrows = node_array.nrows() - 1; // drop last entry because duplicate of first
+            // drop last entry for correct comperison inside loop
+            let nrows = node_array.nrows() - 1;
             // add Edge to edges vector
             for i in 0..nrows {
                 let y0 = (raster_info.ymax - node_array[[i, 1]]) / raster_info.yres - 0.5;

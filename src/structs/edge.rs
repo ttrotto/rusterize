@@ -39,7 +39,6 @@ impl Edge {
             x = x1 + (fystart - y1) * dxdy;
             yend = y0c as usize;
         }
-        // safe type casting
         let ystart = fystart as usize;
         Self {
             ystart,
