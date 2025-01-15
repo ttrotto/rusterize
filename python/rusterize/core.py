@@ -73,7 +73,7 @@ def rusterize(gdf: DataFrame,
     df = pl.from_pandas(gdf[cols]) if cols else None
 
     # rusterize
-    r = _rusterize(
+    raster, x, y, bands = _rusterize(
         gdf.geometry,
         raster_info,
         pixel_fn,
@@ -84,5 +84,9 @@ def rusterize(gdf: DataFrame,
         background
     )
 
-    return DataArray(r,
-                     coords=)
+    return DataArray(raster,
+                     dims=["band", "y", "x"],
+                     coords={"x": x,
+                             "y": y,
+                             "band": bands}
+                     ).rio.write_crs(gdf.crs)
