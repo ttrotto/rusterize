@@ -18,7 +18,7 @@ pub struct RasterInfo {
 }
 
 impl RasterInfo {
-    // map PyAny information to Raster
+    // map PyAny to RasterInfo
     pub fn from(pyinfo: &Bound<PyAny>) -> Self {
         let raster_info: RasterInfo = pyinfo
             .extract()
@@ -32,7 +32,7 @@ impl RasterInfo {
         }
     }
 
-    // build raster
+    // build 3D raster
     pub fn build_raster(&self, bands: usize) -> Array3<f64> {
         Array3::from_elem((bands, self.nrows, self.ncols), f64::NAN)
     }

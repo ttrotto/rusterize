@@ -4,7 +4,6 @@ On-demand functions for polygon rasterizetion.
 
 use numpy::ndarray::ArrayViewMut2;
 
-// declare a new type
 pub type PixelFn = fn(&mut ArrayViewMut2<f64>, usize, usize, &f64);
 
 // sum values or NA

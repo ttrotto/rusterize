@@ -21,7 +21,7 @@ pub fn rasterize_polygon(
     edgelist::build_edges(&mut edges, polygon, raster_info);
     edges.sort_by(less_by_ystart);
 
-    // init active edges
+    // active edges
     let mut active_edges: Vec<Edge> = Vec::new();
 
     // start with first y line
@@ -30,7 +30,7 @@ pub fn rasterize_polygon(
         None => return, // handle case when no edge to rasterize
     };
 
-    // ranges for x coordinate
+    // init counter and start column for polygon filling
     let (mut xstart, mut counter): (usize, usize) = (0, 0);
 
     // rasterize loop
@@ -38,10 +38,10 @@ pub fn rasterize_polygon(
         // transfer current edges ref to active edges
         active_edges.extend(
             edges
-                .extract_if(|edge| edge.ystart <= yline) // experimental
+                .extract_if(.., |edge| edge.ystart <= yline) // experimental
                 .collect::<Vec<Edge>>(),
         );
-        // sort active edges by x
+        // sort active edges
         active_edges.sort_by(less_by_x);
 
         // even-odd polygon fill
