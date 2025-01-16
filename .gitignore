@@ -31,3 +31,6 @@ tests/
 
 # local build script
 ./build.sh
+
+# GitHub Actions
+.github/
