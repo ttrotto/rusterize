@@ -38,7 +38,7 @@ pub fn rasterize_polygon(
         // transfer current edges ref to active edges
         active_edges.extend(
             edges
-                .extract_if(|edge| edge.ystart <= yline) // experimental
+                .extract_if(.., |edge| edge.ystart <= yline) // experimental
                 .collect::<Vec<Edge>>(),
         );
         // sort active edges

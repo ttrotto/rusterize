@@ -229,13 +229,13 @@ fn rusterize_py<'py>(
         raster_info.xmin + raster_info.ncols as f64 * raster_info.xres,
         raster_info.xres,
     )
-        .to_pyarray_bound(py);
+    .to_pyarray_bound(py);
     let y_coords = Array::range(
         raster_info.ymax,
         raster_info.ymax - raster_info.nrows as f64 * raster_info.yres,
         -raster_info.yres,
     )
-        .to_pyarray_bound(py);
+    .to_pyarray_bound(py);
 
     // rusterize
     let (ret, band_names) = rusterize_rust(
