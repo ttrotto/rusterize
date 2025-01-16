@@ -28,9 +28,3 @@ Cargo.lock
 
 # Tests
 tests/
-
-# local build script
-./build.sh
-
-# GitHub Actions
-.github/
