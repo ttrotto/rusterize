@@ -4,7 +4,11 @@ build-backend = "maturin"
 
 [project]
 name = "rusterize"
+description = "High performance rasterization tool for Python build in Rust"
+readme = "README.md"
 requires-python = ">=3.10"
+license = {file = "LICENSE"}
+author = {name = "Tommaso Trotto", email = "ttrotto@mail.ubc.ca"}
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -25,3 +29,6 @@ dependencies = [
 python-source = "python"
 module-name = "rusterize"
 include = [{ path = "rust-toolchain.toml", format = "sdist" }]
+
+[project.urls]
+repository = "https://github.com/ttrotto/rusterize"
