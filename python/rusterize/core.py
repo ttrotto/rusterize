@@ -4,6 +4,7 @@ from typing import Optional, Tuple, Union
 
 import polars as pl
 from xarray.core.dataarray import DataArray
+from rioxarray import *
 from pandas import DataFrame
 from .rusterize import _rusterize
 
@@ -23,7 +24,7 @@ def rusterize(gdf: DataFrame,
               field: Optional[str] = None,
               by: Optional[str] = None,
               pixel_fn: str = "last",
-              background: Union[int, float] = None,
+              background: Optional[Union[int, float]] = None,
               threads: int = 4
               ) -> DataArray:
     """
@@ -52,7 +53,7 @@ def rusterize(gdf: DataFrame,
         raise TypeError("Must pass a valid resolution tuple (x, y).")
     if not isinstance(pixel_fn, str):
         raise TypeError("Must pass a valid string to pixel_fn. Select only of sum, first, last, min, max, count, or any.")
-    if not isinstance(background, (int, float)):
+    if not isinstance(background, (int, float, type(None))):
         raise TypeError("Must pass a valid background type.")
     if not isinstance(threads, int):
         raise TypeError("Must pass a valid thread number")
