@@ -4,13 +4,22 @@ Adapted from https://github.com/pola-rs/polars/blob/main/py-polars/src/allocator
  */
 
 #[cfg(not(target_family = "unix"))]
+use mimalloc::MiMalloc;
+
+#[cfg(not(target_family = "unix"))]
 #[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+static GLOBAL: MiMalloc = MiMalloc;
+
+#[cfg(all(target_family = "unix", not(target_os = "macos")))]
+use tikv_jemallocator::Jemalloc;
 
 #[cfg(all(target_family = "unix", not(target_os = "macos")))]
 #[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static GLOBAL: Jemalloc = Jemalloc;
+
+#[cfg(all(target_family = "unix", target_os = "macos"))]
+use tikv_jemallocator::Jemalloc;
 
 #[cfg(all(target_family = "unix", target_os = "macos"))]
 #[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static GLOBAL: Jemalloc = Jemalloc;

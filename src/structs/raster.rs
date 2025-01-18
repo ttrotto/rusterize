@@ -33,7 +33,7 @@ impl RasterInfo {
     }
 
     // build 3D raster
-    pub fn build_raster(&self, bands: usize) -> Array3<f64> {
-        Array3::from_elem((bands, self.nrows, self.ncols), f64::NAN)
+    pub fn build_raster(&self, bands: usize, background: f64) -> Array3<f64> {
+        Array3::from_elem((bands, self.nrows, self.ncols), background)
     }
 }

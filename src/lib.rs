@@ -122,7 +122,7 @@ fn rusterize_rust(
 
             // multiband raster on by groups
             let groups = by.group_tuples(true, false).expect("No groups found!");
-            raster = raster_info.build_raster(groups.len());
+            raster = raster_info.build_raster(groups.len(), background);
 
             // parallel iterator along bands, zipped with the corresponding groups
             let pool = rayon::ThreadPoolBuilder::new()
@@ -155,7 +155,7 @@ fn rusterize_rust(
         }
         None => {
             // singleband raster
-            raster = raster_info.build_raster(1);
+            raster = raster_info.build_raster(1, background);
 
             // rasterize polygons
             field
@@ -176,10 +176,6 @@ fn rusterize_rust(
         }
     }
 
-    // replace NaN with background
-    if !background.is_nan() {
-        raster.mapv_inplace(|x| if x.is_nan() { background } else { x })
-    };
     (raster, band_names)
 }
 
