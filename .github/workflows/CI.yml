@@ -28,8 +28,8 @@ jobs:
             target: aarch64
           - runner: ubuntu-22.04
             target: armv7
-          - runner: ubuntu-22.04
-            target: s390x
+          # - runner: ubuntu-22.04
+          #  target: s390x
           - runner: ubuntu-22.04
             target: ppc64le
     steps:
@@ -170,11 +170,11 @@ jobs:
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: "wheels-*/*"
-      - name: Publish to PyPI
+      - name: Publish to TestPyPI
         if: "startsWith(github.ref, 'refs/tags/')"
         uses: PyO3/maturin-action@v1
         env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+          MATURIN_PYPI_TOKEN: ${{ secrets.TESTPYPI_API_TOKEN }}
         with:
-          command: upload
+          command: upload -r https://test.pypi.org/legacy/
           args: --non-interactive --skip-existing wheels-*/*
