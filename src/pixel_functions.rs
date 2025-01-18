@@ -7,7 +7,6 @@ use numpy::ndarray::ArrayViewMut2;
 pub type PixelFn = fn(&mut ArrayViewMut2<f64>, usize, usize, &f64);
 
 // sum values or NA
-#[inline]
 fn sum_values(array: &mut ArrayViewMut2<f64>, y: usize, x: usize, value: &f64) {
     if array[[y, x]].is_nan() || value.is_nan() {
         array[[y, x]] = *value;
@@ -17,7 +16,6 @@ fn sum_values(array: &mut ArrayViewMut2<f64>, y: usize, x: usize, value: &f64) {
 }
 
 // set first value only if currently NA
-#[inline]
 fn first_values(array: &mut ArrayViewMut2<f64>, y: usize, x: usize, value: &f64) {
     if array[[y, x]].is_nan() {
         array[[y, x]] = *value;
@@ -25,13 +23,11 @@ fn first_values(array: &mut ArrayViewMut2<f64>, y: usize, x: usize, value: &f64)
 }
 
 // always set last value
-#[inline]
 fn last_values(array: &mut ArrayViewMut2<f64>, y: usize, x: usize, value: &f64) {
     array[[y, x]] = *value;
 }
 
 // set value if smaller than current
-#[inline]
 fn min_values(array: &mut ArrayViewMut2<f64>, y: usize, x: usize, value: &f64) {
     if array[[y, x]].is_nan() || array[[y, x]] > *value {
         array[[y, x]] = *value;
@@ -39,7 +35,6 @@ fn min_values(array: &mut ArrayViewMut2<f64>, y: usize, x: usize, value: &f64) {
 }
 
 // set value if larger than current
-#[inline]
 fn max_values(array: &mut ArrayViewMut2<f64>, y: usize, x: usize, value: &f64) {
     if array[[y, x]].is_nan() || array[[y, x]] < *value {
         array[[y, x]] = *value;
@@ -47,7 +42,6 @@ fn max_values(array: &mut ArrayViewMut2<f64>, y: usize, x: usize, value: &f64) {
 }
 
 // count values at index
-#[inline]
 fn count_values(array: &mut ArrayViewMut2<f64>, y: usize, x: usize, _value: &f64) {
     if array[[y, x]].is_nan() {
         array[[y, x]] = 1.0;
@@ -57,7 +51,6 @@ fn count_values(array: &mut ArrayViewMut2<f64>, y: usize, x: usize, _value: &f64
 }
 
 // mark value presence
-#[inline]
 fn any_values(array: &mut ArrayViewMut2<f64>, y: usize, x: usize, _value: &f64) {
     array[[y, x]] = 1.0;
 }
