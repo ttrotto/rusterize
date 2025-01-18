@@ -1,5 +1,4 @@
 #![feature(extract_if)]
-extern crate blas_src;
 
 mod allocator;
 mod structs {
