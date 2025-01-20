@@ -85,7 +85,7 @@ def rusterize(gdf: DataFrame,
         background
     )
 
-    return raster, x, y, bands
+    return raster
     # return DataArray(raster,
     #                  dims=["band", "y", "x"],
     #                  coords={"x": x,

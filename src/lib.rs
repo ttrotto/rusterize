@@ -18,7 +18,7 @@ use numpy::{
         parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
         {Array, Array3, Axis},
     },
-    PyArray1, PyArray3, IntoPyArray,
+    IntoPyArray, PyArray1, PyArray3,
 };
 use polars::prelude::*;
 use py_geo_interface::from_py::AsGeometryVec;
@@ -28,9 +28,9 @@ use pyo3::{
 };
 use pyo3_polars::PyDataFrame;
 use std::sync::mpsc::channel;
-use structs::{raster::RasterInfo};
+use structs::raster::RasterInfo;
 
-type TupleToPython<'py> = PyResult<(
+type XarrayDict<'py> = PyResult<(
     Bound<'py, PyArray3<f64>>,
     Bound<'py, PyArray1<f64>>,
     Bound<'py, PyArray1<f64>>,
@@ -199,7 +199,7 @@ fn rusterize_py<'py>(
     pyfield: Option<&str>,
     pyby: Option<&str>,
     pybackground: Option<&Bound<'py, PyAny>>,
-) -> TupleToPython<'py> {
+) -> XarrayDict<'py> {
     // get number of threads
     let op_threads = pythreads.extract::<isize>()?;
     let threads = if op_threads <= 0 {
