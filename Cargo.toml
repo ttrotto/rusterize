@@ -17,9 +17,10 @@ ndarray = { version = "0.15.6", features = ["rayon"] }
 polars = { version = "0.44.2", features = ["lazy", "simd", "performant", "nightly"] }
 pyo3-polars = { version = "0.18.0", features = ["lazy", "dtype-struct"] }
 geo = "0.29.3"
-geo-types = "0.7.14"
-py_geo_interface = { version = "0.8.0"}
+geo-types = "0.7.15"
+py_geo_interface = "0.8.0"
 rayon = "1.10.0"
+dict_derive = "0.6.0"
 
 # OS-specific allocators
 [target.'cfg(not(target_family = "unix"))'.dependencies]

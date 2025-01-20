@@ -3,20 +3,10 @@ from __future__ import annotations
 from typing import Optional, Tuple, Union
 
 import polars as pl
-from xarray.core.dataarray import DataArray
+from xarray import DataArray
 from rioxarray import *
 from pandas import DataFrame
 from .rusterize import _rusterize
-
-
-class _RasterInfo:
-    def __init__(self,
-                 bounds: Tuple[float,...],
-                 res: Union[Tuple[int, ...], Tuple[float, ...]]):
-        """ Mirrors RasterInfo class in Rust """
-        self.xmin, self.ymin, self.xmax, self.ymax = bounds
-        self.xres, self.yres = res
-        self.nrows, self.ncols = 0, 0
 
 
 def rusterize(gdf: DataFrame,
@@ -67,7 +57,17 @@ def rusterize(gdf: DataFrame,
         raise NotImplementedError("Only projected CRS are supported.")
 
     # RasterInfo
-    raster_info = _RasterInfo(gdf.total_bounds, res)
+    bounds = gdf.total_bounds
+    raster_info = {
+        "xmin": bounds[0],
+        "ymin": bounds[1],
+        "xmax": bounds[2],
+        "ymax": bounds[3],
+        "xres": res[0],
+        "yres": res[1],
+        "nrows": 0,
+        "ncols": 0
+    }
 
     # extract columns of interest and convert to polars
     cols = list(set([col for col in (field, by) if col]))
@@ -85,9 +85,10 @@ def rusterize(gdf: DataFrame,
         background
     )
 
-    return DataArray(raster,
-                     dims=["band", "y", "x"],
-                     coords={"x": x,
-                             "y": y,
-                             "band": bands}
-                     ).rio.write_crs(gdf.crs)
+    return raster, x, y, bands
+    # return DataArray(raster,
+    #                  dims=["band", "y", "x"],
+    #                  coords={"x": x,
+    #                          "y": y,
+    #                          "band": bands}
+    #                  ).rio.write_crs(gdf.crs)

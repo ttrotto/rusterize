@@ -4,6 +4,7 @@ mod allocator;
 mod structs {
     pub mod edge;
     pub mod raster;
+    // pub mod xarray;
 }
 mod edgelist;
 mod pixel_functions;
@@ -17,17 +18,17 @@ use numpy::{
         parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
         {Array, Array3, Axis},
     },
-    PyArray1, PyArray3, ToPyArray,
+    PyArray1, PyArray3, IntoPyArray,
 };
 use polars::prelude::*;
 use py_geo_interface::from_py::AsGeometryVec;
 use pyo3::{
     prelude::*,
-    types::{PyAny, PyList, PyString},
+    types::{PyAny, PyList},
 };
 use pyo3_polars::PyDataFrame;
 use std::sync::mpsc::channel;
-use structs::raster::RasterInfo;
+use structs::{raster::RasterInfo};
 
 type TupleToPython<'py> = PyResult<(
     Bound<'py, PyArray3<f64>>,
@@ -35,6 +36,13 @@ type TupleToPython<'py> = PyResult<(
     Bound<'py, PyArray1<f64>>,
     Bound<'py, PyList>,
 )>;
+
+// type TupleToPython<'py> = PyResult<(
+//     &'py PyArray3<f64>,
+//     &'py PyArray1<f64>,
+//     &'py PyArray1<f64>,
+//     &'py PyList,
+// )>;
 
 fn rusterize_rust(
     mut geometry: Vec<Geometry>,
@@ -185,11 +193,11 @@ fn rusterize_py<'py>(
     py: Python<'py>,
     pygeometry: &Bound<'py, PyAny>,
     pyinfo: &Bound<'py, PyAny>,
-    pypixel_fn: &Bound<'py, PyString>,
+    pypixel_fn: &str,
     pythreads: &Bound<'py, PyAny>,
     pydf: Option<PyDataFrame>,
-    pyfield: Option<&Bound<'py, PyString>>,
-    pyby: Option<&Bound<'py, PyString>>,
+    pyfield: Option<&str>,
+    pyby: Option<&str>,
     pybackground: Option<&Bound<'py, PyAny>>,
 ) -> TupleToPython<'py> {
     // get number of threads
@@ -210,13 +218,10 @@ fn rusterize_py<'py>(
     let raster_info = RasterInfo::from(pyinfo);
 
     // extract function arguments
-    let f = pypixel_fn.to_str()?;
-    let pixel_fn = set_pixel_function(f);
+    let pixel_fn = set_pixel_function(pypixel_fn);
     let background = pybackground
         .and_then(|inner| inner.extract::<f64>().ok())
         .unwrap_or(f64::NAN);
-    let field = pyfield.map(|inner| inner.to_str().unwrap());
-    let by = pyby.map(|inner| inner.to_str().unwrap());
 
     // construct coordinates
     let x_coords = Array::range(
@@ -224,13 +229,13 @@ fn rusterize_py<'py>(
         raster_info.xmin + raster_info.ncols as f64 * raster_info.xres,
         raster_info.xres,
     )
-    .to_pyarray_bound(py);
+    .into_pyarray_bound(py);
     let y_coords = Array::range(
         raster_info.ymax,
         raster_info.ymax - raster_info.nrows as f64 * raster_info.yres,
         -raster_info.yres,
     )
-    .to_pyarray_bound(py);
+    .into_pyarray_bound(py);
 
     // rusterize
     let (ret, band_names) = rusterize_rust(
@@ -240,16 +245,17 @@ fn rusterize_py<'py>(
         background,
         threads,
         df,
-        field,
-        by,
+        pyfield,
+        pyby,
     );
-    let pyret = ret.to_pyarray_bound(py);
+    let pyret = ret.into_pyarray_bound(py);
     let pynames = PyList::new_bound(py, band_names);
+
     Ok((pyret, x_coords, y_coords, pynames))
 }
 
 #[pymodule]
-fn rusterize(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+fn rusterize(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(rusterize_py, m)?)?;
     Ok(())
 }
