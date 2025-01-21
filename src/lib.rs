@@ -139,7 +139,7 @@ fn rusterize_rust(
                             if let (Some(fv), Some(geom)) =
                                 (field.get(i as usize), geometry.get(i as usize))
                             {
-                                rasterize_polygon(&raster_info, geom, &fv, &mut band, &pixel_fn);
+                                rasterize_polygon(&raster_info, geom, &fv, &mut band, &pixel_fn, &background);
                             }
                         }
                     })
@@ -164,6 +164,7 @@ fn rusterize_rust(
                             &fv,
                             &mut raster.index_axis_mut(Axis(0), 0),
                             &pixel_fn,
+                            &background,
                         )
                     }
                 });

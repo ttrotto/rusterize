@@ -15,6 +15,7 @@ pub fn rasterize_polygon(
     field_value: &f64,
     ndarray: &mut ArrayViewMut2<f64>,
     pxfn: &PixelFn,
+    background: &f64,
 ) {
     // build edgelist and sort
     let mut edges: Vec<Edge> = Vec::new();
@@ -59,7 +60,7 @@ pub fn rasterize_polygon(
             } else {
                 let xend = x;
                 for xpix in xstart..xend {
-                    pxfn(ndarray, yline, xpix, field_value);
+                    pxfn(ndarray, yline, xpix, field_value, background);
                 }
             }
         }
