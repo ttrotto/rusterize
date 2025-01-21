@@ -4,7 +4,7 @@ mod allocator;
 mod structs {
     pub mod edge;
     pub mod raster;
-    // pub mod xarray;
+    pub mod xarray;
 }
 mod edgelist;
 mod pixel_functions;
@@ -18,7 +18,7 @@ use numpy::{
         parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
         {Array, Array3, Axis},
     },
-    IntoPyArray, PyArray1, PyArray3,
+    IntoPyArray,
 };
 use polars::prelude::*;
 use py_geo_interface::from_py::AsGeometryVec;
@@ -28,21 +28,7 @@ use pyo3::{
 };
 use pyo3_polars::PyDataFrame;
 use std::sync::mpsc::channel;
-use structs::raster::RasterInfo;
-
-type XarrayDict<'py> = PyResult<(
-    Bound<'py, PyArray3<f64>>,
-    Bound<'py, PyArray1<f64>>,
-    Bound<'py, PyArray1<f64>>,
-    Bound<'py, PyList>,
-)>;
-
-// type TupleToPython<'py> = PyResult<(
-//     &'py PyArray3<f64>,
-//     &'py PyArray1<f64>,
-//     &'py PyArray1<f64>,
-//     &'py PyList,
-// )>;
+use structs::{raster::RasterInfo, xarray::Xarray};
 
 fn rusterize_rust(
     mut geometry: Vec<Geometry>,
@@ -199,7 +185,7 @@ fn rusterize_py<'py>(
     pyfield: Option<&str>,
     pyby: Option<&str>,
     pybackground: Option<&Bound<'py, PyAny>>,
-) -> XarrayDict<'py> {
+) -> PyResult<Xarray<'py>> {
     // get number of threads
     let op_threads = pythreads.extract::<isize>()?;
     let threads = if op_threads <= 0 {
@@ -249,9 +235,12 @@ fn rusterize_py<'py>(
         pyby,
     );
     let pyret = ret.into_pyarray_bound(py);
-    let pynames = PyList::new_bound(py, band_names);
+    let pybands = PyList::new_bound(py, band_names);
+    let pydims = PyList::new_bound(py, vec!["x", "y", "bands"]);
 
-    Ok((pyret, x_coords, y_coords, pynames))
+    // build xarray dictionary
+    let xarray = Xarray::build_xarray(pyret, pydims, x_coords, y_coords, pybands);
+    Ok(xarray)
 }
 
 #[pymodule]

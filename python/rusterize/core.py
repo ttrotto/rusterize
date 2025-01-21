@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import polars as pl
-from xarray import DataArray
-from rioxarray import *
 from pandas import DataFrame
 from .rusterize import _rusterize
 
@@ -16,7 +14,7 @@ def rusterize(gdf: DataFrame,
               pixel_fn: str = "last",
               background: Optional[Union[int, float]] = None,
               threads: int = 4
-              ) -> DataArray:
+              ) -> Dict[str, Any]:
     """
     Fast geopandas rasterization into xarray.DataArray
 
@@ -30,7 +28,7 @@ def rusterize(gdf: DataFrame,
     :param threads: number of threads to use when `by` is specified. Set to -1 to use all threads. Default is 4.
 
     Returns:
-        Rasterized geometries into xr.DataArray
+        Dictionary containing rasterized geometries and spatial attributes to build a xarray.DataArray.
     """
     # type checks
     if not isinstance(gdf, DataFrame):
@@ -74,7 +72,7 @@ def rusterize(gdf: DataFrame,
     df = pl.from_pandas(gdf[cols]) if cols else None
 
     # rusterize
-    raster, x, y, bands = _rusterize(
+    return _rusterize(
         gdf.geometry,
         raster_info,
         pixel_fn,
@@ -84,11 +82,3 @@ def rusterize(gdf: DataFrame,
         by,
         background
     )
-
-    return raster
-    # return DataArray(raster,
-    #                  dims=["band", "y", "x"],
-    #                  coords={"x": x,
-    #                          "y": y,
-    #                          "band": bands}
-    #                  ).rio.write_crs(gdf.crs)
