@@ -13,10 +13,13 @@ mod rasterize_polygon;
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
 use geo_types::Geometry;
-use numpy::{ndarray::{
-    parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
-    {Array, Array3, Axis},
-}, IntoPyArray, PyArray1};
+use numpy::{
+    ndarray::{
+        parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
+        {Array, Array3, Axis},
+    },
+    IntoPyArray,
+};
 use polars::prelude::*;
 use py_geo_interface::from_py::AsGeometryVec;
 use pyo3::{
@@ -25,7 +28,6 @@ use pyo3::{
 };
 use pyo3_polars::PyDataFrame;
 use std::sync::mpsc::channel;
-use ndarray::Array1;
 use structs::{raster::RasterInfo, xarray::Xarray};
 
 fn rusterize_rust(
@@ -137,7 +139,14 @@ fn rusterize_rust(
                             if let (Some(fv), Some(geom)) =
                                 (field.get(i as usize), geometry.get(i as usize))
                             {
-                                rasterize_polygon(&raster_info, geom, &fv, &mut band, &pixel_fn, &background);
+                                rasterize_polygon(
+                                    &raster_info,
+                                    geom,
+                                    &fv,
+                                    &mut band,
+                                    &pixel_fn,
+                                    &background,
+                                );
                             }
                         }
                     })

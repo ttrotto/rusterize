@@ -10,7 +10,7 @@ use pyo3::{prelude::*, types::PyList};
 #[derive(IntoPyObject)]
 struct Dims<'py> {
     dims: &'py str,
-    data: Bound<'py, PyAny>
+    data: Bound<'py, PyAny>,
 }
 
 impl<'py> Dims<'py> {
@@ -18,7 +18,6 @@ impl<'py> Dims<'py> {
         Self { dims, data }
     }
 }
-
 
 #[derive(IntoPyObject)]
 struct Coordinates<'py> {
