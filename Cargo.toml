@@ -34,7 +34,6 @@ tikv-jemallocator = { version = "*", features = ["disable_initial_exec_tls"] }
 
 [profile.release]
 lto = "thin"
-debug = "line-tables-only"
 
 [profile.dist-release]
 opt-level = 3
