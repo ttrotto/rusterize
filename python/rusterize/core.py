@@ -4,6 +4,8 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import polars as pl
 from pandas import DataFrame
+import rioxarray
+from xarray import DataArray
 from .rusterize import _rusterize
 
 
@@ -72,7 +74,7 @@ def rusterize(gdf: DataFrame,
     df = pl.from_pandas(gdf[cols]) if cols else None
 
     # rusterize
-    return _rusterize(
+    r = _rusterize(
         gdf.geometry,
         raster_info,
         pixel_fn,
@@ -82,3 +84,4 @@ def rusterize(gdf: DataFrame,
         by,
         background
     )
+    return DataArray.from_dict(r).rio.write_crs(gdf.crs, inplace=True)

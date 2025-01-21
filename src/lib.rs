@@ -13,13 +13,10 @@ mod rasterize_polygon;
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
 use geo_types::Geometry;
-use numpy::{
-    ndarray::{
-        parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
-        {Array, Array3, Axis},
-    },
-    IntoPyArray,
-};
+use numpy::{ndarray::{
+    parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
+    {Array, Array3, Axis},
+}, IntoPyArray, PyArray1};
 use polars::prelude::*;
 use py_geo_interface::from_py::AsGeometryVec;
 use pyo3::{
@@ -28,6 +25,7 @@ use pyo3::{
 };
 use pyo3_polars::PyDataFrame;
 use std::sync::mpsc::channel;
+use ndarray::Array1;
 use structs::{raster::RasterInfo, xarray::Xarray};
 
 fn rusterize_rust(
@@ -237,7 +235,7 @@ fn rusterize_py<'py>(
     );
     let pyret = ret.into_pyarray_bound(py);
     let pybands = PyList::new_bound(py, band_names);
-    let pydims = PyList::new_bound(py, vec!["x", "y", "bands"]);
+    let pydims = PyList::new_bound(py, vec!["bands", "y", "x"]);
 
     // build xarray dictionary
     let xarray = Xarray::build_xarray(pyret, pydims, x_coords, y_coords, pybands);

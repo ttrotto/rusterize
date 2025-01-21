@@ -8,10 +8,23 @@ use numpy::{PyArray1, PyArray3};
 use pyo3::{prelude::*, types::PyList};
 
 #[derive(IntoPyObject)]
-pub struct Coordinates<'py> {
-    pub x: Bound<'py, PyArray1<f64>>,
-    pub y: Bound<'py, PyArray1<f64>>,
-    pub bands: Bound<'py, PyList>,
+struct Dims<'py> {
+    dims: &'py str,
+    data: Bound<'py, PyAny>
+}
+
+impl<'py> Dims<'py> {
+    fn new(dims: &'py str, data: Bound<'py, PyAny>) -> Self {
+        Self { dims, data }
+    }
+}
+
+
+#[derive(IntoPyObject)]
+struct Coordinates<'py> {
+    x: Dims<'py>,
+    y: Dims<'py>,
+    bands: Dims<'py>,
 }
 
 impl<'py> Coordinates<'py> {
@@ -20,15 +33,18 @@ impl<'py> Coordinates<'py> {
         y: Bound<'py, PyArray1<f64>>,
         bands: Bound<'py, PyList>,
     ) -> Self {
+        let x = Dims::new("x", x.into_any());
+        let y = Dims::new("y", y.into_any());
+        let bands = Dims::new("bands", bands.into_any());
         Self { x, y, bands }
     }
 }
 
 #[derive(IntoPyObject)]
 pub struct Xarray<'py> {
-    pub data: Bound<'py, PyArray3<f64>>,
-    pub dims: Bound<'py, PyList>,
-    pub coords: Coordinates<'py>,
+    data: Bound<'py, PyArray3<f64>>,
+    dims: Bound<'py, PyList>,
+    coords: Coordinates<'py>,
 }
 
 impl<'py> Xarray<'py> {
