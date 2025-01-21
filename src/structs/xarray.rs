@@ -15,8 +15,12 @@ pub struct Coordinates<'py> {
 }
 
 impl<'py> Coordinates<'py> {
-    fn new(x: Bound<'py, PyArray1<f64>>, y: Bound<'py, PyArray1<f64>>, bands: Bound<'py, PyList>) -> Self {
-        Self {x, y, bands}
+    fn new(
+        x: Bound<'py, PyArray1<f64>>,
+        y: Bound<'py, PyArray1<f64>>,
+        bands: Bound<'py, PyList>,
+    ) -> Self {
+        Self { x, y, bands }
     }
 }
 
