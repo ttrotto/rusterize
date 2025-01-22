@@ -217,16 +217,16 @@ fn rusterize_py<'py>(
         .and_then(|inner| inner.extract::<f64>().ok())
         .unwrap_or(f64::NAN);
 
-    // construct coordinates
+    // construct coordinates (start from pixel's center)
     let x_coords = Array::range(
-        raster_info.xmin,
-        raster_info.xmin + raster_info.ncols as f64 * raster_info.xres,
+        raster_info.xmin + raster_info.xres / 2.0,
+        raster_info.xmin + raster_info.ncols as f64 * raster_info.xres + raster_info.xres / 2.0,
         raster_info.xres,
     )
     .into_pyarray_bound(py);
     let y_coords = Array::range(
-        raster_info.ymax,
-        raster_info.ymax - raster_info.nrows as f64 * raster_info.yres,
+        raster_info.ymax - raster_info.yres / 2.0,
+        raster_info.ymax - raster_info.nrows as f64 * raster_info.yres - raster_info.yres / 2.0,
         -raster_info.yres,
     )
     .into_pyarray_bound(py);
