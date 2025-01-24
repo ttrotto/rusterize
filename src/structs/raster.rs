@@ -28,8 +28,7 @@ impl RasterInfo {
         let raster_info: RasterInfo = pyinfo
             .extract()
             .expect("Wrong mapping passed to Raster object");
-        let nrows = ((raster_info.ymax - raster_info.ymin) / raster_info.yres).round() as usize;
-        let ncols = ((raster_info.xmax - raster_info.xmin) / raster_info.xres).round() as usize;
+        let (nrows, ncols) = raster_info.calculate_dimensions();
         Self {
             nrows,
             ncols,
