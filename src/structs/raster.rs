@@ -33,7 +33,25 @@ impl RasterInfo {
         }
     }
 
-    // build 3D raster
+    fn calculate_dimensions(&self) -> (usize, usize) {
+        let nrows = ((self.ymax - self.ymin) / self.yres).round() as usize;
+        let ncols = ((self.xmax - self.xmin) / self.xres).round() as usize;
+        (nrows, ncols)
+    }
+
+    pub fn update_bounds(&mut self, rect: Rect) {
+        // update bounding box
+        self.xmin = rect.min().x;
+        self.xmax = rect.max().x;
+        self.ymin = rect.min().y;
+        self.ymax = rect.max().y;
+        
+        // ...and dimensions
+        let (nrows, ncols) = self.calculate_dimensions();
+        self.nrows = nrows;
+        self.ncols = ncols;
+    }
+    
     pub fn build_raster(&self, bands: usize, background: f64) -> Array3<f64> {
         Array3::from_elem((bands, self.nrows, self.ncols), background)
     }
