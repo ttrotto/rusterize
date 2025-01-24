@@ -3,7 +3,11 @@ Structure to contain information on raster data.
  */
 
 use dict_derive::FromPyObject;
-use numpy::ndarray::Array3;
+use geo::Rect;
+use numpy::{
+    ndarray::{Array, Array3},
+    IntoPyArray, PyArray1,
+};
 use pyo3::prelude::*;
 
 #[derive(FromPyObject)]
