@@ -27,7 +27,7 @@ impl RasterInfo {
     pub fn from(pyinfo: &Bound<PyAny>) -> Self {
         let raster_info: RasterInfo = pyinfo
             .extract()
-            .expect("Wrong mapping passed to Raster object");
+            .expect("Wrong mapping passed to RasterInfo struct");
         let (nrows, ncols) = raster_info.calculate_dimensions();
         Self {
             nrows,
