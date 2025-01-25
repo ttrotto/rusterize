@@ -7,16 +7,18 @@ mod structs {
     pub mod xarray;
 }
 mod edgelist;
+mod geo_validate;
 mod pixel_functions;
 mod rasterize_polygon;
 
+use crate::geo_validate::validate_geometries;
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
 use geo_types::Geometry;
 use numpy::{
     ndarray::{
         parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
-        {Array, Array3, Axis},
+        {Array3, Axis},
     },
     IntoPyArray,
 };
@@ -31,42 +33,24 @@ use std::sync::mpsc::channel;
 use structs::{raster::RasterInfo, xarray::Xarray};
 
 fn rusterize_rust(
-    mut geometry: Vec<Geometry>,
-    raster_info: RasterInfo,
+    geometry: Vec<Geometry>,
+    raster_info: &mut RasterInfo,
     pixel_fn: PixelFn,
     background: f64,
     threads: usize,
-    mut df: Option<DataFrame>,
+    df: Option<DataFrame>,
     field_name: Option<&str>,
     by_name: Option<&str>,
 ) -> (Array3<f64>, Vec<String>) {
-    // check if any bad geometry
-    let good_geom: Vec<bool> = geometry
-        .iter()
-        .map(|geom| matches!(geom, Geometry::Polygon(_) | Geometry::MultiPolygon(_)))
-        .collect();
-
-    // retain only good geometries
-    if good_geom.iter().any(|&valid| !valid) {
-        println!("Detected unsupported geometries, will be dropped.");
-        let mut iter = good_geom.iter();
-        geometry.retain(|_| *iter.next().unwrap());
-        df = df.and_then(|inner| {
-            inner
-                .filter(&BooleanChunked::from_iter_values(
-                    PlSmallStr::from("good_geom"),
-                    good_geom.into_iter(),
-                ))
-                .ok()
-        });
-    }
+    // validate geometries
+    let (good_geom, df) = validate_geometries(geometry, df, raster_info);
 
     // extract `field` and `by`
     let casted: DataFrame;
     let (field, by) = match df {
         None => (
             // case 1: create a dummy `field`
-            &Float64Chunked::from_vec(PlSmallStr::from("field_f64"), vec![1.0; geometry.len()]),
+            &Float64Chunked::from_vec(PlSmallStr::from("field_f64"), vec![1.0; good_geom.len()]),
             None,
         ),
         Some(df) => {
@@ -96,7 +80,7 @@ fn rusterize_rust(
                 }
             }
 
-            // collect the result
+            // collect casted dataframe
             casted = lf.collect().unwrap();
 
             (
@@ -137,7 +121,7 @@ fn rusterize_rust(
                         // rasterize polygons
                         for &i in idxs.iter() {
                             if let (Some(fv), Some(geom)) =
-                                (field.get(i as usize), geometry.get(i as usize))
+                                (field.get(i as usize), good_geom.get(i as usize))
                             {
                                 rasterize_polygon(
                                     &raster_info,
@@ -161,7 +145,7 @@ fn rusterize_rust(
             // rasterize polygons
             field
                 .into_iter()
-                .zip(geometry)
+                .zip(good_geom)
                 .for_each(|(field_value, geom)| {
                     if let Some(fv) = field_value {
                         // process only non-empty field values
@@ -209,7 +193,7 @@ fn rusterize_py<'py>(
     let geometry = pygeometry.as_geometry_vec()?;
 
     // extract raster information
-    let raster_info = RasterInfo::from(pyinfo);
+    let mut raster_info = RasterInfo::from(pyinfo);
 
     // extract function arguments
     let pixel_fn = set_pixel_function(pypixel_fn);
@@ -217,24 +201,10 @@ fn rusterize_py<'py>(
         .and_then(|inner| inner.extract::<f64>().ok())
         .unwrap_or(f64::NAN);
 
-    // construct coordinates (start from pixel's center)
-    let x_coords = Array::range(
-        raster_info.xmin + raster_info.xres / 2.0,
-        raster_info.xmin + raster_info.ncols as f64 * raster_info.xres + raster_info.xres / 2.0,
-        raster_info.xres,
-    )
-    .into_pyarray_bound(py);
-    let y_coords = Array::range(
-        raster_info.ymax - raster_info.yres / 2.0,
-        raster_info.ymax - raster_info.nrows as f64 * raster_info.yres - raster_info.yres / 2.0,
-        -raster_info.yres,
-    )
-    .into_pyarray_bound(py);
-
     // rusterize
     let (ret, band_names) = rusterize_rust(
         geometry,
-        raster_info,
+        &mut raster_info,
         pixel_fn,
         background,
         threads,
@@ -242,6 +212,11 @@ fn rusterize_py<'py>(
         pyfield,
         pyby,
     );
+
+    // construct coordinates
+    let (y_coords, x_coords) = raster_info.make_coordinates(py);
+
+    // to python
     let pyret = ret.into_pyarray_bound(py);
     let pybands = PyList::new_bound(py, band_names);
     let pydims = PyList::new_bound(py, vec!["bands", "y", "x"]);

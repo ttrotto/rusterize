@@ -4,7 +4,7 @@ Check unsupported geometries and adjust bounding boxes if necessary.
 
 use crate::structs::raster::RasterInfo;
 use geo::BoundingRect;
-use geo_types::{Geometry, Rect, coord};
+use geo_types::{coord, Geometry, Rect};
 use polars::prelude::*;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;

@@ -37,8 +37,7 @@ pub fn rasterize_polygon(
     while yline < raster_info.nrows && !(active_edges.is_empty() && edges.is_empty()) {
         // transfer current edges ref to active edges
         active_edges.extend(
-            edges
-                .extract_if(.., |edge| edge.ystart <= yline) // experimental
+            edges.extract_if(.., |edge| edge.ystart <= yline), // experimental
         );
         // sort active edges
         active_edges.sort_by(less_by_x);
