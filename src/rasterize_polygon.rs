@@ -20,19 +20,18 @@ pub fn rasterize_polygon(
     // build edgelist and sort
     let mut edges: Vec<Edge> = Vec::new();
     edgelist::build_edges(&mut edges, polygon, raster_info);
+
+    // early return if no edges
+    if edges.is_empty() {
+        return;
+    }
     edges.sort_by(less_by_ystart);
 
     // active edges
     let mut active_edges: Vec<Edge> = Vec::new();
 
     // start with first y line
-    let mut yline = match edges.first() {
-        Some(e) => e.ystart,
-        None => return, // handle case when no edge to rasterize
-    };
-
-    // init counter and start column for polygon filling
-    let (mut xstart, mut counter): (usize, usize) = (0, 0);
+    let mut yline = edges.first().unwrap().ystart;
 
     // rasterize loop
     while yline < raster_info.nrows && !(active_edges.is_empty() && edges.is_empty()) {
@@ -40,28 +39,16 @@ pub fn rasterize_polygon(
         active_edges.extend(
             edges
                 .extract_if(.., |edge| edge.ystart <= yline) // experimental
-                .collect::<Vec<Edge>>(),
         );
         // sort active edges
         active_edges.sort_by(less_by_x);
 
         // even-odd polygon fill
-        for edge in &active_edges {
-            counter += 1;
-            let x = if edge.x < 0.0 {
-                0.0
-            } else if edge.x > raster_info.ncols as f64 {
-                raster_info.ncols as f64
-            } else {
-                edge.x.ceil()
-            } as usize;
-            if counter % 2 != 0 {
-                xstart = x;
-            } else {
-                let xend = x;
-                for xpix in xstart..xend {
-                    pxfn(ndarray, yline, xpix, field_value, background);
-                }
+        for (edge1, edge2) in active_edges.iter().zip(active_edges.iter().skip(1)) {
+            let xstart = edge1.x.clamp(0.0, raster_info.ncols as f64).ceil() as usize;
+            let xend = edge2.x.clamp(0.0, raster_info.ncols as f64).ceil() as usize;
+            for xpix in xstart..xend {
+                pxfn(ndarray, yline, xpix, field_value, background);
             }
         }
         yline += 1;
