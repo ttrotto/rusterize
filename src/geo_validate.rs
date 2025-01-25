@@ -78,11 +78,11 @@ pub fn validate_geometries(
                 ))
                 .ok();
         }
+        
+        // update bounding box from new geometries
+        let bbox = bounding_rect(&geometry).unwrap();
+        raster_info.update_bounds(bbox);
     }
-
-    // update bounding box from new geometries
-    let bbox = bounding_rect(&geometry).unwrap();
-    raster_info.update_bounds(bbox);
 
     (geometry, df)
 }
