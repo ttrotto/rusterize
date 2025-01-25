@@ -43,9 +43,16 @@ pub fn rasterize_polygon(
         active_edges.sort_by(less_by_x);
 
         // even-odd polygon fill
-        for (edge1, edge2) in active_edges.iter().zip(active_edges.iter().skip(1)) {
+        for (edge1, edge2) in active_edges
+            .iter()
+            .zip(active_edges.iter().skip(1))
+            .step_by(2)
+        {
+            // clamp and round the x-coordinates of the edges
             let xstart = edge1.x.clamp(0.0, raster_info.ncols as f64).ceil() as usize;
             let xend = edge2.x.clamp(0.0, raster_info.ncols as f64).ceil() as usize;
+
+            // fill the pixels between xstart and xend
             for xpix in xstart..xend {
                 pxfn(ndarray, yline, xpix, field_value, background);
             }
