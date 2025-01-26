@@ -1,5 +1,5 @@
 /*
-Check unsupported geometries and adjust bounding boxes if necessary.
+Check unsupported geometries and adjust bounding box if necessary.
  */
 
 use crate::structs::raster::RasterInfo;
