@@ -103,15 +103,15 @@ fn rusterize_rust(
             let n_groups = groups.len();
             raster = raster_info.build_raster(n_groups, background);
 
-            // note taker for band order
+            // notetaker for band order
             let mut order = vec![String::new(); n_groups];
-
+            
             // init local thread pool
             let pool = rayon::ThreadPoolBuilder::new()
                 .num_threads(threads)
                 .build()
                 .unwrap();
-
+    
             pool.install(|| {
                 // parallel iterator along bands, zipped with the corresponding groups
                 raster
@@ -132,7 +132,7 @@ fn rusterize_rust(
                                     (field.get(i as usize), good_geom.get(i as usize))
                                 {
                                     rasterize_polygon(
-                                        &raster_info,
+                                        raster_info,
                                         geom,
                                         &fv,
                                         &mut band,
@@ -142,10 +142,10 @@ fn rusterize_rust(
                                 }
                             }
                         },
-                    )
-            });
+                    )  
+                });
 
-            // collect band names from the receiver and re-order
+            // collect band names from the receiver and reorder
             for (enum_idx, name) in receiver.iter() {
                 order[enum_idx] = name;
             }
@@ -163,7 +163,7 @@ fn rusterize_rust(
                     if let Some(fv) = field_value {
                         // process only non-empty field values
                         rasterize_polygon(
-                            &raster_info,
+                            raster_info,
                             &geom,
                             &fv,
                             &mut raster.index_axis_mut(Axis(0), 0),
