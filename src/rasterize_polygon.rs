@@ -34,6 +34,7 @@ pub fn rasterize_polygon(
     let mut yline = edges.first().unwrap().ystart;
 
     // rasterize loop
+    let ncols = raster_info.ncols as f64;
     while yline < raster_info.nrows && !(active_edges.is_empty() && edges.is_empty()) {
         // transfer current edges ref to active edges
         active_edges.extend(
@@ -49,8 +50,8 @@ pub fn rasterize_polygon(
             .step_by(2)
         {
             // clamp and round the x-coordinates of the edges
-            let xstart = edge1.x.clamp(0.0, raster_info.ncols as f64).ceil() as usize;
-            let xend = edge2.x.clamp(0.0, raster_info.ncols as f64).ceil() as usize;
+            let xstart = edge1.x.clamp(0.0, ncols).ceil() as usize;
+            let xend = edge2.x.clamp(0.0, ncols).ceil() as usize;
 
             // fill the pixels between xstart and xend
             for xpix in xstart..xend {
