@@ -25,7 +25,12 @@ pub fn build_edges(edges: &mut Vec<Edge>, polygon: &Geometry, raster_info: &Rast
         // multipolygon - iterate over each inner polygon
         Geometry::MultiPolygon(polygon) => {
             for poly in polygon {
-                build_edges(edges, &Geometry::Polygon(poly.clone()), raster_info);
+                // handle exterior polygon
+                process_ring(edges, poly.exterior(), raster_info);
+                // handle interior polygons (if any)
+                for hole in poly.interiors() {
+                    process_ring(edges, hole, raster_info);
+                }
             }
         }
         _ => unimplemented!("Only Polygon and MultiPolygon geometries are supported."),
