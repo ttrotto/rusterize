@@ -11,7 +11,7 @@ name = "rusterize"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.21.2", features = ["extension-module", "nightly", "abi3-py310", "generate-import-lib"] }
+pyo3 = { version = "0.21.2", features = ["extension-module", "abi3-py310", "generate-import-lib"] }
 numpy = "0.21.0"
 ndarray = { version = "0.15.6", features = ["rayon"] }
 polars = { version = "0.44.2", features = ["lazy", "simd", "performant", "nightly"] }
@@ -32,14 +32,15 @@ tikv-jemallocator = { version = "*", features = ["disable_initial_exec_tls", "ba
 [target.'cfg(all(target_family = "unix", target_os = "macos"))'.dependencies]
 tikv-jemallocator = { version = "*", features = ["disable_initial_exec_tls"] }
 
-[profile.release]
-lto = "thin"
+[profile.profiler]
+inherits = "dev"
+debug = true
+lto = true
+codegen-units = 1
 
 [profile.dist-release]
-opt-level = 3
-rustflags = ["-C", "target-cpu=native"]
 inherits = "release"
+rustflags = ["-C", "target-cpu=native"]
 codegen-units = 1
-debug = false
-lto = "fat"
+lto = true
 
