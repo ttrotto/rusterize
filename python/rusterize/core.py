@@ -13,7 +13,7 @@ def rusterize(gdf: DataFrame,
               res: Union[Tuple[int, ...], Tuple[float, ...]],
               field: Optional[str] = None,
               by: Optional[str] = None,
-              pixel_fn: str = "last",
+              fun: str = "last",
               background: Optional[Union[int, float]] = None,
               ) -> Dict[str, Any]:
     """
@@ -24,7 +24,7 @@ def rusterize(gdf: DataFrame,
     :param res: tuple of (xres, yres) for rasterized data.
     :param field: field to rasterize. Default is None.
     :param by: column to rasterize, assigns each unique value to a layer in the stack based on field. Default is None.
-    :param pixel_fn: pixel function to use, see fasterize for options. Default is `last`.
+    :param fun: pixel function to use, see fasterize for options. Default is `last`.
     :param background: background value in final raster. Default is None.
 
     Returns:
@@ -39,7 +39,7 @@ def rusterize(gdf: DataFrame,
         raise TypeError("Must pass a valid string to by.")
     if not isinstance(res, tuple):
         raise TypeError("Must pass a valid resolution tuple (x, y).")
-    if not isinstance(pixel_fn, str):
+    if not isinstance(fun, str):
         raise TypeError("Must pass a valid string to pixel_fn. Select only of sum, first, last, min, max, count, or any.")
     if not isinstance(background, (int, float, type(None))):
         raise TypeError("Must pass a valid background type.")
@@ -49,8 +49,6 @@ def rusterize(gdf: DataFrame,
         raise ValueError("If by is specified, field must also be specified.")
     if len(res) != 2 or any((res[0], res[1])) <= 0 or not isinstance(res[0], type(res[1])):
         raise ValueError("Must pass valid resolution tuple of values of consistent dtype.")
-    if not gdf.crs.is_projected:
-        raise NotImplementedError("Only projected CRS are supported.")
 
     # RasterInfo
     bounds = gdf.total_bounds
@@ -73,7 +71,7 @@ def rusterize(gdf: DataFrame,
     r = _rusterize(
         gdf.geometry,
         raster_info,
-        pixel_fn,
+        fun,
         df,
         field,
         by,
