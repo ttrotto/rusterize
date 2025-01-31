@@ -14,7 +14,6 @@ mod rasterize_polygon;
 use crate::geo_validate::validate_geometries;
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
-use core_affinity::CoreId;
 use geo_types::Geometry;
 use numpy::{
     ndarray::{
@@ -188,6 +187,7 @@ fn rusterize_rust(
 
 #[pyfunction]
 #[pyo3(name = "_rusterize")]
+#[allow(clippy::too_many_arguments)]
 fn rusterize_py<'py>(
     py: Python<'py>,
     pygeometry: &Bound<'py, PyAny>,
