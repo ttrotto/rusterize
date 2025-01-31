@@ -33,3 +33,5 @@ tests/
 # Benchmarks
 .benchmarks
 
+# README quarto stuff
+README_files
