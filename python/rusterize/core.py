@@ -15,7 +15,6 @@ def rusterize(gdf: DataFrame,
               by: Optional[str] = None,
               pixel_fn: str = "last",
               background: Optional[Union[int, float]] = None,
-              threads: int = 4
               ) -> Dict[str, Any]:
     """
     Fast geopandas rasterization into xarray.DataArray
@@ -27,7 +26,6 @@ def rusterize(gdf: DataFrame,
     :param by: column to rasterize, assigns each unique value to a layer in the stack based on field. Default is None.
     :param pixel_fn: pixel function to use, see fasterize for options. Default is `last`.
     :param background: background value in final raster. Default is None.
-    :param threads: number of threads to use when `by` is specified. Set to -1 to use all threads. Default is 4.
 
     Returns:
         Dictionary containing rasterized geometries and spatial attributes to build a xarray.DataArray.
@@ -45,8 +43,6 @@ def rusterize(gdf: DataFrame,
         raise TypeError("Must pass a valid string to pixel_fn. Select only of sum, first, last, min, max, count, or any.")
     if not isinstance(background, (int, float, type(None))):
         raise TypeError("Must pass a valid background type.")
-    if not isinstance(threads, int):
-        raise TypeError("Must pass a valid thread number")
 
     # value check
     if by and not field:
@@ -78,7 +74,6 @@ def rusterize(gdf: DataFrame,
         gdf.geometry,
         raster_info,
         pixel_fn,
-        threads,
         df,
         field,
         by,
