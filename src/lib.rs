@@ -92,64 +92,45 @@ fn rusterize_rust(
 
     // main
     let mut raster: Array3<f64>;
-    let mut band_names: Vec<String> = vec![String::from("band1")];
+    // let mut band_names: Vec<String> = vec![String::from("band1")];
+    let mut band_names: Vec<String> = vec![String::from("band2"),
+                                           String::from("band3"), String::from("band4"), String::from("band5"),
+                                           String::from("band6"), String::from("band7"), String::from("band8"),
+                                           String::from("band9"), String::from("band10"), String::from("band11"),
+                                           String::from("band12"), String::from("band13"), String::from("band14"),
+                                           String::from("band15"), String::from("band16")];
     match by {
         Some(by) => {
-            // open channel for sending and receiving band names
-            let (sender, receiver) = channel();
-
             // multiband raster on by groups
             let groups = by.group_tuples(true, false).expect("No groups found!");
             let n_groups = groups.len();
             raster = raster_info.build_raster(n_groups, background);
-
-            // notetaker for band order
-            let mut order = vec![String::new(); n_groups];
             
-            // init local thread pool
-            let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(threads)
-                .build()
-                .unwrap();
-    
-            pool.install(|| {
-                // parallel iterator along bands, zipped with the corresponding groups
-                raster
-                    .outer_iter_mut()
-                    .into_par_iter()
-                    .zip(groups.into_idx().into_par_iter().enumerate())
-                    .for_each_with(
-                        sender,
-                        |sendr, (mut band, (enum_idx, (group_idx, idxs)))| {
-                            // send band names to receiver
-                            if let Some(name) = by.get(group_idx as usize) {
-                                sendr.send((enum_idx, name.to_string())).unwrap();
-                            }
+            // parallel iterator along bands, zipped with the corresponding groups
+            raster
+                .outer_iter_mut()
+                .into_iter()
+                .zip(groups.into_idx().into_iter().enumerate())
+                .for_each(
+                    |(mut band, (enum_idx, (group_idx, idxs)))| {
 
-                            // rasterize polygons
-                            for &i in idxs.iter() {
-                                if let (Some(fv), Some(geom)) =
-                                    (field.get(i as usize), good_geom.get(i as usize))
-                                {
-                                    rasterize_polygon(
-                                        raster_info,
-                                        geom,
-                                        &fv,
-                                        &mut band,
-                                        &pixel_fn,
-                                        &background,
-                                    );
-                                }
+                        // rasterize polygons
+                        for &i in idxs.iter() {
+                            if let (Some(fv), Some(geom)) =
+                                (field.get(i as usize), good_geom.get(i as usize))
+                            {
+                                rasterize_polygon(
+                                    raster_info,
+                                    geom,
+                                    &fv,
+                                    &mut band,
+                                    &pixel_fn,
+                                    &background,
+                                );
                             }
-                        },
-                    )  
-                });
-
-            // collect band names from the receiver and reorder
-            for (enum_idx, name) in receiver.iter() {
-                order[enum_idx] = name;
-            }
-            band_names = order;
+                        }
+                    },
+                );  
         }
         None => {
             // singleband raster
