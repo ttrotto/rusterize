@@ -2,7 +2,12 @@
 Structure to contain information on raster data.
  */
 
-use numpy::ndarray::Array3;
+use dict_derive::FromPyObject;
+use geo::Rect;
+use numpy::{
+    ndarray::{Array, Array3},
+    IntoPyArray, PyArray1,
+};
 use pyo3::prelude::*;
 
 #[derive(FromPyObject)]
@@ -22,9 +27,8 @@ impl RasterInfo {
     pub fn from(pyinfo: &Bound<PyAny>) -> Self {
         let raster_info: RasterInfo = pyinfo
             .extract()
-            .expect("Wrong mapping passed to Raster object");
-        let nrows = ((raster_info.ymax - raster_info.ymin) / raster_info.yres).round() as usize;
-        let ncols = ((raster_info.xmax - raster_info.xmin) / raster_info.xres).round() as usize;
+            .expect("Wrong mapping passed to RasterInfo struct");
+        let (nrows, ncols) = raster_info.shape();
         Self {
             nrows,
             ncols,
@@ -32,8 +36,46 @@ impl RasterInfo {
         }
     }
 
-    // build 3D raster
+    fn shape(&self) -> (usize, usize) {
+        let nrows = ((self.ymax - self.ymin) / self.yres).round() as usize;
+        let ncols = ((self.xmax - self.xmin) / self.xres).round() as usize;
+        (nrows, ncols)
+    }
+
+    pub fn update_bounds(&mut self, rect: Rect) {
+        // update bounding box
+        self.xmin = rect.min().x;
+        self.xmax = rect.max().x;
+        self.ymin = rect.min().y;
+        self.ymax = rect.max().y;
+
+        // recalculate shape
+        let (nrows, ncols) = self.shape();
+        self.nrows = nrows;
+        self.ncols = ncols;
+    }
+
     pub fn build_raster(&self, bands: usize, background: f64) -> Array3<f64> {
         Array3::from_elem((bands, self.nrows, self.ncols), background)
+    }
+
+    // construct coordinates for xarray (start from pixel's center)
+    pub fn make_coordinates<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> (Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>) {
+        let y_coords = Array::range(
+            self.ymax - self.yres / 2.0,
+            self.ymax - self.nrows as f64 * self.yres - self.yres / 2.0,
+            -self.yres,
+        )
+        .into_pyarray_bound(py);
+        let x_coords = Array::range(
+            self.xmin + self.xres / 2.0,
+            self.xmin + self.ncols as f64 * self.xres + self.xres / 2.0,
+            self.xres,
+        )
+        .into_pyarray_bound(py);
+        (y_coords, x_coords)
     }
 }

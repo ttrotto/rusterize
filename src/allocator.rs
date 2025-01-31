@@ -1,6 +1,5 @@
 /*
 OS-dependent memory allocator for better performance.
-Adapted from https://github.com/pola-rs/polars/blob/main/py-polars/src/allocator.rs
  */
 
 #[cfg(not(target_family = "unix"))]

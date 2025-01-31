@@ -15,52 +15,47 @@ pub fn rasterize_polygon(
     field_value: &f64,
     ndarray: &mut ArrayViewMut2<f64>,
     pxfn: &PixelFn,
+    background: &f64,
 ) {
     // build edgelist and sort
     let mut edges: Vec<Edge> = Vec::new();
     edgelist::build_edges(&mut edges, polygon, raster_info);
+
+    // early return if no edges
+    if edges.is_empty() {
+        return;
+    }
     edges.sort_by(less_by_ystart);
 
     // active edges
     let mut active_edges: Vec<Edge> = Vec::new();
 
     // start with first y line
-    let mut yline = match edges.first() {
-        Some(e) => e.ystart,
-        None => return, // handle case when no edge to rasterize
-    };
-
-    // init counter and start column for polygon filling
-    let (mut xstart, mut counter): (usize, usize) = (0, 0);
+    let mut yline = edges.first().unwrap().ystart;
 
     // rasterize loop
+    let ncols = raster_info.ncols as f64;
     while yline < raster_info.nrows && !(active_edges.is_empty() && edges.is_empty()) {
         // transfer current edges ref to active edges
         active_edges.extend(
-            edges
-                .extract_if(.., |edge| edge.ystart <= yline) // experimental
-                .collect::<Vec<Edge>>(),
+            edges.extract_if(.., |edge| edge.ystart <= yline), // experimental
         );
         // sort active edges
         active_edges.sort_by(less_by_x);
 
         // even-odd polygon fill
-        for edge in &active_edges {
-            counter += 1;
-            let x = if edge.x < 0.0 {
-                0.0
-            } else if edge.x > raster_info.ncols as f64 {
-                raster_info.ncols as f64
-            } else {
-                edge.x.ceil()
-            } as usize;
-            if counter % 2 != 0 {
-                xstart = x;
-            } else {
-                let xend = x;
-                for xpix in xstart..xend {
-                    pxfn(ndarray, yline, xpix, field_value);
-                }
+        for (edge1, edge2) in active_edges
+            .iter()
+            .zip(active_edges.iter().skip(1))
+            .step_by(2)
+        {
+            // clamp and round the x-coordinates of the edges
+            let xstart = edge1.x.clamp(0.0, ncols).ceil() as usize;
+            let xend = edge2.x.clamp(0.0, ncols).ceil() as usize;
+
+            // fill the pixels between xstart and xend
+            for xpix in xstart..xend {
+                pxfn(ndarray, yline, xpix, field_value, background);
             }
         }
         yline += 1;

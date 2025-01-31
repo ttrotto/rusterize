@@ -11,15 +11,17 @@ name = "rusterize"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.21.2", features = ["extension-module", "nightly", "abi3-py310", "generate-import-lib"] }
+pyo3 = { version = "0.21.2", features = ["extension-module", "abi3-py310", "generate-import-lib"] }
 numpy = "0.21.0"
 ndarray = { version = "0.15.6", features = ["rayon"] }
 polars = { version = "0.44.2", features = ["lazy", "simd", "performant", "nightly"] }
 pyo3-polars = { version = "0.18.0", features = ["lazy", "dtype-struct"] }
 geo = "0.29.3"
-geo-types = "0.7.14"
-py_geo_interface = { version = "0.8.0"}
+geo-types = "0.7.15"
+py_geo_interface = "0.8.0"
 rayon = "1.10.0"
+dict_derive = "0.6.0"
+core_affinity = "0.8.1"
 
 # OS-specific allocators
 [target.'cfg(not(target_family = "unix"))'.dependencies]
@@ -31,15 +33,15 @@ tikv-jemallocator = { version = "*", features = ["disable_initial_exec_tls", "ba
 [target.'cfg(all(target_family = "unix", target_os = "macos"))'.dependencies]
 tikv-jemallocator = { version = "*", features = ["disable_initial_exec_tls"] }
 
-[profile.release]
-lto = "thin"
-debug = "line-tables-only"
+[profile.profiler]
+inherits = "dev"
+debug = true
+lto = true
+codegen-units = 1
 
 [profile.dist-release]
-opt-level = 3
-rustflags = ["-C", "target-cpu=native"]
 inherits = "release"
+rustflags = ["-C", "target-feature=+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe"]
 codegen-units = 1
-debug = false
-lto = "fat"
+lto = true
 
