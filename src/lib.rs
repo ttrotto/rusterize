@@ -14,6 +14,7 @@ mod rasterize_polygon;
 use crate::geo_validate::validate_geometries;
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize_polygon::rasterize_polygon;
+use core_affinity::CoreId;
 use geo_types::Geometry;
 use numpy::{
     ndarray::{
@@ -37,7 +38,6 @@ fn rusterize_rust(
     raster_info: &mut RasterInfo,
     pixel_fn: PixelFn,
     background: f64,
-    threads: usize,
     df: Option<DataFrame>,
     field_name: Option<&str>,
     by_name: Option<&str>,
@@ -105,13 +105,21 @@ fn rusterize_rust(
 
             // notetaker for band order
             let mut order = vec![String::new(); n_groups];
-            
-            // init local thread pool
+
+            // get CPU IDs and dynamically set thread number
+            let core_ids = core_affinity::get_core_ids().unwrap();
+            let num_threads = n_groups.min(core_ids.len());
+
+            // init thread pool and bind each band to a thread
             let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(threads)
+                .num_threads(num_threads)
+                .start_handler(move |thread_index| {
+                    let core_id = core_ids[thread_index % core_ids.len()];
+                    core_affinity::set_for_current(core_id);
+                })
                 .build()
                 .unwrap();
-    
+
             pool.install(|| {
                 // parallel iterator along bands, zipped with the corresponding groups
                 raster
@@ -142,8 +150,8 @@ fn rusterize_rust(
                                 }
                             }
                         },
-                    )  
-                });
+                    )
+            });
 
             // collect band names from the receiver and reorder
             for (enum_idx, name) in receiver.iter() {
@@ -185,20 +193,11 @@ fn rusterize_py<'py>(
     pygeometry: &Bound<'py, PyAny>,
     pyinfo: &Bound<'py, PyAny>,
     pypixel_fn: &str,
-    pythreads: &Bound<'py, PyAny>,
     pydf: Option<PyDataFrame>,
     pyfield: Option<&str>,
     pyby: Option<&str>,
     pybackground: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Xarray<'py>> {
-    // get number of threads
-    let op_threads = pythreads.extract::<isize>()?;
-    let threads = if op_threads <= 0 {
-        std::thread::available_parallelism()?.get()
-    } else {
-        op_threads as usize
-    };
-
     // extract dataframe
     let df = pydf.map(|inner| inner.into());
 
@@ -220,7 +219,6 @@ fn rusterize_py<'py>(
         &mut raster_info,
         pixel_fn,
         background,
-        threads,
         df,
         pyfield,
         pyby,
