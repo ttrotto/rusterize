@@ -17,7 +17,7 @@ use crate::rasterize_polygon::rasterize_polygon;
 use geo_types::Geometry;
 use numpy::{
     ndarray::{
-        parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
+        parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator, IntoParallelRefMutIterator},
         {Array3, Axis},
     },
     IntoPyArray,
@@ -31,6 +31,7 @@ use pyo3::{
 use pyo3_polars::PyDataFrame;
 use std::sync::mpsc::channel;
 use structs::{raster::RasterInfo, xarray::Xarray};
+use core_affinity::CoreId;
 
 fn rusterize_rust(
     geometry: Vec<Geometry>,
@@ -92,11 +93,17 @@ fn rusterize_rust(
 
     // main
     let mut raster: Array3<f64>;
-    let mut band_names: Vec<String> = vec![String::from("band1")];
+    // let mut band_names: Vec<String> = vec![String::from("band1")];
+    let mut band_names: Vec<String> = vec![String::from("band2"),
+    String::from("band3"), String::from("band4"), String::from("band5"),
+    String::from("band6"), String::from("band7"), String::from("band8"),
+    String::from("band9"), String::from("band10"), String::from("band11"),
+    String::from("band12"), String::from("band13"), String::from("band14"),
+    String::from("band15"), String::from("band16")];
     match by {
         Some(by) => {
             // open channel for sending and receiving band names
-            let (sender, receiver) = channel();
+            // let (sender, receiver) = channel();
 
             // multiband raster on by groups
             let groups = by.group_tuples(true, false).expect("No groups found!");
@@ -105,34 +112,19 @@ fn rusterize_rust(
 
             // notetaker for band order
             let mut order = vec![String::new(); n_groups];
-            
-            // init local thread pool
-            let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(threads)
-                .build()
-                .unwrap();
-    
-            pool.install(|| {
-                // parallel iterator along bands, zipped with the corresponding groups
-                raster
-                    .outer_iter_mut()
-                    .into_par_iter()
-                    .zip(groups.into_idx().into_par_iter().enumerate())
-                    .for_each_with(
-                        sender,
-                        |sendr, (mut band, (enum_idx, (group_idx, idxs)))| {
-                            // send band names to receiver
-                            if let Some(name) = by.get(group_idx as usize) {
-                                sendr.send((enum_idx, name.to_string())).unwrap();
-                            }
 
-                            // rasterize polygons
+            crossbeam::thread::scope(|s| {
+                raster.outer_iter_mut().zip(groups.into_idx().into_iter().enumerate())
+                    .for_each(|(mut band, (enum_idx, (group_idx, idxs)))| {
+                        let gg = good_geom.clone();
+                        let rf = raster_info.clone();
+                        s.spawn(move |_| {
                             for &i in idxs.iter() {
                                 if let (Some(fv), Some(geom)) =
-                                    (field.get(i as usize), good_geom.get(i as usize))
+                                    (field.get(i as usize), gg.get(i as usize))
                                 {
                                     rasterize_polygon(
-                                        raster_info,
+                                        &rf,
                                         geom,
                                         &fv,
                                         &mut band,
@@ -141,15 +133,90 @@ fn rusterize_rust(
                                     );
                                 }
                             }
-                        },
-                    )  
-                });
+                        });
+                    }
+                    )
+            }).expect("TODO: panic message");
 
-            // collect band names from the receiver and reorder
-            for (enum_idx, name) in receiver.iter() {
-                order[enum_idx] = name;
-            }
-            band_names = order;
+            // raster
+            //     .outer_iter_mut()
+            //     .into_iter()
+            //     .zip(groups.into_idx().into_iter().enumerate())
+            //     .for_each(
+            //         |(mut band, (enum_idx, (group_idx, idxs)))| {
+            //             println!("Processing band {} on thread {:?}", enum_idx, std::thread::current().id());
+            // 
+            //             // rasterize polygons
+            //             for &i in idxs.iter() {
+            //                 if let (Some(fv), Some(geom)) =
+            //                     (field.get(i as usize), good_geom.get(i as usize))
+            //                 {
+            //                     rasterize_polygon(
+            //                         raster_info,
+            //                         geom,
+            //                         &fv,
+            //                         &mut band,
+            //                         &pixel_fn,
+            //                         &background,
+            //                     );
+            //                 }
+            //             }
+            //         },
+            //     );
+            
+            // // init local thread pool
+            // let core_ids = core_affinity::get_core_ids().unwrap();
+            // let num_threads = core_ids.len();
+            // let pool = rayon::ThreadPoolBuilder::new()
+            //     .num_threads(num_threads)
+            //     .start_handler(move |thread_index| {
+            //         // Bind each thread to a specific CPU core
+            //         let core_id = core_ids[thread_index % core_ids.len()];
+            //         core_affinity::set_for_current(core_id);
+            //     })
+            //     .build()
+            //     .unwrap();
+            
+            // let group_idx = groups.into_idx();
+            // rayon::ThreadPoolBuilder::new().num_threads(1000).build_global().unwrap();
+            // pool.install(|| {
+            // parallel iterator along bands, zipped with the corresponding groups
+            //     raster
+            //         .outer_iter_mut()
+            //         .into_par_iter()
+            //         .zip(groups.into_idx().into_par_iter())
+            //         .for_each(
+            //             |(mut band, (group_idx, idxs))| {
+            //                 println!("Processing band {} on thread {:?}", 0, std::thread::current().id());
+            //                 // // send band names to receiver
+            //                 // if let Some(name) = by.get(group_idx as usize) {
+            //                 //     sendr.send((enum_idx, name.to_string())).unwrap();
+            //                 // }
+            // 
+            //                 // rasterize polygons
+            //                 for &i in idxs.iter() {
+            //                     if let (Some(fv), Some(geom)) =
+            //                         (field.get(i as usize), good_geom.get(i as usize))
+            //                     {
+            //                         rasterize_polygon(
+            //                             raster_info,
+            //                             geom,
+            //                             &fv,
+            //                             &mut band,
+            //                             &pixel_fn,
+            //                             &background,
+            //                         );
+            //                     }
+            //                 }
+            //             },
+            //         );
+                // });
+
+            // // collect band names from the receiver and reorder
+            // for (enum_idx, name) in receiver.iter() {
+            //     order[enum_idx] = name;
+            // }
+            // band_names = order;
         }
         None => {
             // singleband raster
