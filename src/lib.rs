@@ -120,8 +120,8 @@ fn rusterize_rust(
                         let gg = good_geom.clone();
                         let rf = raster_info.clone();
                         s.spawn(move |_| {
-                            println!("Processing band {} on thread {:?}", enum_idx, std::thread::current().id());
-                            let now = Instant::now();
+                            // println!("Processing band {} on thread {:?}", enum_idx, std::thread::current().id());
+                            // let now = Instant::now();
                             for &i in idxs.iter() {
                                 if let (Some(fv), Some(geom)) =
                                     (field.get(i as usize), gg.get(i as usize))
@@ -136,8 +136,8 @@ fn rusterize_rust(
                                     );
                                 }
                             }
-                            let elapsed = now.elapsed();
-                            println!("Elapsed: {:.2?}", elapsed);
+                            // let elapsed = now.elapsed();
+                            // println!("Elapsed: {:.2?}", elapsed);
                         });
                     }
                     )
