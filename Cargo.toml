@@ -21,6 +21,7 @@ geo-types = "0.7.15"
 py_geo_interface = "0.8.0"
 rayon = "1.10.0"
 dict_derive = "0.6.0"
+core_affinity = "0.8.1"
 
 # OS-specific allocators
 [target.'cfg(not(target_family = "unix"))'.dependencies]
