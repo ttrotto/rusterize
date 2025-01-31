@@ -10,7 +10,7 @@ use numpy::{
 };
 use pyo3::prelude::*;
 
-#[derive(FromPyObject)]
+#[derive(FromPyObject, Clone)]
 pub struct RasterInfo {
     pub nrows: usize,
     pub ncols: usize,
