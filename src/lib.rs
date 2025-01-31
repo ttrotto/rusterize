@@ -32,6 +32,7 @@ use pyo3_polars::PyDataFrame;
 use std::sync::mpsc::channel;
 use structs::{raster::RasterInfo, xarray::Xarray};
 use core_affinity::CoreId;
+use std::time::Instant;
 
 fn rusterize_rust(
     geometry: Vec<Geometry>,
@@ -119,6 +120,8 @@ fn rusterize_rust(
                         let gg = good_geom.clone();
                         let rf = raster_info.clone();
                         s.spawn(move |_| {
+                            println!("Processing band {} on thread {:?}", enum_idx, std::thread::current().id());
+                            let now = Instant::now();
                             for &i in idxs.iter() {
                                 if let (Some(fv), Some(geom)) =
                                     (field.get(i as usize), gg.get(i as usize))
@@ -133,6 +136,8 @@ fn rusterize_rust(
                                     );
                                 }
                             }
+                            let elapsed = now.elapsed();
+                            println!("Elapsed: {:.2?}", elapsed);
                         });
                     }
                     )
@@ -145,7 +150,7 @@ fn rusterize_rust(
             //     .for_each(
             //         |(mut band, (enum_idx, (group_idx, idxs)))| {
             //             println!("Processing band {} on thread {:?}", enum_idx, std::thread::current().id());
-            // 
+            //
             //             // rasterize polygons
             //             for &i in idxs.iter() {
             //                 if let (Some(fv), Some(geom)) =
@@ -163,7 +168,7 @@ fn rusterize_rust(
             //             }
             //         },
             //     );
-            
+
             // // init local thread pool
             // let core_ids = core_affinity::get_core_ids().unwrap();
             // let num_threads = core_ids.len();
@@ -176,7 +181,7 @@ fn rusterize_rust(
             //     })
             //     .build()
             //     .unwrap();
-            
+
             // let group_idx = groups.into_idx();
             // rayon::ThreadPoolBuilder::new().num_threads(1000).build_global().unwrap();
             // pool.install(|| {
@@ -192,7 +197,7 @@ fn rusterize_rust(
             //                 // if let Some(name) = by.get(group_idx as usize) {
             //                 //     sendr.send((enum_idx, name.to_string())).unwrap();
             //                 // }
-            // 
+            //
             //                 // rasterize polygons
             //                 for &i in idxs.iter() {
             //                     if let (Some(fv), Some(geom)) =
