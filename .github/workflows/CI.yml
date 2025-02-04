@@ -3,6 +3,9 @@ name: CI
 on:
   release:
     types: [published]
+  push:
+    branches:
+      - main
   
 permissions:
   contents: read
@@ -159,7 +162,6 @@ jobs:
       - name: Download sdists and wheels
         uses: actions/download-artifact@v4
         with:
-          name: python-package-distribution
           path: dist
           merge-multiple: true
       - name: Publish to PyPI
