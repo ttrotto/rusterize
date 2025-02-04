@@ -8,6 +8,7 @@ description = "High performance rasterization tool for Python build in Rust"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
+keywords = ["fast", "raster"]
 author = {name = "Tommaso Trotto", email = "ttrotto@mail.ubc.ca"}
 classifiers = [
     "License :: OSI Approved :: MIT License",
@@ -26,10 +27,10 @@ dependencies = [
     "rioxarray>=0.18.2"
 ]
 
+[project.urls]
+repository = "https://github.com/ttrotto/rusterize"
+
 [tool.maturin]
 python-source = "python"
 module-name = "rusterize"
 include = [{ path = "rust-toolchain.toml", format = "sdist" }]
-
-[project.urls]
-repository = "https://github.com/ttrotto/rusterize"
