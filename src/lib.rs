@@ -103,7 +103,7 @@ fn rusterize_rust(
 
             // dynamically set number of threads
             let cpus = num_cpus::get();
-            let num_threads = n_groups.min(cpus);
+            let num_threads = n_groups.min(cpus / 2);
 
             // init thread pool
             let pool = rayon::ThreadPoolBuilder::new()
