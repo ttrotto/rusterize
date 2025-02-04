@@ -1,14 +1,11 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
-      - master
-    tags:
-      - "*"
-  pull_request:
-  workflow_dispatch:
+#  push:
+#    branches:
+#      - main
+  release:
+    types: [published]
 
 permissions:
   contents: read
