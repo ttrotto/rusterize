@@ -10,7 +10,7 @@ use numpy::{
 };
 use pyo3::prelude::*;
 
-#[derive(FromPyObject)]
+#[derive(FromPyObject, Debug)]
 pub struct RasterInfo {
     pub nrows: usize,
     pub ncols: usize,
@@ -20,26 +20,47 @@ pub struct RasterInfo {
     pub ymax: f64,
     pub xres: f64,
     pub yres: f64,
+    pub has_extent: bool,
 }
 
 impl RasterInfo {
-    // map PyAny to RasterInfo
     pub fn from(pyinfo: &Bound<PyAny>) -> Self {
+        // map PyAny to RasterInfo
         let raster_info: RasterInfo = pyinfo
             .extract()
             .expect("Wrong mapping passed to RasterInfo struct");
-        let (nrows, ncols) = raster_info.shape();
-        Self {
-            nrows,
-            ncols,
-            ..raster_info
+
+        raster_info
+    }
+
+    pub fn update_dims(&mut self) {
+        // extend bounds by half pixel to avoid missing points on the border
+        if !self.has_extent && self.xres != 0.0 {
+            self.xmin -= self.xres / 2.0;
+            self.xmax += self.xres / 2.0;
+            self.ymin -= self.yres / 2.0;
+            self.ymax += self.yres / 2.0;
+        }
+
+        // calculate resolution
+        if self.xres == 0.0 {
+            self.resolution();
+        }
+
+        // calculate shape
+        if self.nrows == 0 {
+            self.shape();
         }
     }
 
-    fn shape(&self) -> (usize, usize) {
-        let nrows = ((self.ymax - self.ymin) / self.yres).round() as usize;
-        let ncols = ((self.xmax - self.xmin) / self.xres).round() as usize;
-        (nrows, ncols)
+    fn shape(&mut self) {
+        self.nrows = ((self.ymax - self.ymin) / self.yres).round() as usize;
+        self.ncols = ((self.xmax - self.xmin) / self.xres).round() as usize;
+    }
+
+    fn resolution(&mut self) {
+        self.xres = (self.xmax - self.xmin) / self.ncols as f64;
+        self.yres = (self.ymax - self.ymin) / self.nrows as f64;
     }
 
     pub fn update_bounds(&mut self, rect: Rect) {
@@ -48,11 +69,6 @@ impl RasterInfo {
         self.xmax = rect.max().x;
         self.ymin = rect.min().y;
         self.ymax = rect.max().y;
-
-        // recalculate shape
-        let (nrows, ncols) = self.shape();
-        self.nrows = nrows;
-        self.ncols = ncols;
     }
 
     pub fn build_raster(&self, bands: usize, background: f64) -> Array3<f64> {
@@ -66,13 +82,13 @@ impl RasterInfo {
     ) -> (Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>) {
         let y_coords = Array::range(
             self.ymax - self.yres / 2.0,
-            self.ymax - self.nrows as f64 * self.yres - self.yres / 2.0,
+            self.ymax - self.nrows as f64 * self.yres,
             -self.yres,
         )
         .into_pyarray_bound(py);
         let x_coords = Array::range(
             self.xmin + self.xres / 2.0,
-            self.xmin + self.ncols as f64 * self.xres + self.xres / 2.0,
+            self.xmin + self.ncols as f64 * self.xres,
             self.xres,
         )
         .into_pyarray_bound(py);
