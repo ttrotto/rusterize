@@ -1,8 +1,8 @@
 # rusterize
 
-High performance rasterization tool for python built in Rust. This
-repository is heavily based on the [**fasterize**](https://github.com/ecohealthalliance/fasterize.git) package built in C++
-for R. This version ports it to Python with a Rust backend.
+High performance rasterization tool for Python built in Rust. This
+repository is heavily based on the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package built in C++
+for R. This version ports it to Python with a Rust backend, with some useful improvements.
 
 Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/)
 dataframes and returns a [xarray](https://docs.xarray.dev/en/stable/). It
@@ -51,15 +51,19 @@ from rusterize.core import rusterize
 
 # rusterize
 rusterize(gdf,
-          (30, 30),
-          "field",
-          "by",
-          "sum",
-          0) 
+          res=(30, 30),
+          out_shape=(10, 10)
+          extent=(0, 300, 0, 300)
+          field="field",
+          by="by",
+          fun="sum",
+          background=0) 
 ```
 
 - `gdf`: geopandas dataframe to rasterize
-- `res`: tuple of (xres, yres) for final resolution
+- `res`: tuple of (xres, yres) for desired resolution
+- `out_shape`: tuple of (nrows, ncols) for desired output shape
+- `extent`: tuple of (xmin, ymin, xmax, ymax) for desired output extent
 - `field`: field to rasterize. Default is None (a value of `1` is rasterized).
 - `by`: column to rasterize. Assigns each group to a band in the
   stack. Values are taken from `field`. Default is None
@@ -67,10 +71,16 @@ rusterize(gdf,
   `last`. Available options are `sum`, `first`, `last`, `min`, `max`, `count`, or `any`
 - `background`: background value in final raster. Default is None (NaN)
 
+Note that control over the desired extent is not as strict as for resolution and shape. That is,
+when resolution, output shape, and extent are specified, priority is given to resolution and shape.
+So, extent is not guaranteed, but resolution and shape are. If extent is not given, it is taken
+from the polygons and is not modified, unless you specify a resolution value. If you only specify an output
+shape, the extent is maintained. This mimics the logics of `gdal_rasterize`.
+
 # Usage
 
 **rusterize** consists of a single function `rusterize()`. The Rust implementation
-returns an array that is then converted to a xarray on the Python side
+returns an array that is converted to a xarray on the Python side
 for simpliicty.
 
 ``` python
@@ -110,8 +120,7 @@ plt.show()
 
 # Benchmarks
 
-**fasterize** is fast and so is **rusterize**! Let’s try it on small and large
-datasets.
+**rusterize** is fast! Let’s try it on small and large datasets.
 
 ``` python
 from rusterize.core import rusterize
@@ -202,7 +211,7 @@ Unit: seconds
 
 # Comparison with other tools
 
-While `rusterize` is fast, there are other very fast solutions out there, including
+While `rusterize` is fast, there are other very fast solutions out there, including:
 - `GDAL`
 - `rasterio`
 - `geocube`
