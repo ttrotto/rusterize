@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "rusterize"
-description = "High performance rasterization tool for Python build in Rust"
+description = "High performance rasterization tool for Python built in Rust"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
