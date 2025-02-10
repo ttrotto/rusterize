@@ -79,10 +79,15 @@ pub fn validate_geometries(
                 .ok();
         }
 
-        // update bounding box from new geometries
-        let bbox = bounding_rect(&geometry).unwrap();
-        raster_info.update_bounds(bbox);
+        // update RasterInfo spatial properties
+        if !raster_info.has_extent {
+            let bbox = bounding_rect(&geometry).unwrap();
+            println!("{:?}", bbox);
+            raster_info.update_bounds(bbox);
+        }
     }
 
+    // update RasterInfo spatial properties
+    raster_info.update_dims();
     (geometry, df)
 }
