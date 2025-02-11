@@ -116,7 +116,7 @@ output.plot.imshow(ax=ax)
 plt.show()
 ```
 
-![](README_files/figure-commonmark/cell-2-output-1.png)
+![](img/plot.png)
 
 # Benchmarks
 
