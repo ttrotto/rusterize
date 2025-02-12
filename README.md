@@ -13,7 +13,7 @@ tighly mirrors the processing routine of fasterize, so it works only on
 
 Install the current version with pip:
 
-``` {shell}
+``` shell
 pip install rusterize
 ```
 
@@ -25,7 +25,7 @@ package. For this to work, you’ll need to have [Rust](https://www.rust-lang.or
 [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 installed.
 
-``` {shell}
+``` shell
 # Clone repo
 git clone https://github.com/<username>/rusterize.git
 cd rusterize
@@ -44,7 +44,7 @@ maturin develop --profile dist-release
 
 This function has a simple API:
 
-``` {shell}
+``` python
 from rusterize.core import rusterize
 
 # gdf = <import datasets as needed>
@@ -155,7 +155,7 @@ Then you can run it with [pytest](https://docs.pytest.org/en/stable/)
 and
 [pytest-benchmark](https://pytest-benchmark.readthedocs.io/en/stable/):
 
-``` {shell}
+```
 pytest <python file> --benchmark-min-rounds=20 --benchmark-time-unit='s'
 
 --------------------------------------------- benchmark: 1 tests --------------------------------------------
@@ -168,7 +168,7 @@ test_small            0.5083   0.6416   0.5265  0.0393   0.5120  0.0108       2;
 
 And fasterize:
 
-``` {r}
+``` r
 large <- st_read("Mammals_Terrestrial/Mammals_Terrestrial.shp", quiet = TRUE)
 small <- large[1:1000, ]
 fn <- function(v) {
@@ -183,7 +183,7 @@ microbenchmark(
 )
 ```
 
-``` {shell}
+```
 Unit: seconds
       expr             min        lq      mean    median        uq       max  neval
  fasterize_large  9.565781  9.815375  10.02838  9.984965  10.18532  10.66656     20
@@ -195,7 +195,7 @@ And on even
 datasets? This is a benchmark with 350K+ geometries rasterized at 30
 meters (20 rounds) with no field value and pixel function `sum`.
 
-``` {shell}
+```
 # rusterize
 --------------------------------------------- benchmark: 1 tests --------------------------------------------
 Name (time in s)         Min      Max     Mean  StdDev   Median     IQR  Outliers     OPS  Rounds  Iterations
