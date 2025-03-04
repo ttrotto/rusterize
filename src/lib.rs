@@ -6,14 +6,14 @@ mod structs {
     pub mod raster;
     pub mod xarray;
 }
-mod edgelist;
+mod edge_collection;
 mod geo_validate;
 mod pixel_functions;
-mod rasterize_polygon;
+mod rasterize;
 
 use crate::geo_validate::validate_geometries;
 use crate::pixel_functions::{set_pixel_function, PixelFn};
-use crate::rasterize_polygon::rasterize_polygon;
+use crate::rasterize::rasterize;
 use geo_types::Geometry;
 use numpy::{
     ndarray::{
@@ -97,7 +97,7 @@ fn rusterize_rust(
             let groups = by.group_tuples(true, false).expect("No groups found!");
             let n_groups = groups.len();
             let group_idx = groups.into_idx();
-            
+
             // multiband raster
             raster = raster_info.build_raster(n_groups, background);
 
@@ -110,7 +110,7 @@ fn rusterize_rust(
                 .num_threads(num_threads)
                 .build()
                 .unwrap();
-            
+
             // parallel iterator along bands, zipped with corresponding groups
             pool.install(|| {
                 raster
@@ -124,7 +124,7 @@ fn rusterize_rust(
                                 (field.get(i as usize), good_geom.get(i as usize))
                             {
                                 // process only non-empty field values
-                                rasterize_polygon(
+                                rasterize(
                                     raster_info,
                                     geom,
                                     &fv,
@@ -137,7 +137,7 @@ fn rusterize_rust(
                         // band name
                         by.get(group_idx as usize).unwrap().to_string()
                     })
-                    .collect_into_vec(&mut band_names)  
+                    .collect_into_vec(&mut band_names)
             });
         }
         None => {
@@ -151,7 +151,7 @@ fn rusterize_rust(
                 .for_each(|(field_value, geom)| {
                     if let Some(fv) = field_value {
                         // process only non-empty field values
-                        rasterize_polygon(
+                        rasterize(
                             raster_info,
                             &geom,
                             &fv,
