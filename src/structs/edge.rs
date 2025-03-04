@@ -1,18 +1,33 @@
 /*
-Structure to contain information on polygon edges.
+Structure to contain information on polygon and line edges.
  */
 
 use crate::structs::raster::RasterInfo;
 use std::cmp::Ordering;
 
-pub struct Edge {
+// collection of edges
+pub enum EdgeCollection {
+    PolyEdges(Vec<PolyEdge>),
+    LineEdges(Vec<LineEdge>),
+}
+
+impl EdgeCollection {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            EdgeCollection::PolyEdges(poly_edges) => poly_edges.is_empty(),
+            EdgeCollection::LineEdges(line_edges) => line_edges.is_empty(),
+        }
+    }
+}
+
+pub struct PolyEdge {
     pub ystart: usize, // first row intersection
     pub yend: usize,   // last row below intersection
     pub x: f64,        // x location of ystart
     pub dxdy: f64,     // step
 }
 
-impl Edge {
+impl PolyEdge {
     pub fn new(
         mut x0: f64,
         y0: f64,
@@ -49,14 +64,63 @@ impl Edge {
     }
 }
 
+pub struct LineEdge {
+    pub nsteps: usize, // number of steps
+    pub x0: f64,       // metrix column
+    pub y0: f64,       // matrix row
+    pub dx: f64,       // x step
+    pub dy: f64,       // y step
+    pub ystart: f64,   // first y coordinate
+}
+
+impl LineEdge {
+    pub fn new(mut x0: f64, y0: f64, mut x1: f64, y1: f64, raster_info: &RasterInfo) -> Self {
+        // get matrix rows and columns from raster info
+        x0 = (x0 - raster_info.xmin) / raster_info.xres - 0.5;
+        x1 = (x1 - raster_info.xmin) / raster_info.xres - 0.5;
+
+        // calculate steps
+        let mut dx = x1 - x0;
+        let mut dy = y1 - y0;
+        let fnsteps = dx.abs().max(dy.abs()).max(1.0) + 1.0;
+        dx /= fnsteps;
+        dy /= fnsteps;
+        let nsteps = fnsteps as usize;
+        let ystart = y0;
+        Self {
+            nsteps,
+            x0,
+            y0,
+            dx,
+            dy,
+            ystart,
+        }
+    }
+}
+
 // compare on usize Y coordinate
 #[inline]
-pub fn less_by_ystart(edge1: &Edge, edge2: &Edge) -> Ordering {
+pub fn less_by_ystart_poly(edge1: &PolyEdge, edge2: &PolyEdge) -> Ordering {
     edge1.ystart.cmp(&edge2.ystart)
 }
 
 // partial compare on f64 X coordinate
 #[inline]
-pub fn less_by_x(edge1: &Edge, edge2: &Edge) -> Ordering {
-    edge1.x.partial_cmp(&edge2.x).unwrap_or(Ordering::Equal) // treat NaN as equal for sorting
+pub fn less_by_x_poly(edge1: &PolyEdge, edge2: &PolyEdge) -> Ordering {
+    edge1.x.partial_cmp(&edge2.x).unwrap_or(Ordering::Equal)
+}
+
+// compare on f64 Y coordinate
+#[inline]
+pub fn less_by_ystart_line(edge1: &LineEdge, edge2: &LineEdge) -> Ordering {
+    edge1
+        .ystart
+        .partial_cmp(&edge2.ystart)
+        .unwrap_or(Ordering::Equal)
+}
+
+// partial compare on f64 X coordinate
+#[inline]
+pub fn less_by_x_line(edge1: &LineEdge, edge2: &LineEdge) -> Ordering {
+    edge1.x0.partial_cmp(&edge2.x0).unwrap_or(Ordering::Equal)
 }
