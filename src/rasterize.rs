@@ -2,13 +2,13 @@
 Rasterize a single (multi)polygon or (multi)linestring.
  */
 
-use crate::edgelist;
+use crate::edge_collection;
 use crate::pixel_functions::PixelFn;
-use crate::structs::edge::{less_by_x_line, less_by_x_poly, less_by_ystart, Edge};
-use crate::structs::{
-    edge::{LineEdge, PolyEdge},
-    raster::RasterInfo,
+use crate::structs::edge::{
+    less_by_x_line, less_by_x_poly, less_by_ystart_line, less_by_ystart_poly, EdgeCollection,
 };
+use crate::structs::{edge::PolyEdge, raster::RasterInfo};
+use edge_collection::build_edges;
 use geo_types::Geometry;
 use numpy::ndarray::ArrayViewMut2;
 use rayon::prelude::*;
@@ -21,34 +21,33 @@ pub fn rasterize(
     pxfn: &PixelFn,
     background: &f64,
 ) {
-    // build edgelist and sort
-    let mut edges: Vec<Edge> = Vec::new();
-    edgelist::build_edges(&mut edges, geom, raster_info);
+    // build edge collection
+    let edges = build_edges(geom, raster_info);
 
     // early return if no edges
     if edges.is_empty() {
         return;
     }
-    edges.par_sort_by(less_by_ystart);
-
-    // start with first y line
-    let first_edge = edges.first().unwrap();
-    let mut yline = first_edge.ystart();
 
     // branch by geometry type
     let ncols = raster_info.ncols as f64;
-    match first_edge {
-        Edge::PolyEdge(_) => {
+    let nrows = raster_info.nrows as f64;
+    match edges {
+        EdgeCollection::PolyEdges(mut polyedges) => {
+            // sort edges
+            polyedges.par_sort_by(less_by_ystart_poly);
+
+            // start with first y line
+            let mut yline = polyedges.first().unwrap().ystart;
+
             // active edges
             let mut active_edges: Vec<PolyEdge> = Vec::new();
 
             // rasterize loop
-            while yline < raster_info.nrows && !(active_edges.is_empty() && edges.is_empty()) {
+            while yline < raster_info.nrows && !(active_edges.is_empty() && polyedges.is_empty()) {
                 // transfer current edges ref to active edges
                 active_edges.extend(
-                    edges
-                        .extract_if(.., |edge| edge.ystart() <= yline) // experimental
-                        .filter_map(|edge| PolyEdge::try_from(edge).ok()),
+                    polyedges.extract_if(.., |edge| edge.ystart <= yline), // experimental
                 );
                 // sort active edges
                 active_edges.par_sort_by(less_by_x_poly);
@@ -82,30 +81,24 @@ pub fn rasterize(
                 })
             }
         }
-        Edge::LineEdge(_) => {
-            // extract Edge variant
-            let mut active_edges: Vec<LineEdge> = edges
-                .into_iter()
-                .filter_map(|edge| LineEdge::try_from(edge).ok())
-                .collect();
+        EdgeCollection::LineEdges(mut linedges) => {
             // sort edges
-            active_edges.par_sort_by(less_by_x_line);
+            linedges.par_sort_by(less_by_ystart_line);
+            linedges.par_sort_by(less_by_x_line);
 
             // fill
-            for mut edge in active_edges {
-                for _ in 0..edge.nsteps {
-                    let xstart = edge.x0.clamp(0.0, ncols).ceil() as usize;
-                    let xend = edge.x0.clamp(0.0, ncols).ceil() as usize;
+            for mut edge in linedges {
+                (0..edge.nsteps).for_each(|_| {
+                    let x = edge.x0.clamp(0.0, ncols).ceil() as usize;
+                    let y = edge.y0.clamp(0.0, nrows).ceil() as usize;
 
-                    // fill the pixels between xstart and xend
-                    for xpix in xstart..xend {
-                        pxfn(ndarray, yline, xpix, field_value, background);
-                    }
+                    // fill the pixels at x-y location
+                    pxfn(ndarray, y, x, field_value, background);
 
                     // next move
                     edge.x0 += edge.dx;
                     edge.y0 += edge.dy;
-                }
+                })
             }
         }
     }
