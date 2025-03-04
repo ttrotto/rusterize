@@ -46,7 +46,13 @@ pub fn validate_geometries(
     let mut good_geom: Vec<bool> = Vec::with_capacity(geometry.len());
     let mut has_invalid = false;
     for geom in &geometry {
-        let valid = matches!(geom, &Geometry::Polygon(_) | &Geometry::MultiPolygon(_));
+        let valid = matches!(
+            geom,
+            &Geometry::Polygon(_)
+                | &Geometry::MultiPolygon(_)
+                | &Geometry::LineString(_)
+                | &Geometry::MultiLineString(_)
+        );
         if !valid {
             has_invalid = true;
         }
@@ -82,7 +88,6 @@ pub fn validate_geometries(
         // update RasterInfo spatial properties
         if !raster_info.has_extent {
             let bbox = bounding_rect(&geometry).unwrap();
-            println!("{:?}", bbox);
             raster_info.update_bounds(bbox);
         }
     }
