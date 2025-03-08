@@ -1,6 +1,6 @@
 /*
-Build structured edge list from a single (multi)polygon.
-If multipolygon, then iterates over each inner polygon.
+Build structured edge collection from a single (multi)polygon or (multi)linestring.
+If multi, then iterates over each inner geometry.
 From the Geometry, the values are extracted and reconstructed as an array of nodes.
  */
 
@@ -101,17 +101,12 @@ fn process_line(edges: &mut Vec<LineEdge>, line: &LineString<f64>, raster_info: 
     // add LineEdge
     let nrows = node_array.nrows() - 1;
     for i in 0..nrows {
-        let y0 = (raster_info.ymax - node_array[[i, 1]]) / raster_info.yres - 1.0;
-        let y1 = (raster_info.ymax - node_array[[i + 1, 1]]) / raster_info.yres - 1.0;
-        // only add edges that are inside the raster
-        if y0 > 0.0 || y1 > 0.0 {
-            edges.push(LineEdge::new(
-                node_array[[i, 0]],
-                y0,
-                node_array[[i + 1, 0]],
-                y1,
-                raster_info,
-            ))
-        }
+        edges.push(LineEdge::new(
+            node_array[[i, 0]],
+            node_array[[i, 1]],
+            node_array[[i + 1, 0]],
+            node_array[[i + 1, 1]],
+            raster_info,
+        ))
     }
 }
