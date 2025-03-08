@@ -74,18 +74,26 @@ pub struct LineEdge {
 }
 
 impl LineEdge {
-    pub fn new(mut x0: f64, y0: f64, mut x1: f64, y1: f64, raster_info: &RasterInfo) -> Self {
+    pub fn new(
+        mut x0: f64,
+        mut y0: f64,
+        mut x1: f64,
+        mut y1: f64,
+        raster_info: &RasterInfo,
+    ) -> Self {
         // get matrix rows and columns from raster info
-        x0 = (x0 - raster_info.xmin) / raster_info.xres - 0.5;
-        x1 = (x1 - raster_info.xmin) / raster_info.xres - 0.5;
+        x0 = (x0 - raster_info.xmin) / raster_info.xres - 1.0;
+        x1 = (x1 - raster_info.xmin) / raster_info.xres - 1.0;
+        y0 = (raster_info.ymax - y0) / raster_info.yres - 1.0;
+        y1 = (raster_info.ymax - y1) / raster_info.yres - 1.0;
 
         // calculate steps
         let mut dx = x1 - x0;
         let mut dy = y1 - y0;
-        let fnsteps = dx.abs().max(dy.abs()).max(1.0) + 1.0;
+        let fnsteps = dx.abs().max(dy.abs()).max(1.0); // at least 1 step
         dx /= fnsteps;
         dy /= fnsteps;
-        let nsteps = fnsteps as usize;
+        let nsteps = fnsteps.round() as usize;
         let ystart = y0;
         Self {
             nsteps,
