@@ -45,7 +45,7 @@ pub fn rasterize(
 
             // rasterize loop
             while yline < raster_info.nrows && !(active_edges.is_empty() && polyedges.is_empty()) {
-                // transfer current edges ref to active edges
+                // transfer current edges to active edges
                 active_edges.extend(
                     polyedges.extract_if(.., |edge| edge.ystart <= yline), // experimental
                 );
@@ -89,8 +89,9 @@ pub fn rasterize(
             // fill
             for mut edge in linedges {
                 (0..edge.nsteps).for_each(|_| {
-                    let x = edge.x0.clamp(0.0, ncols).ceil() as usize;
-                    let y = edge.y0.clamp(0.0, nrows).ceil() as usize;
+                    // clamp values and adjust to 0-index
+                    let x = edge.x0.clamp(0.0, ncols - 1.0).ceil() as usize;
+                    let y = edge.y0.clamp(0.0, nrows - 1.0).ceil() as usize;
 
                     // fill the pixels at x-y location
                     pxfn(ndarray, y, x, field_value, background);
