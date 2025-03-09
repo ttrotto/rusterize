@@ -90,10 +90,10 @@ impl LineEdge {
         // calculate steps
         let mut dx = x1 - x0;
         let mut dy = y1 - y0;
-        let fnsteps = dx.abs().max(dy.abs()).max(1.0); // at least 1 step
+        let fnsteps = dx.abs().max(dy.abs()).max(1.0).ceil() + 1.0; // at least 1 step
         dx /= fnsteps;
         dy /= fnsteps;
-        let nsteps = fnsteps.round() as usize;
+        let nsteps = fnsteps as usize;
         let ystart = y0;
         Self {
             nsteps,
