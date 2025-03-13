@@ -1,8 +1,8 @@
 # rusterize
 
 High performance rasterization tool for Python built in Rust. This
-repository stems from the [fasterize](https://github.com/ecohealthalliance/fasterize.git) and [controlledburn](https://github.com/hypertidy/controlledburn) packages built in C++
-for R and unifies the logics into a single Python package with a Rust backend, in addition to some useful improvements.
+repository stems from the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package built in C++
+for R and ports the logics into Python with a Rust backend, in addition to some useful improvements.
 
 **rusterize** is designed to work on (multi)polygons and (multi)linestrings. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/). 
 
