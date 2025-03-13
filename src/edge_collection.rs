@@ -41,15 +41,18 @@ pub fn build_edges(geom: &Geometry, raster_info: &RasterInfo) -> EdgeCollection 
         Geometry::LineString(line) => {
             let mut linedges: Vec<LineEdge> = Vec::new();
             // handle single segment
-            process_line(&mut linedges, line, raster_info);
+            process_line(&mut linedges, line, raster_info, false);
             EdgeCollection::LineEdges(linedges)
         }
         // multilinestring - iterate over each inner linestring
         Geometry::MultiLineString(multiline) => {
             let mut linedges: Vec<LineEdge> = Vec::new();
+            let n_segments = multiline.0.len();
             // handle multiple segments
-            for line in multiline {
-                process_line(&mut linedges, line, raster_info);
+            for (i, line) in multiline.iter().enumerate() {
+                // check if last segment
+                let is_last = i == n_segments - 1;
+                process_line(&mut linedges, line, raster_info, is_last);
             }
             EdgeCollection::LineEdges(linedges)
         }
@@ -95,18 +98,23 @@ fn process_ring(edges: &mut Vec<PolyEdge>, line: &LineString<f64>, raster_info: 
     }
 }
 
-fn process_line(edges: &mut Vec<LineEdge>, line: &LineString<f64>, raster_info: &RasterInfo) {
+fn process_line(edges: &mut Vec<LineEdge>, line: &LineString<f64>, raster_info: &RasterInfo, is_last: bool) {
     // build node array
     let node_array = build_node_array(line);
     // add LineEdge
-    let nrows = node_array.nrows() - 1;
+    let mut nrows = node_array.nrows() - 1;
+    // if is_last {
+    //     nrows += 1;
+    // }
     for i in 0..nrows {
+        let is_last_segment = is_last && i == nrows - 1;
         edges.push(LineEdge::new(
             node_array[[i, 0]],
             node_array[[i, 1]],
             node_array[[i + 1, 0]],
             node_array[[i + 1, 1]],
             raster_info,
+            is_last_segment
         ))
     }
 }

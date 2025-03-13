@@ -4,9 +4,8 @@ Rasterize a single (multi)polygon or (multi)linestring.
 
 use crate::edge_collection;
 use crate::pixel_functions::PixelFn;
-use crate::structs::edge::{
-    less_by_x_line, less_by_x_poly, less_by_ystart_line, less_by_ystart_poly, EdgeCollection,
-};
+// use crate::structs::edge::{less_by_x_line, less_by_x_poly, less_by_ystart_line, less_by_ystart_poly, EdgeCollection, LineEdge};
+use crate::structs::edge::{less_by_x_poly, less_by_ystart_poly, EdgeCollection};
 use crate::structs::{edge::PolyEdge, raster::RasterInfo};
 use edge_collection::build_edges;
 use geo_types::Geometry;
@@ -82,25 +81,71 @@ pub fn rasterize(
             }
         }
         EdgeCollection::LineEdges(mut linedges) => {
-            // sort edges
-            linedges.par_sort_by(less_by_ystart_line);
-            linedges.par_sort_by(less_by_x_line);
-
-            // fill
+            // gdal - simplified
             for mut edge in linedges {
-                (0..edge.nsteps).for_each(|_| {
-                    // clamp values and adjust to 0-index
-                    let x = edge.x0.clamp(0.0, ncols - 1.0).ceil() as usize;
-                    let y = edge.y0.clamp(0.0, nrows - 1.0).ceil() as usize;
+                loop {
+                    // Fill the pixel at (x0, y0) if it's within bounds
+                    if edge.ix0 >= 0 && edge.ix0 < raster_info.ncols as isize &&
+                        edge.iy0 >= 0 && edge.iy0 < raster_info.nrows as isize {
+                        if !(edge.ix0 == edge.ix1 && edge.iy0 == edge.iy1 && !edge.is_last_segment) {
+                            pxfn(ndarray, edge.iy0 as usize, edge.ix0 as usize, field_value, background);
+                        }
+                    }
 
-                    // fill the pixels at x-y location
-                    pxfn(ndarray, y, x, field_value, background);
+                    // Check if we've reached the end of the line
+                    if edge.ix0 == edge.ix1 && edge.iy0 == edge.iy1 {
+                        break;
+                    }
 
-                    // next move
-                    edge.x0 += edge.dx;
-                    edge.y0 += edge.dy;
-                })
+                    // Update the error term and coordinates
+                    let e2 = 2 * edge.err;
+                    if e2 >= edge.dy {
+                        edge.err += edge.dy;
+                        edge.ix0 += edge.sx;
+                    }
+                    if e2 <= edge.dx {
+                        edge.err += edge.dx;
+                        edge.iy0 += edge.sy;
+                    }
+                }
             }
+            
+            
+            // // grid walking
+            // for mut edge in linedges {
+            //     let (mut ix, mut iy): (usize, usize) = (0, 0);
+            //     while ix < edge.nx || iy < edge.ny {
+            //         if (1 + 2*ix) * edge.ny < (1 + 2*iy) * edge.nx {
+            //             edge.x0 += edge.sign_x;
+            //             ix += 1
+            //         } else {
+            //             edge.y0 += edge.sign_y;
+            //             iy += 1
+            //         }
+            //         let y = (raster_info.ymax - edge.y0) / raster_info.yres - 1.0;
+            //         let x = (edge.x0 - raster_info.xmin) / raster_info.xres - 1.0;
+            //         pxfn(ndarray, y.round() as usize, x.round() as usize, field_value, background);
+            //     }
+            // }
+            // // sort edges
+            // linedges.par_sort_by(less_by_ystart_line);
+            // linedges.par_sort_by(less_by_x_line);
+            //
+            // // fill
+            // for mut edge in linedges {
+            //     (0..edge.nsteps).for_each(|_| {
+            //         // clamp values and adjust to 0-index
+            //         let x = edge.x0.clamp(0.0, ncols - 1.0).ceil() as usize;
+            //         let y = edge.y0.clamp(0.0, nrows - 1.0).ceil() as usize;
+            //
+            //         // fill the pixels at x-y location
+            //         pxfn(ndarray, y, x, field_value, background);
+            //
+            //         // next move
+            //         edge.x0 += edge.dx;
+            //         edge.y0 += edge.dy;
+            //     })
+            // }
         }
     }
 }
