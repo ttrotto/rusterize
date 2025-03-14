@@ -2,9 +2,9 @@
 
 High performance rasterization tool for Python built in Rust. This
 repository stems from the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package built in C++
-for R and ports the logics into Python with a Rust backend, in addition to some useful improvements.
+for R and ports parts of the logics into Python with a Rust backend, in addition to some useful improvements.
 
-**rusterize** is designed to work on (multi)polygons and (multi)linestrings. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/). 
+**rusterize** is designed to work on *(multi)polygons* and *(multi)linestrings*. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/). 
 
 # Installation
 
@@ -206,6 +206,8 @@ Unit: seconds
       expr      min       lq     mean   median       uq      max neval
  fasterize 62.12409 72.13832 74.53424 75.12375 77.72899 84.77415    20
 ```
+
+In terms of (multi)line rasterization speed, here's a benchmark against `gdal_rasterize` using a layer from the province of Quebec, Canada, representing water courses for a total of ~4.5 million multilinestrings.  
 
 # Comparison with other tools
 
