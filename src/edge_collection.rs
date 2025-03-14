@@ -41,7 +41,7 @@ pub fn build_edges(geom: &Geometry, raster_info: &RasterInfo) -> EdgeCollection 
         Geometry::LineString(line) => {
             let mut linedges: Vec<LineEdge> = Vec::new();
             // handle single segment
-            process_line(&mut linedges, line, raster_info, false);
+            process_line(&mut linedges, line, raster_info, true);
             EdgeCollection::LineEdges(linedges)
         }
         // multilinestring - iterate over each inner linestring
@@ -51,8 +51,8 @@ pub fn build_edges(geom: &Geometry, raster_info: &RasterInfo) -> EdgeCollection 
             // handle multiple segments
             for (i, line) in multiline.iter().enumerate() {
                 // check if last segment
-                let is_last = i == n_segments - 1;
-                process_line(&mut linedges, line, raster_info, is_last);
+                let is_last_segment = i == n_segments - 1;
+                process_line(&mut linedges, line, raster_info, is_last_segment);
             }
             EdgeCollection::LineEdges(linedges)
         }
@@ -98,23 +98,34 @@ fn process_ring(edges: &mut Vec<PolyEdge>, line: &LineString<f64>, raster_info: 
     }
 }
 
-fn process_line(edges: &mut Vec<LineEdge>, line: &LineString<f64>, raster_info: &RasterInfo, is_last: bool) {
+fn process_line(
+    edges: &mut Vec<LineEdge>,
+    line: &LineString<f64>,
+    raster_info: &RasterInfo,
+    is_last_segment: bool,
+) {
     // build node array
     let node_array = build_node_array(line);
     // add LineEdge
-    let mut nrows = node_array.nrows() - 1;
-    // if is_last {
-    //     nrows += 1;
-    // }
+    let nrows = node_array.nrows() - 1;
+    let irows = raster_info.nrows as isize;
+    let icols = raster_info.ncols as isize;
     for i in 0..nrows {
-        let is_last_segment = is_last && i == nrows - 1;
-        edges.push(LineEdge::new(
-            node_array[[i, 0]],
-            node_array[[i, 1]],
-            node_array[[i + 1, 0]],
-            node_array[[i + 1, 1]],
-            raster_info,
-            is_last_segment
-        ))
+        // world-to-pixel conversion
+        let ix0 = ((node_array[[i, 0]] - raster_info.xmin) / raster_info.xres).floor() as isize;
+        let iy0 = ((raster_info.ymax - node_array[[i, 1]]) / raster_info.yres).floor() as isize;
+        // only add edges that are inside the raster
+        if ix0 >= 0 && ix0 < icols && iy0 >= 0 && iy0 < irows {
+            // rasterize if last pixel of last segment and not closed geometry
+            let to_rasterize = is_last_segment && i == nrows - 1 && !line.is_closed();
+            edges.push(LineEdge::new(
+                ix0,
+                iy0,
+                node_array[[i + 1, 0]],
+                node_array[[i + 1, 1]],
+                raster_info,
+                to_rasterize,
+            ))
+        }
     }
 }
