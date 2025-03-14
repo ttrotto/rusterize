@@ -41,18 +41,15 @@ pub fn build_edges(geom: &Geometry, raster_info: &RasterInfo) -> EdgeCollection 
         Geometry::LineString(line) => {
             let mut linedges: Vec<LineEdge> = Vec::new();
             // handle single segment
-            process_line(&mut linedges, line, raster_info, true);
+            process_line(&mut linedges, line, raster_info);
             EdgeCollection::LineEdges(linedges)
         }
         // multilinestring - iterate over each inner linestring
         Geometry::MultiLineString(multiline) => {
             let mut linedges: Vec<LineEdge> = Vec::new();
-            let n_segments = multiline.0.len();
             // handle multiple segments
-            for (i, line) in multiline.iter().enumerate() {
-                // check if last segment
-                let is_last_segment = i == n_segments - 1;
-                process_line(&mut linedges, line, raster_info, is_last_segment);
+            for line in multiline {
+                process_line(&mut linedges, line, raster_info);
             }
             EdgeCollection::LineEdges(linedges)
         }
@@ -98,12 +95,7 @@ fn process_ring(edges: &mut Vec<PolyEdge>, line: &LineString<f64>, raster_info: 
     }
 }
 
-fn process_line(
-    edges: &mut Vec<LineEdge>,
-    line: &LineString<f64>,
-    raster_info: &RasterInfo,
-    is_last_segment: bool,
-) {
+fn process_line(edges: &mut Vec<LineEdge>, line: &LineString<f64>, raster_info: &RasterInfo) {
     // build node array
     let node_array = build_node_array(line);
     // add LineEdge
@@ -116,15 +108,13 @@ fn process_line(
         let iy0 = ((raster_info.ymax - node_array[[i, 1]]) / raster_info.yres).floor() as isize;
         // only add edges that are inside the raster
         if ix0 >= 0 && ix0 < icols && iy0 >= 0 && iy0 < irows {
-            // rasterize if last pixel of last segment and not closed geometry
-            let to_rasterize = is_last_segment && i == nrows - 1 && !line.is_closed();
             edges.push(LineEdge::new(
                 ix0,
                 iy0,
                 node_array[[i + 1, 0]],
                 node_array[[i + 1, 1]],
                 raster_info,
-                to_rasterize,
+                line.is_closed(),
             ))
         }
     }

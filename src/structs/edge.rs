@@ -69,12 +69,12 @@ pub struct LineEdge {
     pub iy0: isize,
     pub ix1: isize,
     pub iy1: isize,
-    pub dx: isize,
-    pub dy: isize,
-    pub sx: isize,
-    pub sy: isize,
+    pub dx: isize, // horizontal step
+    pub dy: isize, // vertical step
+    pub sx: isize, // horizontal slope
+    pub sy: isize, // vertical slope
     pub err: isize,
-    pub to_rasterize: bool,
+    pub is_closed: bool,
 }
 
 impl LineEdge {
@@ -84,7 +84,7 @@ impl LineEdge {
         x1: f64,
         y1: f64,
         raster_info: &RasterInfo,
-        to_rasterize: bool,
+        is_closed: bool,
     ) -> Self {
         // world-to-pixel conversion
         let ix1 = ((x1 - raster_info.xmin) / raster_info.xres).floor() as isize;
@@ -111,7 +111,7 @@ impl LineEdge {
             sx,
             sy,
             err,
-            to_rasterize,
+            is_closed,
         }
     }
 }

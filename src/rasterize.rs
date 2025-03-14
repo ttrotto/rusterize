@@ -11,7 +11,6 @@ use geo_types::Geometry;
 use numpy::ndarray::ArrayViewMut2;
 use rayon::prelude::*;
 
-#[allow(clippy::nonminimal_bool)]
 pub fn rasterize(
     raster_info: &RasterInfo,
     geom: &Geometry,
@@ -50,13 +49,13 @@ pub fn rasterize(
                 // sort active edges
                 active_edges.par_sort_by(less_by_x);
 
-                // even-odd polygon fill{
+                // even-odd polygon fill
                 for (edge1, edge2) in active_edges
                     .iter()
                     .zip(active_edges.iter().skip(1))
                     .step_by(2)
                 {
-                    // clamp and round the x-coordinates of the edges
+                    // clamp the x-coordinates of the edges
                     let xstart = edge1.x.clamp(0.0, ncols).ceil() as usize;
                     let xend = edge2.x.clamp(0.0, ncols).ceil() as usize;
 
@@ -79,27 +78,14 @@ pub fn rasterize(
                 })
             }
         }
-        EdgeCollection::LineEdges(linedges) => {
-            for mut edge in linedges {
-                loop {
-                    // condition for rasterization
-                    let is_endline = edge.ix0 == edge.ix1 && edge.iy0 == edge.iy1;
-
-                    // skip the last pixel for intermediate segments
-                    if !(is_endline && !edge.to_rasterize) {
-                        pxfn(
-                            ndarray,
-                            edge.iy0 as usize,
-                            edge.ix0 as usize,
-                            field_value,
-                            background,
-                        );
-                    }
-
-                    // check if it's the end of the line
-                    if is_endline {
-                        break;
-                    }
+        EdgeCollection::LineEdges(mut linedges) => {
+            let last_idx = linedges.len() - 1;
+            for (idx, edge) in linedges.iter_mut().enumerate() {
+                // rasterize all pixels except very last
+                while edge.ix0 != edge.ix1 || edge.iy0 != edge.iy1 {
+                    let ix0 = edge.ix0 as usize;
+                    let iy0 = edge.iy0 as usize;
+                    pxfn(ndarray, iy0, ix0, field_value, background);
 
                     // update the error term and coordinates
                     let e2 = 2 * edge.err;
@@ -111,6 +97,13 @@ pub fn rasterize(
                         edge.err += edge.dx;
                         edge.iy0 += edge.sy;
                     }
+                }
+
+                // rasterize last pixel if very last and geometry is not closed
+                if idx == last_idx && !edge.is_closed {
+                    let ix0 = edge.ix0 as usize;
+                    let iy0 = edge.iy0 as usize;
+                    pxfn(ndarray, iy0, ix0, field_value, background);
                 }
             }
         }
