@@ -1,5 +1,5 @@
 /*
-On-demand functions for polygon rasterizetion.
+On-demand functions for geometry rasterizetion.
  */
 
 use numpy::ndarray::ArrayViewMut2;

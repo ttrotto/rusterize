@@ -2,7 +2,7 @@ cargo-features = ["profile-rustflags"]
 
 [package]
 name = "rusterize"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 resolver = "2"
 
@@ -44,4 +44,3 @@ inherits = "release"
 rustflags = ["-C", "target-feature=+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe"]
 codegen-units = 1
 lto = true
-

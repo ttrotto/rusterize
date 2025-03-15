@@ -1,13 +1,10 @@
 # rusterize
 
 High performance rasterization tool for Python built in Rust. This
-repository is heavily based on the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package built in C++
-for R. This version ports it to Python with a Rust backend, with some useful improvements.
+repository stems from the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package built in C++
+for R and ports parts of the logics into Python with a Rust backend, in addition to some useful improvements.
 
-Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/)
-dataframes and returns a [xarray](https://docs.xarray.dev/en/stable/). It
-tighly mirrors the processing routine of fasterize, so it works only on
-(multi)polygon geometries at the moment.
+**rusterize** is designed to work on *(multi)polygons* and *(multi)linestrings*. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/). 
 
 # Installation
 
@@ -47,7 +44,7 @@ This function has a simple API:
 ``` python
 from rusterize.core import rusterize
 
-# gdf = <import datasets as needed>
+# gdf = <import/modify dataframe as needed>
 
 # rusterize
 rusterize(gdf,
@@ -66,7 +63,7 @@ rusterize(gdf,
 - `extent`: tuple of (xmin, ymin, xmax, ymax) for desired output extent
 - `field`: field to rasterize. Default is None (a value of `1` is rasterized).
 - `by`: column to rasterize. Assigns each group to a band in the
-  stack. Values are taken from `field`. Default is None
+  stack. Values are taken from `field`. Default is None (singleband raster)
 - `fun`: pixel function to use when multiple values overlap. Default is
   `last`. Available options are `sum`, `first`, `last`, `min`, `max`, `count`, or `any`
 - `background`: background value in final raster. Default is None (NaN)
@@ -90,17 +87,18 @@ from shapely import wkt
 import matplotlib.pyplot as plt
 
 # example from fasterize
-polygons = [
+geoms = [
     "POLYGON ((-180 -20, -140 55, 10 0, -140 -60, -180 -20), (-150 -20, -100 -10, -110 20, -150 -20))",
     "POLYGON ((-10 0, 140 60, 160 0, 140 -55, -10 0))",
-    "POLYGON ((-125 0, 0 60, 40 5, 15 -45, -125 0))"
+    "POLYGON ((-125 0, 0 60, 40 5, 15 -45, -125 0))",
+    "MULTILINESTRING ((-180 -70, -140 -50), (-140 -50, -100 -70), (-100 -70, -60 -50), (-60 -50, -20 -70), (-20 -70, 20 -50), (20 -50, 60 -70), (60 -70, 100 -50), (100 -50, 140 -70), (140 -70, 180 -50))"
 ]
 
 # Convert WKT strings to Shapely geometries
-geometries = [wkt.loads(polygon) for polygon in polygons]
+geometries = [wkt.loads(geom) for geom in geoms]
 
 # Create a GeoDataFrame
-gdf = gpd.GeoDataFrame({'value': range(1, len(polygons) + 1)}, geometry=geometries, crs='EPSG:32619')
+gdf = gpd.GeoDataFrame({'value': range(1, len(geoms) + 1)}, geometry=geometries, crs='EPSG:32619')
 
 # rusterize
 output = rusterize(
@@ -209,14 +207,16 @@ Unit: seconds
  fasterize 62.12409 72.13832 74.53424 75.12375 77.72899 84.77415    20
 ```
 
+In terms of (multi)line rasterization speed, here's a benchmark against `gdal_rasterize` using a layer from the province of Quebec, Canada, representing water courses for a total of ~4.5 million multilinestrings.  
+
 # Comparison with other tools
 
-While `rusterize` is fast, there are other very fast solutions out there, including:
+While **rusterize** is fast, there are other fast alternatives out there, including:
 - `GDAL`
 - `rasterio`
 - `geocube`
 
-However, `rusterize` allows for a seamless, Rust-native processing with similar or lower memory footprint that doesn't require you to leave Python, and returns the geoinformation you need for downstream processing.
+However, **rusterize** allows for a seamless, Rust-native processing with similar or lower memory footprint that doesn't require you to leave Python, and returns the geoinformation you need for downstream processing with ample control over resolution, shape, and extent.
 
 The following is a time comparison run on a dataset with 340K+ geometries, rasterized at 2m resolution.
 ```
