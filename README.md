@@ -114,7 +114,7 @@ output.plot.imshow(ax=ax)
 plt.show()
 ```
 
-![](img/rusterized_geometries.png)
+![](img/plot.png)
 
 # Benchmarks
 
