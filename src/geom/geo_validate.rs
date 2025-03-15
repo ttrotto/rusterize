@@ -1,7 +1,7 @@
 /*
 Check unsupported geometries and adjust bounding box if necessary.
  */
-
+use std::time::Instant;
 use crate::structs::raster::RasterInfo;
 use geo::BoundingRect;
 use geo_types::{coord, Geometry, Rect};
@@ -43,6 +43,7 @@ pub fn validate_geometries(
     raster_info: &mut RasterInfo,
 ) -> (Vec<Geometry>, Option<DataFrame>) {
     // check if any bad geometry
+    let start = Instant::now();
     let mut good_geom: Vec<bool> = Vec::with_capacity(geometry.len());
     let mut has_invalid = false;
     for geom in &geometry {
@@ -58,6 +59,8 @@ pub fn validate_geometries(
         }
         good_geom.push(valid);
     }
+    println!("Elapsed time has_invalid: {:?}", start.elapsed());
+    
 
     if has_invalid {
         // issue warning if bad geometries
