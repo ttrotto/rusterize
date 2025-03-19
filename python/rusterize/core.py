@@ -96,7 +96,7 @@ def rusterize(gdf: DataFrame,
 
     # rusterize
     r = _rusterize(
-        gdf.geometry,
+        gdf[['geometry']],
         raster_info,
         fun,
         df,
