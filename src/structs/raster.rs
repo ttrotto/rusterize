@@ -85,13 +85,13 @@ impl RasterInfo {
             self.ymax - self.nrows as f64 * self.yres,
             -self.yres,
         )
-        .into_pyarray_bound(py);
+        .into_pyarray(py);
         let x_coords = Array::range(
             self.xmin + self.xres / 2.0,
             self.xmin + self.ncols as f64 * self.xres,
             self.xres,
         )
-        .into_pyarray_bound(py);
+        .into_pyarray(py);
         (y_coords, x_coords)
     }
 }
