@@ -61,7 +61,7 @@ pub fn validate_geometries(
     if has_invalid {
         // issue warning if bad geometries
         Python::with_gil(|py| {
-            let warnings = PyModule::import_bound(py, "warnings").unwrap();
+            let warnings = PyModule::import(py, "warnings").unwrap();
             warnings
                 .call_method1(
                     "warn",

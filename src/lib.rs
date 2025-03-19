@@ -6,12 +6,17 @@ mod structs {
     pub mod raster;
     pub mod xarray;
 }
+mod geom {
+    pub mod from_geopandas;
+    pub mod to_geo_vector;
+    pub mod validate;
+    pub mod parse_wkb;
+}
 mod edge_collection;
-mod geo_validate;
 mod pixel_functions;
 mod rasterize;
 
-use crate::geo_validate::validate_geometries;
+use crate::geom::{to_geo_vector::to_geo_vector, validate::validate_geometries};
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize::rasterize;
 use geo_types::Geometry;
@@ -23,7 +28,7 @@ use numpy::{
     IntoPyArray,
 };
 use polars::prelude::*;
-use py_geo_interface::from_py::AsGeometryVec;
+// use py_geo_interface::from_py::AsGeometryVec;
 use pyo3::{
     prelude::*,
     types::{PyAny, PyList},
@@ -169,6 +174,7 @@ fn rusterize_rust(
 
 #[pyfunction]
 #[pyo3(name = "_rusterize")]
+#[pyo3(signature = (pygeometry, pyinfo, pypixel_fn, pydf=None, pyfield=None, pyby=None, pybackground=None))]
 #[allow(clippy::too_many_arguments)]
 fn rusterize_py<'py>(
     py: Python<'py>,
@@ -184,7 +190,8 @@ fn rusterize_py<'py>(
     let df = pydf.map(|inner| inner.into());
 
     // extract geometries
-    let geometry = pygeometry.as_geometry_vec()?;
+    let geometry = to_geo_vector(py, pygeometry)?;
+    // let geometry = pygeometry.as_geometry_vec()?;
 
     // extract raster information
     let mut raster_info = RasterInfo::from(pyinfo);
@@ -210,9 +217,9 @@ fn rusterize_py<'py>(
     let (y_coords, x_coords) = raster_info.make_coordinates(py);
 
     // to python
-    let pyret = ret.into_pyarray_bound(py);
-    let pybands = PyList::new_bound(py, band_names);
-    let pydims = PyList::new_bound(py, vec!["bands", "y", "x"]);
+    let pyret = ret.into_pyarray(py);
+    let pybands = PyList::new(py, band_names)?;
+    let pydims = PyList::new(py, vec!["bands", "y", "x"])?;
 
     // build xarray dictionary
     let xarray = Xarray::build_xarray(pyret, pydims, x_coords, y_coords, pybands);
