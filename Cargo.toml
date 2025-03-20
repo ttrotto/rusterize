@@ -11,12 +11,11 @@ name = "rusterize"
 crate-type = ["cdylib"]
 
 [dependencies]
+arrow = "54.2.1"
 dict_derive = "0.6.0"
 geo = "0.29.3"
 geo-types = "0.7.15"
-geo-traits = "0.2.0"
 geozero = "0.14.0"
-geoarrow = "0.4.0-beta.3"
 ndarray = { version = "0.16.1", features = ["rayon"] }
 num_cpus = "1.16.0"
 numpy = "0.23.0"
