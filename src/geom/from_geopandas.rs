@@ -1,19 +1,24 @@
 /*
 Convert geopandas into arrow format and pass it to Rust as geoarrow::Table
-This is much faster than parsing geometries directly via __geo_interface__
+This is faster than parsing geometries directly via __geo_interface__
 Adapted from https://github.com/geoarrow/geoarrow-rs/blob/main/python/geoarrow-core/src/interop/geopandas/from_geopandas.rs
  */
-use geoarrow::array::CoordType;
-use geoarrow::datatypes::{Dimension, NativeType};
-use geoarrow::error::GeoArrowError;
-use geoarrow::table::Table;
-use pyo3::exceptions::PyValueError;
-use pyo3::intern;
-use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyTuple};
-use pyo3::PyAny;
+
+use arrow::array::BinaryArray;
+use geo_types::Geometry;
+use geozero::{
+    error::GeozeroError,
+    wkb::{FromWkb, WkbDialect},
+};
+use pyo3::{
+    exceptions::PyValueError,
+    intern,
+    prelude::*,
+    types::{PyAny, PyDict, PyTuple},
+};
 use pyo3_arrow::PyTable;
 use pyo3_geoarrow::{PyGeoArrowError, PyGeoArrowResult};
+use std::io::Cursor;
 
 fn import_geopandas(py: Python) -> PyGeoArrowResult<Bound<PyModule>> {
     let geopandas_mod = py.import(intern!(py, "geopandas"))?;
@@ -33,21 +38,23 @@ fn import_geopandas(py: Python) -> PyGeoArrowResult<Bound<PyModule>> {
     }
 }
 
-fn pytable_to_table(table: PyTable) -> Result<Table, GeoArrowError> {
-    let (batches, schema) = table.into_inner();
-    Table::try_new(batches, schema)
+fn parse_wkb_to_geometry(wkb: &[u8]) -> Result<Geometry<f64>, GeozeroError> {
+    let mut reader = Cursor::new(wkb);
+    FromWkb::from_wkb(&mut reader, WkbDialect::Wkb)
 }
 
-pub fn from_geopandas(py: Python, input: &Bound<PyAny>) -> Result<Table, PyGeoArrowError> {
+pub fn from_geopandas(py: Python, input: &Bound<PyAny>) -> Result<Vec<Geometry>, PyGeoArrowError> {
     let geopandas_mod = import_geopandas(py)?;
     let geodataframe_class = geopandas_mod.getattr(intern!(py, "GeoDataFrame"))?;
     if !input.is_instance(&geodataframe_class)? {
-        return Err(PyValueError::new_err("Expected GeoDataFrame input.").into());
+        return Err(PyValueError::new_err(format!("Expected GeoDataFrame input, got {}", geodataframe_class)).into());
     }
+
+    // convert geopandas to PyTable
     let kwargs = PyDict::new(py);
     kwargs
         .set_item("geometry_encoding", "wkb")
-        .expect("Can't set dictionary keywords");
+        .expect("Unable to set dictionary keywords");
     let table = input
         .call_method(
             intern!(py, "to_arrow"),
@@ -55,15 +62,28 @@ pub fn from_geopandas(py: Python, input: &Bound<PyAny>) -> Result<Table, PyGeoAr
             Some(&kwargs),
         )?
         .extract::<PyTable>()?;
-    println!("table: {:?}", table);    
-    let table = pytable_to_table(table).unwrap();
-    println!("here1");
-    let table = table
-        .parse_serialized_geometry(
-            table.default_geometry_column_idx().unwrap(),
-            Some(NativeType::GeometryCollection(CoordType::Interleaved, Dimension::XY)),
+
+    // extact inner components
+    let (batches, _schema) = table.into_inner();
+
+    // deserialize wkb geometries
+    let mut geom_vec = Vec::with_capacity(batches.len());
+    for batch in batches {
+        // convert to BinaryArray
+        let geometry_column = batch
+            .column(0)
+            .as_any()
+            .downcast_ref::<BinaryArray>()
+            .ok_or(PyGeoArrowError::from(PyValueError::new_err(
+                "Unable to downcast geometries to arrow::BinaryArray.",
+            )))?;
+
+        // collect
+        geom_vec.extend(
+            geometry_column
+                .iter()
+                .filter_map(|wkb| wkb.and_then(|wkb| parse_wkb_to_geometry(wkb).ok())),
         )
-        .expect("Can't deserialize geometries from Arrow Table into GeometryCollection");
-    println!("here2");
-    Ok(table)
+    }
+    Ok(geom_vec)
 }
