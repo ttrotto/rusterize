@@ -8,15 +8,13 @@ mod structs {
 }
 mod geom {
     pub mod from_geopandas;
-    pub mod to_geo_vector;
     pub mod validate;
-    pub mod parse_wkb;
 }
 mod edge_collection;
 mod pixel_functions;
 mod rasterize;
 
-use crate::geom::{to_geo_vector::to_geo_vector, validate::validate_geometries};
+use crate::geom::{from_geopandas::from_geopandas, validate::validate_geometries};
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize::rasterize;
 use geo_types::Geometry;
@@ -28,7 +26,6 @@ use numpy::{
     IntoPyArray,
 };
 use polars::prelude::*;
-// use py_geo_interface::from_py::AsGeometryVec;
 use pyo3::{
     prelude::*,
     types::{PyAny, PyList},
@@ -189,9 +186,8 @@ fn rusterize_py<'py>(
     // extract dataframe
     let df = pydf.map(|inner| inner.into());
 
-    // extract geometries
-    let geometry = to_geo_vector(py, pygeometry)?;
-    // let geometry = pygeometry.as_geometry_vec()?;
+    // parse geometries
+    let geometry = from_geopandas(py, pygeometry)?;
 
     // extract raster information
     let mut raster_info = RasterInfo::from(pyinfo);
