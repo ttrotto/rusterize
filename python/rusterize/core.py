@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import NoneType
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Tuple
 
 import polars as pl
 from pandas import DataFrame
@@ -11,13 +11,13 @@ from .rusterize import _rusterize
 
 
 def rusterize(gdf: DataFrame,
-              res: Optional[Union[Tuple[int, ...], Tuple[float, ...]]] = None,
-              out_shape: Optional[Union[Tuple[int, ...]]] = None,
-              extent: Optional[Union[Tuple[int, ...], Tuple[float, ...]]] = None,
-              field: Optional[str] = None,
-              by: Optional[str] = None,
+              res: Tuple[int, ...] | Tuple[float, ...] | None = None,
+              out_shape: Tuple[int, ...] | None = None,
+              extent: Tuple[int, ...] | Tuple[float, ...] | None = None,
+              field: str | None = None,
+              by: str | None = None,
               fun: str = "last",
-              background: Optional[Union[int, float]] = None,
+              background: int | float | None = None,
               ) -> Dict[str, Any]:
     """
     Fast geopandas rasterization into xarray.DataArray
@@ -29,8 +29,8 @@ def rusterize(gdf: DataFrame,
         :param extent: tuple of (xmin, xmax, ymin, ymax) for regularized extent.
         :param field: field to rasterize. Default is None.
         :param by: column to rasterize, assigns each unique value to a layer in the stack based on field. Default is None.
-        :param fun: pixel function to use, see fasterize for options. Default is `last`.
-        :param background: background value in final raster. Default is None.
+        :param fun: pixel function to use. Available options are `sum`, `first`, `last`, `min`, `max`, `count`, or `any`. Default is `last`.
+        :param background: background value in final raster. Default is None (NaN).
 
     Returns:
         Rasterized xarray.DataArray.
@@ -54,11 +54,11 @@ def rusterize(gdf: DataFrame,
     if not isinstance(by, (str, NoneType)):
         raise TypeError("Must pass a valid string to by.")
     if not isinstance(fun, str):
-        raise TypeError("Must pass a valid string to pixel_fn. Select only of sum, first, last, min, max, count, or any.")
+        raise TypeError("Must pass a valid string to pixel_fn. Select one of sum, first, last, min, max, count, or any.")
     if not isinstance(background, (int, float, NoneType)):
         raise TypeError("Must pass a valid background type.")
 
-    # value check
+    # value checks
     if not res and not out_shape and not extent:
         raise ValueError("One of `res`, `out_shape`, or `extent` must be provided.")
     if extent and not res and not out_shape:
@@ -70,7 +70,7 @@ def rusterize(gdf: DataFrame,
     if extent and len(extent) != 4:
         raise ValueError("Extent must be 4 numbers (xmin, ymin, xmax, ymax).")
     if by and not field:
-        raise ValueError("If by is specified, field must also be specified.")
+        raise ValueError("If `by` is specified, `field` must also be specified.")
 
     # defaults
     _res = res if res else (0, 0)
