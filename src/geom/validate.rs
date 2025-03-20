@@ -1,12 +1,12 @@
 /*
 Check unsupported geometries and adjust bounding box if necessary.
  */
+
 use crate::structs::raster::RasterInfo;
 use geo::BoundingRect;
 use geo_types::{coord, Geometry, Rect};
 use polars::prelude::*;
-use pyo3::prelude::*;
-use pyo3::types::PyModule;
+use pyo3::{prelude::*, types::PyModule};
 
 // https://github.com/georust/geo/blob/main/geo/src/algorithm/bounding_rect.rs#L186
 fn bounding_rect(geometry: &[Geometry]) -> Option<Rect> {
@@ -73,6 +73,11 @@ pub fn validate_geometries(
         // retain only good geometries
         let mut iter = good_geom.iter();
         geometry.retain(|_| *iter.next().unwrap());
+        
+        // early stop if no supported geometries are left
+        if geometry.is_empty() {
+            panic!("There are no supported geometries left to rasterize")
+        }
 
         // retain dataframe rows accordingly
         if let Some(inner_df) = df {
