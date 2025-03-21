@@ -47,14 +47,16 @@ pub fn from_geopandas(py: Python, input: &Bound<PyAny>) -> Result<Vec<Geometry>,
     let geopandas_mod = import_geopandas(py)?;
     let geodataframe_class = geopandas_mod.getattr(intern!(py, "GeoDataFrame"))?;
     if !input.is_instance(&geodataframe_class)? {
-        return Err(PyValueError::new_err(format!("Expected GeoDataFrame input, got {}", geodataframe_class)).into());
+        return Err(PyValueError::new_err(format!(
+            "Expected GeoDataFrame input, got {}",
+            geodataframe_class
+        ))
+        .into());
     }
 
     // convert geopandas to PyTable
     let kwargs = PyDict::new(py);
-    kwargs
-        .set_item("geometry_encoding", "wkb")
-        .expect("Unable to set dictionary keywords");
+    kwargs.set_item("geometry_encoding", "wkb")?;
     let table = input
         .call_method(
             intern!(py, "to_arrow"),
@@ -68,22 +70,23 @@ pub fn from_geopandas(py: Python, input: &Bound<PyAny>) -> Result<Vec<Geometry>,
 
     // deserialize wkb geometries
     let mut geom_vec = Vec::with_capacity(batches.len());
-    for batch in batches {
+    for (idx, batch) in batches.iter().enumerate() {
         // convert to BinaryArray
         let geometry_column = batch
             .column(0)
             .as_any()
             .downcast_ref::<BinaryArray>()
-            .ok_or(PyGeoArrowError::from(PyValueError::new_err(
-                "Unable to downcast geometries to arrow::BinaryArray.",
-            )))?;
+            .ok_or(PyGeoArrowError::from(PyValueError::new_err(format!(
+                "Unable to downcast geometries to arrow::BinaryArray at index {}",
+                idx
+            ))))?;
 
         // collect
         geom_vec.extend(
             geometry_column
                 .iter()
                 .filter_map(|wkb| wkb.and_then(|wkb| parse_wkb_to_geometry(wkb).ok())),
-        )
+        );
     }
     Ok(geom_vec)
 }
