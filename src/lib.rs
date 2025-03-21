@@ -13,7 +13,6 @@ mod geom {
 mod edge_collection;
 mod pixel_functions;
 mod rasterize;
-
 use crate::geom::{from_geopandas::from_geopandas, validate::validate_geometries};
 use crate::pixel_functions::{set_pixel_function, PixelFn};
 use crate::rasterize::rasterize;

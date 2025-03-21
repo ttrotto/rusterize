@@ -73,7 +73,7 @@ pub fn validate_geometries(
         // retain only good geometries
         let mut iter = good_geom.iter();
         geometry.retain(|_| *iter.next().unwrap());
-        
+
         // early stop if no supported geometries are left
         if geometry.is_empty() {
             panic!("There are no supported geometries left to rasterize")
