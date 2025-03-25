@@ -18,6 +18,7 @@ use pyo3::{
 };
 use pyo3_arrow::PyTable;
 use pyo3_geoarrow::{PyGeoArrowError, PyGeoArrowResult};
+use rayon::prelude::*;
 use std::io::Cursor;
 
 fn import_geopandas(py: Python) -> PyGeoArrowResult<Bound<PyModule>> {
@@ -70,23 +71,16 @@ pub fn from_geopandas(py: Python, input: &Bound<PyAny>) -> Result<Vec<Geometry>,
 
     // deserialize wkb geometries
     let mut geom_vec = Vec::with_capacity(batches.len());
-    for (idx, batch) in batches.iter().enumerate() {
-        // convert to BinaryArray
-        let geometry_column = batch
-            .column(0)
-            .as_any()
-            .downcast_ref::<BinaryArray>()
-            .ok_or(PyGeoArrowError::from(PyValueError::new_err(format!(
-                "Unable to downcast geometries to arrow::BinaryArray at index {}",
-                idx
-            ))))?;
-
-        // collect
+    for batch in batches.iter() {
         geom_vec.extend(
-            geometry_column
+            batch
+                .column(0)
+                .as_any()
+                .downcast_ref::<BinaryArray>()
+                .expect("Unable to downcast array of binary array when deserializing geometries")
                 .iter()
                 .filter_map(|wkb| wkb.and_then(|wkb| parse_wkb_to_geometry(wkb).ok())),
-        );
+        )
     }
     Ok(geom_vec)
 }
