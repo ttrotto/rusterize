@@ -17,6 +17,7 @@ geo = "0.29.3"
 geo-types = "0.7.15"
 geozero = "0.14.0"
 ndarray = { version = "0.16.1", features = ["rayon"] }
+num-traits = "0.2.19"
 num_cpus = "1.16.0"
 numpy = "0.23.0"
 polars = { version = "0.46.0", features = ["lazy", "simd", "performant", "nightly"] }
@@ -28,7 +29,6 @@ rayon = "1.10.0"
 
 [patch.crates-io]
 pyo3-geoarrow = { git = "https://github.com/geoarrow/geoarrow-rs" }
-#geoarrow = { git = "https://github.com/geoarrow/geoarrow-rs" }
 
 # OS-specific allocators
 [target.'cfg(not(target_family = "unix"))'.dependencies]

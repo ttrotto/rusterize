@@ -2869,6 +2869,7 @@ dependencies = [
  "geozero",
  "mimalloc",
  "ndarray",
+ "num-traits",
  "num_cpus",
  "numpy",
  "polars",
