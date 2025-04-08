@@ -5,7 +5,7 @@ Rasterize a single (multi)polygon or (multi)linestring.
 use crate::edge_collection;
 use crate::pixel_functions::PixelFn;
 use crate::structs::{
-    edge::{less_by_x, less_by_ystart, EdgeCollection, PolyEdge},
+    edge::{EdgeCollection, PolyEdge, less_by_x, less_by_ystart},
     raster::RasterInfo,
 };
 
