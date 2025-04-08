@@ -4,13 +4,13 @@ from types import NoneType
 from typing import Any, Dict, Tuple
 
 import polars as pl
-from pandas import DataFrame
+from geopandas import GeoDataFrame
 import rioxarray
 from xarray import DataArray
 from .rusterize import _rusterize
 
 
-def rusterize(gdf: DataFrame,
+def rusterize(gdf: GeoDataFrame,
               res: Tuple[int, ...] | Tuple[float, ...] | None = None,
               out_shape: Tuple[int, ...] | None = None,
               extent: Tuple[int, ...] | Tuple[float, ...] | None = None,
@@ -41,7 +41,7 @@ def rusterize(gdf: DataFrame,
         The logics dictating the final spatial properties of the rasterized geometries follow those of GDAL.
     """
     # type checks
-    if not isinstance(gdf, DataFrame):
+    if not isinstance(gdf, GeoDataFrame):
         raise TypeError("Must pass a valid geopandas dataframe.")
     if not isinstance(res, (tuple, NoneType)):
         raise TypeError("Must pass a valid resolution tuple (x, y).")
@@ -79,14 +79,14 @@ def rusterize(gdf: DataFrame,
 
     # RasterInfo
     raster_info = {
+        "nrows": _shape[0],
+        "ncols": _shape[1],
         "xmin": _bounds[0],
         "ymin": _bounds[1],
         "xmax": _bounds[2],
         "ymax": _bounds[3],
         "xres": _res[0],
         "yres": _res[1],
-        "nrows": _shape[0],
-        "ncols": _shape[1],
         "has_extent": has_extent
     }
 
@@ -96,7 +96,7 @@ def rusterize(gdf: DataFrame,
 
     # rusterize
     r = _rusterize(
-        gdf[['geometry']],
+        gdf.geometry,
         raster_info,
         fun,
         df,
