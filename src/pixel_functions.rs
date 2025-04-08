@@ -65,6 +65,9 @@ pub fn set_pixel_function(fstr: &str) -> PixelFn {
         "max" => max_values,
         "count" => count_values,
         "any" => any_values,
-        _ => panic!("'fun' has an invalid value: {}. Select one of sum, first, last, min, max, count, or any", fstr),
+        _ => panic!(
+            "'fun' has an invalid value: {}. Select one of sum, first, last, min, max, count, or any",
+            fstr
+        ),
     }
 }
