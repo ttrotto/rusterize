@@ -4,9 +4,9 @@ Check unsupported geometries and adjust bounding box if necessary.
 
 use crate::structs::raster::RasterInfo;
 use geo::BoundingRect;
-use geo_types::{coord, Geometry, Rect};
+use geo_types::{Geometry, Rect, coord};
 use polars::prelude::*;
-use pyo3::{prelude::*, types::PyModule};
+use pyo3::prelude::*;
 
 // https://github.com/georust/geo/blob/main/geo/src/algorithm/bounding_rect.rs#L186
 fn bounding_rect(geometry: &[Geometry]) -> Option<Rect> {
@@ -61,7 +61,7 @@ pub fn validate_geometries(
     if has_invalid {
         // issue warning if bad geometries
         Python::with_gil(|py| {
-            let warnings = PyModule::import(py, "warnings").unwrap();
+            let warnings = Python::import(py, "warnings").unwrap();
             warnings
                 .call_method1(
                     "warn",
