@@ -4,8 +4,11 @@ Rasterize a single (multi)polygon or (multi)linestring.
 
 use crate::edge_collection;
 use crate::pixel_functions::PixelFn;
-use crate::structs::edge::{less_by_x, less_by_ystart, EdgeCollection};
-use crate::structs::{edge::PolyEdge, raster::RasterInfo};
+use crate::structs::{
+    edge::{EdgeCollection, PolyEdge, less_by_x, less_by_ystart},
+    raster::RasterInfo,
+};
+
 use edge_collection::build_edges;
 use geo_types::Geometry;
 use numpy::ndarray::ArrayViewMut2;

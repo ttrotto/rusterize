@@ -4,32 +4,35 @@ mod allocator;
 mod structs {
     pub mod edge;
     pub mod raster;
-    pub mod xarray;
+}
+mod geom {
+    pub mod from_shapely;
+    pub mod validate;
 }
 mod edge_collection;
-mod geo_validate;
 mod pixel_functions;
 mod rasterize;
+mod to_xarray;
 
-use crate::geo_validate::validate_geometries;
-use crate::pixel_functions::{set_pixel_function, PixelFn};
+use crate::geom::{from_shapely::from_shapely, validate::validate_geometries};
+use crate::pixel_functions::{PixelFn, set_pixel_function};
 use crate::rasterize::rasterize;
 use geo_types::Geometry;
 use numpy::{
+    IntoPyArray,
     ndarray::{
         parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
         {Array3, Axis},
     },
-    IntoPyArray,
 };
 use polars::prelude::*;
-use py_geo_interface::from_py::AsGeometryVec;
 use pyo3::{
     prelude::*,
-    types::{PyAny, PyList},
+    types::{PyAny, PyDict, PyList},
 };
 use pyo3_polars::PyDataFrame;
-use structs::{raster::RasterInfo, xarray::Xarray};
+use structs::raster::RasterInfo;
+use to_xarray::build_xarray;
 
 fn rusterize_rust(
     geometry: Vec<Geometry>,
@@ -169,6 +172,7 @@ fn rusterize_rust(
 
 #[pyfunction]
 #[pyo3(name = "_rusterize")]
+#[pyo3(signature = (pygeometry, pyinfo, pypixel_fn, pydf=None, pyfield=None, pyby=None, pybackground=None))]
 #[allow(clippy::too_many_arguments)]
 fn rusterize_py<'py>(
     py: Python<'py>,
@@ -179,12 +183,12 @@ fn rusterize_py<'py>(
     pyfield: Option<&str>,
     pyby: Option<&str>,
     pybackground: Option<&Bound<'py, PyAny>>,
-) -> PyResult<Xarray<'py>> {
+) -> PyResult<Bound<'py, PyDict>> {
     // extract dataframe
     let df = pydf.map(|inner| inner.into());
 
-    // extract geometries
-    let geometry = pygeometry.as_geometry_vec()?;
+    // parse geometries
+    let geometry = from_shapely(py, pygeometry)?;
 
     // extract raster information
     let mut raster_info = RasterInfo::from(pyinfo);
@@ -210,12 +214,12 @@ fn rusterize_py<'py>(
     let (y_coords, x_coords) = raster_info.make_coordinates(py);
 
     // to python
-    let pyret = ret.into_pyarray_bound(py);
-    let pybands = PyList::new_bound(py, band_names);
-    let pydims = PyList::new_bound(py, vec!["bands", "y", "x"]);
+    let pyret = ret.into_pyarray(py);
+    let pybands = PyList::new(py, band_names)?;
+    let pydims = PyList::new(py, vec!["bands", "y", "x"])?;
 
     // build xarray dictionary
-    let xarray = Xarray::build_xarray(pyret, pydims, x_coords, y_coords, pybands);
+    let xarray = build_xarray(py, pyret, pydims, x_coords, y_coords, pybands)?;
     Ok(xarray)
 }
 
