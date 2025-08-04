@@ -16,9 +16,9 @@ __version__ = importlib.metadata.version("rusterize")
 
 def rusterize(
 	gdf: GeoDataFrame,
-	res: Tuple | List | np.ndarray | None = None,
-	out_shape: Tuple | List | np.ndarray | None = None,
-	extent: Tuple | List | np.ndarray = None,
+	res: Tuple | List | None = None,
+	out_shape: Tuple | List | None = None,
+	extent: Tuple | List | None = None,
 	field: str | None = None,
 	by: str | None = None,
 	burn: int | float | None = None,
@@ -57,12 +57,12 @@ def rusterize(
 	# type checks
 	if not isinstance(gdf, GeoDataFrame):
 		raise TypeError("`gdf` must be a geopandas dataframe.")
-	if not isinstance(res, (tuple, list, np.ndarray, NoneType)):
-		raise TypeError("`resolution` must be a tuple, list, or numpy array of (x, y).")
-	if not isinstance(out_shape, (tuple, list, np.ndarray, NoneType)):
-		raise TypeError("`out_shape` must be a tuple, list, or numpy array of (nrows, ncols).")
-	if not isinstance(extent, (tuple, list, np.ndarray, NoneType)):
-		raise TypeError("`extent` must be a tuple, list, or numpy array of (xmin, ymin, xmax, ymax).")
+	if not isinstance(res, (tuple, list, NoneType)):
+		raise TypeError("`resolution` must be a tuple or list of (x, y).")
+	if not isinstance(out_shape, (tuple, list, NoneType)):
+		raise TypeError("`out_shape` must be a tuple or list of (nrows, ncols).")
+	if not isinstance(extent, (tuple, list, NoneType)):
+		raise TypeError("`extent` must be a tuple or list of (xmin, ymin, xmax, ymax).")
 	if not isinstance(field, (str, NoneType)):
 		raise TypeError("`field` must be a string column name.")
 	if not isinstance(by, (str, NoneType)):
