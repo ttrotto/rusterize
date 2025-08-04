@@ -4,7 +4,7 @@ High performance rasterization tool for Python built in Rust. This
 repository stems from the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package built in C++
 for R and ports parts of the logics into Python with a Rust backend, in addition to some useful improvements.
 
-**rusterize** is designed to work on *(multi)polygons* and *(multi)linestrings*. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/). 
+**rusterize** is designed to work on *(multi)polygons* and *(multi)linestrings*, even when they are nested inside complex geometry collections. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/). 
 
 # Installation
 
@@ -28,7 +28,7 @@ git clone https://github.com/<username>/rusterize.git
 cd rusterize
 
 # Install the Rust nightly toolchain
-rustup toolchain install nightly-2025-01-05
+rustup toolchain install nightly-2025-07-01
 
  # Install maturin
 pip install maturin
@@ -42,7 +42,7 @@ maturin develop --profile dist-release
 This package has a simple API:
 
 ``` python
-from rusterize.core import rusterize
+from rusterize import rusterize
 
 # gdf = <import/modify dataframe as needed>
 
@@ -50,21 +50,25 @@ from rusterize.core import rusterize
 rusterize(gdf,
           res=(30, 30),
           out_shape=(10, 10)
-          extent=(0, 300, 0, 300)
+          extent=(0, 10, 10, 20)
           field="field",
           by="by",
+          burn=None,
           fun="sum",
-          background=0) 
+          background=0,
+          dtype="uint8") 
 ```
 
 - `gdf`: geopandas dataframe to rasterize
-- `res`: tuple of (xres, yres) for desired resolution (default: `None`)
-- `out_shape`: tuple of (nrows, ncols) for desired output shape (default: `None`)
-- `extent`: tuple of (xmin, ymin, xmax, ymax) for desired output extent (default: `None`)
-- `field`: field to rasterize. (default: `None` -> a value of `1` is rasterized).
-- `by`: column to rasterize. Assigns each group to a band in the stack. Values are taken from `field`. (default: `None` -> singleband raster)
+- `res`: (xres, yres) for desired resolution (default: `None`)
+- `out_shape`: (nrows, ncols) for desired output shape (default: `None`)
+- `extent`: (xmin, ymin, xmax, ymax) for desired output extent (default: `None`)
+- `field`: column to rasterize. Mutually exclusive with `burn`. (default: `None` -> a value of `1` is rasterized)
+- `by`: column for grouping. Assign each group to a band in the stack. Values are taken from `field` if specified, else `burn` is rasterized. (default: `None` -> singleband raster)
+- `burn`: a single value to burn. Mutually exclusive with `field`. (default: `None`). If no field is found in `gdf` or if `field` is `None`, then `burn=1`
 - `fun`: pixel function to use when multiple values overlap. Available options are `sum`, `first`, `last`, `min`, `max`, `count`, or `any`. (default: `last`)
-- `background`: background value in final raster. (default: `np.nan`)
+- `background`: background value in final raster. (default: `np.nan`). A `None` value corresponds to the default of the specified dtype. An illegal value for a dtype will be replaced with the default of that dtype. For example, a `background=np.nan` for `dtype="uint8"` will become `background=0`, where `0` is the default for `uint8`.
+- `dtype`: dtype of the final raster. Possible values are `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64` (default: `float64`)
 
 Note that control over the desired extent is not as strict as for resolution and shape. That is,
 when resolution, output shape, and extent are specified, priority is given to resolution and shape.
@@ -79,7 +83,7 @@ returns a dictionary that is converted to a xarray on the Python side
 for simpliicty.
 
 ``` python
-from rusterize.core import rusterize
+from rusterize import rusterize
 import geopandas as gpd
 from shapely import wkt
 import matplotlib.pyplot as plt
@@ -89,7 +93,8 @@ geoms = [
     "POLYGON ((-180 -20, -140 55, 10 0, -140 -60, -180 -20), (-150 -20, -100 -10, -110 20, -150 -20))",
     "POLYGON ((-10 0, 140 60, 160 0, 140 -55, -10 0))",
     "POLYGON ((-125 0, 0 60, 40 5, 15 -45, -125 0))",
-    "MULTILINESTRING ((-180 -70, -140 -50), (-140 -50, -100 -70), (-100 -70, -60 -50), (-60 -50, -20 -70), (-20 -70, 20 -50), (20 -50, 60 -70), (60 -70, 100 -50), (100 -50, 140 -70), (140 -70, 180 -50))"
+    "MULTILINESTRING ((-180 -70, -140 -50), (-140 -50, -100 -70), (-100 -70, -60 -50), (-60 -50, -20 -70), (-20 -70, 20 -50), (20 -50, 60 -70), (60 -70, 100 -50), (100 -50, 140 -70), (140 -70, 180 -50))",
+    "GEOMETRYCOLLECTION (POINT (50 -40), POLYGON ((75 -40, 75 -30, 100 -30, 100 -40, 75 -40)), LINESTRING (80 -40, 100 0), GEOMETRYCOLLECTION (POLYGON ((100 20, 100 30, 110 30, 110 20, 100 20))))"
 ]
 
 # Convert WKT strings to Shapely geometries
@@ -103,7 +108,7 @@ output = rusterize(
     gdf,
     res=(1, 1),
     field="value",
-    fun="sum"
+    fun="sum",
 ).squeeze()
 
 # plot it
@@ -119,7 +124,7 @@ plt.show()
 **rusterize** is fast! Let’s try it on small and large datasets.
 
 ``` python
-from rusterize.core import rusterize
+from rusterize import rusterize
 import geopandas as gpd
 import requests
 import zipfile
