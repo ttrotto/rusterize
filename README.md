@@ -2,7 +2,7 @@
 
 High performance rasterization tool for Python built in Rust. This
 repository stems from the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package built in C++
-for R and ports parts of the logics into Python with a Rust backend, in addition to some useful improvements.
+for R and ports parts of the logics into Python with a Rust backend, in addition to some useful improvements (see [API](#API)).
 
 **rusterize** is designed to work on *(multi)polygons* and *(multi)linestrings*, even when they are nested inside complex geometry collections. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/). 
 
@@ -28,7 +28,7 @@ git clone https://github.com/<username>/rusterize.git
 cd rusterize
 
 # Install the Rust nightly toolchain
-rustup toolchain install nightly-2025-07-01
+rustup toolchain install nightly-2025-07-31
 
  # Install maturin
 pip install maturin
@@ -159,11 +159,10 @@ pytest <python file> --benchmark-min-rounds=20 --benchmark-time-unit='s'
 --------------------------------------------- benchmark: 1 tests --------------------------------------------
 Name (time in s)         Min      Max     Mean  StdDev   Median     IQR  Outliers     OPS  Rounds  Iterations
 -------------------------------------------------------------------------------------------------------------
-rusterize_large       1.6430   1.9249   1.7442  0.1024   1.6878   0.1974      6;0  0.5733      20           1
-rusterize_small       0.0912   0.1194   0.1014  0.0113   0.0953   0.0223      7;0  9.8633      20           1 
+rusterize_small       0.0791    0.0899   0.0812  0.0027   0.0803  0.0020       2;2  12.3214     20          1
+rusterize_large     1.379545    1.4474   1.4006  0.0178   1.3966  0.0214       5;1   0.7140     20          1
 -------------------------------------------------------------------------------------------------------------
 ```
-
 And fasterize:
 ``` r
 library(sf)
@@ -186,9 +185,9 @@ microbenchmark(
 ```
 ```
 Unit: seconds
-            expr       min         lq       mean     median         uq        max neval
- fasterize_large 9.9450280 10.6674467 10.8632224 10.9182963 11.1943478 11.3768210    20
- fasterize_small 0.4906411  0.5140836  0.5581061  0.5320919  0.5603512  0.8750579    20
+            expr       min         lq       mean     median        uq        max neval
+ fasterize_small 0.4741043  0.4926114  0.5191707  0.5193289  0.536741  0.5859029    20
+ fasterize_large 9.2199426 10.3595465 10.6653139 10.5369429 11.025771 11.7944567    20
 ```
 And on an even larger datasets? Here we use a layer from the province of Quebec, Canada representing ~2M polygons of forest stands, rasterized at 30 meters (20 rounds) with no field value and pixel function `any`. The comparison with `gdal_rasterize` was run with `hyperfine --runs 20 "gdal_rasterize -tr 30 30 -burn 1 <data_in> <data_out>"`.
 ```
@@ -196,7 +195,7 @@ And on an even larger datasets? Here we use a layer from the province of Quebec,
 --------------------------------------------- benchmark: 1 tests --------------------------------------------
 Name (time in s)         Min      Max     Mean  StdDev   Median     IQR  Outliers     OPS  Rounds  Iterations
 -------------------------------------------------------------------------------------------------------------
-rusterize             6.7270   7.0098   6.7824  0.0646   6.7686   0.0266      2;2  0.1474      20           1
+rusterize             5.9331   7.2308   6.1302  0.3183  5.9903   0.1736       2;4  0.1631      20           1
 -------------------------------------------------------------------------------------------------------------
 
 # fasterize
@@ -205,8 +204,8 @@ Unit: seconds
  fasterize 157.4734 177.2055 194.3222 194.6455 213.9195 230.6504    20
 
 # gdal_rasterize (CLI) - read from fast drive, write to fast drive
-Time (mean ± σ):      5.801 s ±  0.124 s    [User: 4.381 s, System: 1.396 s]
-Range (min … max):    5.649 s …  6.023 s    20 runs
+Time (mean ± σ):      5.495 s ±  0.038 s    [User: 4.268 s, System: 1.225 s]
+Range (min … max):    5.452 s …  5.623 s    20 runs
 ```
 In terms of (multi)line rasterization speed, here's a benchmark against `gdal_rasterize` using a layer from the province of Quebec, Canada, representing a subset of the road network for a total of ~535K multilinestrings.
 ```
@@ -223,11 +222,11 @@ Range (min … max):    8.658 s …  8.874 s    20 runs
 ```
 # Comparison with other tools
 
-While **rusterize** is fast, there are other fast alternatives out there, including `GDAL`, `rasterio` and `geocube`. However, **rusterize** allows for a seamless, Rust-native processing with similar or lower memory footprint that doesn't require you to leave Python, and returns the geoinformation you need for downstream processing with ample control over resolution, shape, and extent.
+While **rusterize** is fast, there are other fast alternatives out there, including `GDAL`, `rasterio` and `geocube`. However, **rusterize** allows for a seamless, Rust-native processing with similar or lower memory footprint that doesn't require you to leave Python, and returns the geoinformation you need for downstream processing with ample control over resolution, shape, extent, and data type.
 
 The following is a time comparison on a single run on the same forest stands dataset used earlier.
 ```
-rusterize:    6.7 sec
+rusterize:    5.9 sec
 rasterio:     68  sec (but no spatial information)
 fasterize:    157 sec (including raster creation)
 geocube:      260 sec (larger memory footprint)
