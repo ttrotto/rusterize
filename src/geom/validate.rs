@@ -43,7 +43,7 @@ pub fn validate_geometries(
 ) -> (Vec<Geometry>, Option<DataFrame>) {
     // check if any bad geometry
     let mut good_geom: Vec<bool> = Vec::with_capacity(geometry.len());
-    let mut has_invalid = false;
+    let mut has_invalid = 0u32;
     for geom in &geometry {
         let valid = matches!(
             geom,
@@ -51,21 +51,24 @@ pub fn validate_geometries(
                 | &Geometry::MultiPolygon(_)
                 | &Geometry::LineString(_)
                 | &Geometry::MultiLineString(_)
+                | &Geometry::GeometryCollection(_)
         );
         if !valid {
-            has_invalid = true;
+            has_invalid += 1;
         }
         good_geom.push(valid);
     }
 
-    if has_invalid {
+    if has_invalid > 0 {
         // issue warning if bad geometries
         Python::with_gil(|py| {
             let warnings = Python::import(py, "warnings").unwrap();
             warnings
                 .call_method1(
                     "warn",
-                    ("Detected unsupported geometries, will be dropped.",),
+                    (format!(
+                        "Detected {has_invalid} unsupported geometries, will be dropped."
+                    ),),
                 )
                 .unwrap();
         });
