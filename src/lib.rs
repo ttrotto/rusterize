@@ -1,5 +1,3 @@
-#![feature(extract_if)]
-
 mod allocator;
 mod structs {
     pub mod edge;
@@ -11,168 +9,68 @@ mod geom {
 }
 mod edge_collection;
 mod pixel_functions;
-mod rasterize;
+mod prelude;
+mod rasterize_geometry;
+mod rusterize_impl;
 mod to_xarray;
 
-use crate::geom::{from_shapely::from_shapely, validate::validate_geometries};
-use crate::pixel_functions::{PixelFn, set_pixel_function};
-use crate::rasterize::rasterize;
-use geo_types::Geometry;
-use numpy::{
-    IntoPyArray,
-    ndarray::{
-        parallel::prelude::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator},
-        {Array3, Axis},
-    },
+use crate::{
+    geom::from_shapely::from_shapely, pixel_functions::set_pixel_function, prelude::*,
+    rusterize_impl::rusterize_impl,
 };
-use polars::prelude::*;
+use geo_types::Geometry;
+use num_traits::{Num, NumCast};
+use numpy::Element;
+use polars::prelude::DataFrame;
 use pyo3::{
     prelude::*,
-    types::{PyAny, PyDict, PyList},
+    types::{PyAny, PyDict},
 };
 use pyo3_polars::PyDataFrame;
 use structs::raster::RasterInfo;
 use to_xarray::build_xarray;
 
-fn rusterize_rust(
+#[allow(clippy::too_many_arguments)]
+fn execute_rusterize<'py, T>(
+    py: Python<'py>,
     geometry: Vec<Geometry>,
-    raster_info: &mut RasterInfo,
-    pixel_fn: PixelFn,
-    background: f64,
+    mut raster_info: RasterInfo,
+    pypixel_fn: &str,
+    pybackground: Option<&Bound<'py, PyAny>>,
     df: Option<DataFrame>,
-    field_name: Option<&str>,
-    by_name: Option<&str>,
-) -> (Array3<f64>, Vec<String>) {
-    // validate geometries
-    let (good_geom, df) = validate_geometries(geometry, df, raster_info);
+    pyfield: Option<&str>,
+    pyby: Option<&str>,
+    pyburn: Option<f64>,
+) -> PyResult<Bound<'py, PyDict>>
+where
+    T: Num + NumCast + Copy + PixelOps + PolarsHandler + FromPyObject<'py> + Element + Default,
+{
+    let background = pybackground
+        .and_then(|inner| inner.extract::<T>().ok())
+        .unwrap_or_default();
+    let burn = pyburn.and_then(|v| T::from(v)).unwrap_or(T::one());
+    let pixel_fn = set_pixel_function::<T>(pypixel_fn);
 
-    // extract `field` and `by`
-    let casted: DataFrame;
-    let (field, by) = match df {
-        None => (
-            // case 1: create a dummy `field`
-            &Float64Chunked::from_vec(PlSmallStr::from("field_f64"), vec![1.0; good_geom.len()]),
-            None,
-        ),
-        Some(df) => {
-            let mut lf = df.lazy();
-            match (field_name, by_name) {
-                (Some(field_name), Some(by_name)) => {
-                    // case 2: both `field` and `by` specified
-                    lf = lf.with_columns([
-                        col(field_name).cast(DataType::Float64).alias("field_f64"),
-                        col(by_name).cast(DataType::String).alias("by_str"),
-                    ]);
-                }
-                (Some(field_name), None) => {
-                    // case 3: only `field` specified
-                    lf = lf.with_column(col(field_name).cast(DataType::Float64).alias("field_f64"));
-                }
-                (None, Some(by_name)) => {
-                    // case 4: only `by` specified
-                    lf = lf.with_columns([
-                        lit(1.0).alias("field_f64"), // dummy `field`
-                        col(by_name).cast(DataType::String).alias("by_str"),
-                    ]);
-                }
-                (None, None) => {
-                    // case 5: neither `field` nor `by` specified
-                    panic!("Either `field` or `by` must be specified.");
-                }
-            }
+    // rusterize
+    let (ret, band_names) = rusterize_impl::<T>(
+        geometry,
+        &mut raster_info,
+        pixel_fn,
+        background,
+        df,
+        pyfield,
+        pyby,
+        burn,
+    );
 
-            // collect casted dataframe
-            casted = lf.collect().unwrap();
-
-            (
-                casted.column("field_f64").unwrap().f64().unwrap(),
-                casted.column("by_str").ok().and_then(|col| col.str().ok()),
-            )
-        }
-    };
-
-    // main
-    let mut raster: Array3<f64>;
-    let mut band_names: Vec<String> = vec![String::from("band1")];
-    match by {
-        Some(by) => {
-            // get groups
-            let groups = by.group_tuples(true, false).expect("No groups found!");
-            let n_groups = groups.len();
-            let group_idx = groups.into_idx();
-
-            // multiband raster
-            raster = raster_info.build_raster(n_groups, background);
-
-            // dynamically set number of threads
-            let cpus = num_cpus::get();
-            let num_threads = n_groups.min(cpus / 2);
-
-            // init thread pool
-            let pool = rayon::ThreadPoolBuilder::new()
-                .num_threads(num_threads)
-                .build()
-                .unwrap();
-
-            // parallel iterator along bands, zipped with corresponding groups
-            pool.install(|| {
-                raster
-                    .outer_iter_mut()
-                    .into_par_iter()
-                    .zip(group_idx.into_par_iter())
-                    .map(|(mut band, (group_idx, idxs))| {
-                        // rasterize polygons
-                        for &i in idxs.iter() {
-                            if let (Some(fv), Some(geom)) =
-                                (field.get(i as usize), good_geom.get(i as usize))
-                            {
-                                // process only non-empty field values
-                                rasterize(
-                                    raster_info,
-                                    geom,
-                                    &fv,
-                                    &mut band,
-                                    &pixel_fn,
-                                    &background,
-                                );
-                            }
-                        }
-                        // band name
-                        by.get(group_idx as usize).unwrap().to_string()
-                    })
-                    .collect_into_vec(&mut band_names)
-            });
-        }
-        None => {
-            // singleband raster
-            raster = raster_info.build_raster(1, background);
-
-            // rasterize polygons
-            field
-                .into_iter()
-                .zip(good_geom)
-                .for_each(|(field_value, geom)| {
-                    if let Some(fv) = field_value {
-                        // process only non-empty field values
-                        rasterize(
-                            raster_info,
-                            &geom,
-                            &fv,
-                            &mut raster.index_axis_mut(Axis(0), 0),
-                            &pixel_fn,
-                            &background,
-                        )
-                    }
-                });
-        }
-    }
-
-    (raster, band_names)
+    // build xarray dictionary
+    let xarray = build_xarray(py, raster_info, ret, band_names)?;
+    Ok(xarray)
 }
 
 #[pyfunction]
 #[pyo3(name = "_rusterize")]
-#[pyo3(signature = (pygeometry, pyinfo, pypixel_fn, pydf=None, pyfield=None, pyby=None, pybackground=None))]
+#[pyo3(signature = (pygeometry, pyinfo, pypixel_fn, pydf=None, pyfield=None, pyby=None, pyburn=None, pybackground=None, pydtype="float64"))]
 #[allow(clippy::too_many_arguments)]
 fn rusterize_py<'py>(
     py: Python<'py>,
@@ -182,45 +80,135 @@ fn rusterize_py<'py>(
     pydf: Option<PyDataFrame>,
     pyfield: Option<&str>,
     pyby: Option<&str>,
+    pyburn: Option<f64>,
     pybackground: Option<&Bound<'py, PyAny>>,
+    pydtype: &str,
 ) -> PyResult<Bound<'py, PyDict>> {
     // extract dataframe
-    let df = pydf.map(|inner| inner.into());
+    let df: Option<DataFrame> = pydf.map(|inner| inner.into());
 
     // parse geometries
     let geometry = from_shapely(py, pygeometry)?;
 
     // extract raster information
-    let mut raster_info = RasterInfo::from(pyinfo);
+    let raster_info = RasterInfo::from(pyinfo);
 
-    // extract function arguments
-    let pixel_fn = set_pixel_function(pypixel_fn);
-    let background = pybackground
-        .and_then(|inner| inner.extract::<f64>().ok())
-        .unwrap_or(f64::NAN);
-
-    // rusterize
-    let (ret, band_names) = rusterize_rust(
-        geometry,
-        &mut raster_info,
-        pixel_fn,
-        background,
-        df,
-        pyfield,
-        pyby,
-    );
-
-    // construct coordinates
-    let (y_coords, x_coords) = raster_info.make_coordinates(py);
-
-    // to python
-    let pyret = ret.into_pyarray(py);
-    let pybands = PyList::new(py, band_names)?;
-    let pydims = PyList::new(py, vec!["bands", "y", "x"])?;
-
-    // build xarray dictionary
-    let xarray = build_xarray(py, pyret, pydims, x_coords, y_coords, pybands)?;
-    Ok(xarray)
+    // branch
+    match pydtype {
+        "uint8" => execute_rusterize::<u8>(
+            py,
+            geometry,
+            raster_info,
+            pypixel_fn,
+            pybackground,
+            df,
+            pyfield,
+            pyby,
+            pyburn,
+        ),
+        "uint16" => execute_rusterize::<u16>(
+            py,
+            geometry,
+            raster_info,
+            pypixel_fn,
+            pybackground,
+            df,
+            pyfield,
+            pyby,
+            pyburn,
+        ),
+        "uint32" => execute_rusterize::<u32>(
+            py,
+            geometry,
+            raster_info,
+            pypixel_fn,
+            pybackground,
+            df,
+            pyfield,
+            pyby,
+            pyburn,
+        ),
+        "uint64" => execute_rusterize::<u64>(
+            py,
+            geometry,
+            raster_info,
+            pypixel_fn,
+            pybackground,
+            df,
+            pyfield,
+            pyby,
+            pyburn,
+        ),
+        "int8" => execute_rusterize::<i8>(
+            py,
+            geometry,
+            raster_info,
+            pypixel_fn,
+            pybackground,
+            df,
+            pyfield,
+            pyby,
+            pyburn,
+        ),
+        "int16" => execute_rusterize::<i16>(
+            py,
+            geometry,
+            raster_info,
+            pypixel_fn,
+            pybackground,
+            df,
+            pyfield,
+            pyby,
+            pyburn,
+        ),
+        "int32" => execute_rusterize::<i32>(
+            py,
+            geometry,
+            raster_info,
+            pypixel_fn,
+            pybackground,
+            df,
+            pyfield,
+            pyby,
+            pyburn,
+        ),
+        "int64" => execute_rusterize::<i64>(
+            py,
+            geometry,
+            raster_info,
+            pypixel_fn,
+            pybackground,
+            df,
+            pyfield,
+            pyby,
+            pyburn,
+        ),
+        "float32" => execute_rusterize::<f32>(
+            py,
+            geometry,
+            raster_info,
+            pypixel_fn,
+            pybackground,
+            df,
+            pyfield,
+            pyby,
+            pyburn,
+        ),
+        "float64" => execute_rusterize::<f64>(
+            py,
+            geometry,
+            raster_info,
+            pypixel_fn,
+            pybackground,
+            df,
+            pyfield,
+            pyby,
+            pyburn,
+        ),
+        _ => unimplemented!(
+            "`dtype` must be a one of uint8, uint16, uint32, uint64, int8, int16, int32, int64, float32, float64"
+        ),
+    }
 }
 
 #[pymodule]
