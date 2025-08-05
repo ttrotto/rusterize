@@ -1,22 +1,29 @@
 /*
 Build dictionary for xarray construction.
-In some cases Python will build a xarray without copying the Rust array.
  */
-
-use numpy::{PyArray1, PyArray3};
+use crate::structs::raster::RasterInfo;
+use ndarray::Array3;
+use num_traits::Num;
+use numpy::{Element, IntoPyArray};
 use pyo3::{
     prelude::*,
     types::{PyDict, PyList},
 };
 
-pub fn build_xarray<'py>(
-    py: Python<'py>,
-    data: Bound<'py, PyArray3<f64>>,
-    dims: Bound<'py, PyList>,
-    x: Bound<'py, PyArray1<f64>>,
-    y: Bound<'py, PyArray1<f64>>,
-    bands: Bound<'py, PyList>,
-) -> PyResult<Bound<'py, PyDict>> {
+pub fn build_xarray<T>(
+    py: Python,
+    raster_info: RasterInfo,
+    ret: Array3<T>,
+    band_names: Vec<String>,
+) -> PyResult<Bound<PyDict>>
+where
+    T: Num + Element,
+{
+    let data = ret.into_pyarray(py);
+    let (y, x) = raster_info.make_coordinates(py);
+    let bands = PyList::new(py, band_names)?;
+    let dims = PyList::new(py, vec!["bands", "y", "x"])?;
+
     // dimensions
     let dim_x = PyDict::new(py);
     dim_x.set_item("dims", "x")?;

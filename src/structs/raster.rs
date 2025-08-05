@@ -3,6 +3,7 @@ Structure to contain information on raster data.
  */
 
 use geo::Rect;
+use num_traits::Num;
 use numpy::{
     IntoPyArray, PyArray1,
     ndarray::{Array, Array3},
@@ -71,7 +72,10 @@ impl RasterInfo {
         self.ymax = rect.max().y;
     }
 
-    pub fn build_raster(&self, bands: usize, background: f64) -> Array3<f64> {
+    pub fn build_raster<T>(&self, bands: usize, background: T) -> Array3<T>
+    where
+        T: Num + Copy,
+    {
         Array3::from_elem((bands, self.nrows, self.ncols), background)
     }
 

@@ -7,15 +7,51 @@ use std::cmp::Ordering;
 
 // collection of edges
 pub enum EdgeCollection {
+    Empty,
     PolyEdges(Vec<PolyEdge>),
     LineEdges(Vec<LineEdge>),
+    Mixed {
+        polyedges: Vec<PolyEdge>,
+        linedges: Vec<LineEdge>,
+    },
 }
 
 impl EdgeCollection {
-    pub fn is_empty(&self) -> bool {
+    pub fn add_polyedges(&mut self, new_polyedges: Vec<PolyEdge>) {
+        if new_polyedges.is_empty() {
+            return;
+        }
         match self {
-            EdgeCollection::PolyEdges(poly_edges) => poly_edges.is_empty(),
-            EdgeCollection::LineEdges(line_edges) => line_edges.is_empty(),
+            EdgeCollection::Empty => *self = EdgeCollection::PolyEdges(new_polyedges),
+            EdgeCollection::PolyEdges(polyedges) => polyedges.extend(new_polyedges),
+            EdgeCollection::LineEdges(linedges) => {
+                *self = {
+                    EdgeCollection::Mixed {
+                        polyedges: new_polyedges,
+                        linedges: std::mem::take(linedges),
+                    }
+                }
+            }
+            EdgeCollection::Mixed { polyedges, .. } => polyedges.extend(new_polyedges),
+        }
+    }
+
+    pub fn add_linedges(&mut self, new_linedges: Vec<LineEdge>) {
+        if new_linedges.is_empty() {
+            return;
+        }
+        match self {
+            EdgeCollection::Empty => *self = EdgeCollection::LineEdges(new_linedges),
+            EdgeCollection::PolyEdges(polyedges) => {
+                *self = {
+                    EdgeCollection::Mixed {
+                        polyedges: std::mem::take(polyedges),
+                        linedges: new_linedges,
+                    }
+                }
+            }
+            EdgeCollection::LineEdges(linedges) => linedges.extend(new_linedges),
+            EdgeCollection::Mixed { linedges, .. } => linedges.extend(new_linedges),
         }
     }
 }

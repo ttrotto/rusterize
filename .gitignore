@@ -36,5 +36,5 @@ tests/
 # README quarto stuff
 README_files
 
-# Other stuff
-_ROADMAP
+# uv
+uv.lock

@@ -8,7 +8,7 @@ description = "High performance rasterization tool for Python built in Rust"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
-keywords = ["fast", "raster", "geopandas", "xarray"]
+keywords = ["rust", "fast", "raster", "geometry", "geopandas", "xarray"]
 author = {name = "Tommaso Trotto", email = "ttrotto@mail.ubc.ca"}
 classifiers = [
     "License :: OSI Approved :: MIT License",
