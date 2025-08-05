@@ -19,7 +19,7 @@ use crate::{
     rusterize_impl::rusterize_impl,
 };
 use geo_types::Geometry;
-use num_traits::{Num, NumCast};
+use num_traits::Num;
 use numpy::Element;
 use polars::prelude::DataFrame;
 use pyo3::{
@@ -40,15 +40,17 @@ fn execute_rusterize<'py, T>(
     df: Option<DataFrame>,
     pyfield: Option<&str>,
     pyby: Option<&str>,
-    pyburn: Option<f64>,
+    pyburn: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyDict>>
 where
-    T: Num + NumCast + Copy + PixelOps + PolarsHandler + FromPyObject<'py> + Element + Default,
+    T: Num + Copy + PixelOps + PolarsHandler + FromPyObject<'py> + Element + Default,
 {
     let background = pybackground
         .and_then(|inner| inner.extract::<T>().ok())
         .unwrap_or_default();
-    let burn = pyburn.and_then(|v| T::from(v)).unwrap_or(T::one());
+    let burn = pyburn
+        .and_then(|inner| inner.extract::<T>().ok())
+        .unwrap_or(T::one());
     let pixel_fn = set_pixel_function::<T>(pypixel_fn);
 
     // rusterize
@@ -80,7 +82,7 @@ fn rusterize_py<'py>(
     pydf: Option<PyDataFrame>,
     pyfield: Option<&str>,
     pyby: Option<&str>,
-    pyburn: Option<f64>,
+    pyburn: Option<&Bound<'py, PyAny>>,
     pybackground: Option<&Bound<'py, PyAny>>,
     pydtype: &str,
 ) -> PyResult<Bound<'py, PyDict>> {
