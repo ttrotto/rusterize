@@ -3,7 +3,7 @@ name: CI
 on:
   release:
     types: [published]
-  
+
 permissions:
   contents: read
 
@@ -108,8 +108,8 @@ jobs:
         with:
           python-version: 3.x
           architecture: ${{ matrix.platform.target }}
-      - name: Store RUSTFLAGS in ENV for x86_64
-        if: matrix.platform.target == 'x86_64'
+      - name: Store RUSTFLAGS in ENV for x64
+        if: matrix.platform.target == 'x64'
         id: features
         shell: bash
         run: |
@@ -132,7 +132,6 @@ jobs:
         with:
           name: wheels-windows-${{ matrix.platform.target }}
           path: dist
-
 
   macos:
     runs-on: ${{ matrix.platform.runner }}
@@ -187,4 +186,24 @@ jobs:
         with:
           name: wheels-sdist
           path: dist
+
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs: [linux, musllinux, windows, macos, sdist]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/rusterize
+    permissions:
+      id-token: write
+    steps:
+      - name: Download sdists and wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
 
