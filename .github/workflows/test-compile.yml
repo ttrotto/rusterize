@@ -33,18 +33,13 @@ jobs:
         run: |
           FEATURES=+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe
           echo "RUSTFLAGS=-C target-feature=$FEATURES" >> $GITHUB_ENV
-      - name: Fix problem with ring crate compilation
-        if: matrix.platform.target == 'aarch64'
-        run: |
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-          echo "CC=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
           args: --profile dist-release --out dist --find-interpreter
           sccache: "true"
-          manylinux: auto
+          manylinux: manylinux_2_28
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -79,7 +74,7 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: --profile dist-release --out dist --find-interpreter
           sccache: "true"
-          manylinux: auto
+          manylinux: manylinux_2_28
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
