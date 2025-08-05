@@ -79,7 +79,7 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: --profile dist-release --out dist --find-interpreter
           sccache: "true"
-          manylinux: musllinux_1_2
+          manylinux: auto
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -93,9 +93,7 @@ jobs:
       matrix:
         platform:
           - runner: windows-latest
-            target: x86_64
-          - runner: windows-latest
-            target: aarch64
+            target: x64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
