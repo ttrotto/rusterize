@@ -109,9 +109,10 @@ jobs:
           architecture: ${{ matrix.platform.target }}
       - name: Store RUSTFLAGS in ENV
         id: features
+        shell: pwsh
         run: |
-          FEATURES=+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe
-          echo "features=$FEATURES" >> $GITHUB_OUTPUT
+          $features = "+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe"
+          "features=$features" >> $env:GITHUB_OUTPUT
       - name: Set RUSTFLAGS for x86_64
         if: matrix.platform.target == 'x86_64'
         env:
@@ -129,6 +130,7 @@ jobs:
         with:
           name: wheels-windows-${{ matrix.platform.target }}
           path: dist
+
 
   macos:
     runs-on: ${{ matrix.platform.runner }}
