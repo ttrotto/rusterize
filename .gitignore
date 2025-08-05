@@ -35,3 +35,6 @@ tests/
 
 # README quarto stuff
 README_files
+
+# uv stuff
+uv.lock
