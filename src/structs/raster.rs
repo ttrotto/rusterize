@@ -2,15 +2,16 @@
 Structure to contain information on raster data.
  */
 
-use dict_derive::FromPyObject;
 use geo::Rect;
+use num_traits::Num;
 use numpy::{
-    ndarray::{Array, Array3},
     IntoPyArray, PyArray1,
+    ndarray::{Array, Array3},
 };
 use pyo3::prelude::*;
 
 #[derive(FromPyObject)]
+#[pyo3(from_item_all)]
 pub struct RasterInfo {
     pub nrows: usize,
     pub ncols: usize,
@@ -71,7 +72,10 @@ impl RasterInfo {
         self.ymax = rect.max().y;
     }
 
-    pub fn build_raster(&self, bands: usize, background: f64) -> Array3<f64> {
+    pub fn build_raster<T>(&self, bands: usize, background: T) -> Array3<T>
+    where
+        T: Num + Copy,
+    {
         Array3::from_elem((bands, self.nrows, self.ncols), background)
     }
 
@@ -85,13 +89,13 @@ impl RasterInfo {
             self.ymax - self.nrows as f64 * self.yres,
             -self.yres,
         )
-        .into_pyarray_bound(py);
+        .into_pyarray(py);
         let x_coords = Array::range(
             self.xmin + self.xres / 2.0,
             self.xmin + self.ncols as f64 * self.xres,
             self.xres,
         )
-        .into_pyarray_bound(py);
+        .into_pyarray(py);
         (y_coords, x_coords)
     }
 }

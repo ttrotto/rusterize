@@ -1,60 +1,67 @@
 /*
 Build structured edge collection from a single (multi)polygon or (multi)linestring.
-If multi, then iterates over each inner geometry.
+If multi or GeometryCollection, then iterates over each inner geometry.
 From the Geometry, the values are extracted and reconstructed as an array of nodes.
  */
 
-use crate::structs::edge::{EdgeCollection, LineEdge, PolyEdge};
-use crate::structs::raster::RasterInfo;
+use crate::structs::{
+    edge::{EdgeCollection, LineEdge, PolyEdge},
+    raster::RasterInfo,
+};
 
 use geo::prelude::*;
 use geo_types::{Geometry, LineString};
 use numpy::ndarray::Array2;
 
 pub fn build_edges(geom: &Geometry, raster_info: &RasterInfo) -> EdgeCollection {
-    match geom {
-        // polygon
-        Geometry::Polygon(polygon) => {
-            let mut polyedges: Vec<PolyEdge> = Vec::new();
-            // handle exterior polygon
-            process_ring(&mut polyedges, polygon.exterior(), raster_info);
-            // handle interior polygons (if any)
-            for hole in polygon.interiors() {
-                process_ring(&mut polyedges, hole, raster_info);
+    let mut edges = EdgeCollection::Empty;
+    let mut stack = vec![geom];
+
+    while let Some(current_geom) = stack.pop() {
+        match current_geom {
+            Geometry::GeometryCollection(collection) => {
+                // push geometries back to stack
+                for inner in collection {
+                    stack.push(inner);
+                }
             }
-            EdgeCollection::PolyEdges(polyedges)
-        }
-        // multipolygon - iterate over each inner polygon
-        Geometry::MultiPolygon(multipolygon) => {
-            let mut polyedges: Vec<PolyEdge> = Vec::new();
-            for polygon in multipolygon {
-                // handle exterior polygon
+            Geometry::Polygon(polygon) => {
+                let mut polyedges: Vec<PolyEdge> = Vec::new();
                 process_ring(&mut polyedges, polygon.exterior(), raster_info);
-                // handle interior polygons (if any)
+                // process holes in geometry
                 for hole in polygon.interiors() {
                     process_ring(&mut polyedges, hole, raster_info);
                 }
+                edges.add_polyedges(polyedges);
             }
-            EdgeCollection::PolyEdges(polyedges)
-        }
-        // linestring
-        Geometry::LineString(line) => {
-            let mut linedges: Vec<LineEdge> = Vec::new();
-            // handle single segment
-            process_line(&mut linedges, line, raster_info);
-            EdgeCollection::LineEdges(linedges)
-        }
-        // multilinestring - iterate over each inner linestring
-        Geometry::MultiLineString(multiline) => {
-            let mut linedges: Vec<LineEdge> = Vec::new();
-            // handle multiple segments
-            for line in multiline {
+            Geometry::MultiPolygon(multipolygon) => {
+                let mut polyedges: Vec<PolyEdge> = Vec::new();
+                for polygon in multipolygon {
+                    process_ring(&mut polyedges, polygon.exterior(), raster_info);
+                    // process holes in geometry
+                    for hole in polygon.interiors() {
+                        process_ring(&mut polyedges, hole, raster_info);
+                    }
+                }
+                edges.add_polyedges(polyedges);
+            }
+            Geometry::LineString(line) => {
+                let mut linedges: Vec<LineEdge> = Vec::new();
                 process_line(&mut linedges, line, raster_info);
+                edges.add_linedges(linedges);
             }
-            EdgeCollection::LineEdges(linedges)
+            Geometry::MultiLineString(multiline) => {
+                let mut linedges: Vec<LineEdge> = Vec::new();
+                for line in multiline {
+                    process_line(&mut linedges, line, raster_info);
+                }
+                edges.add_linedges(linedges);
+            }
+            _ => (),
         }
-        _ => unimplemented!("Unsupported geometry type."),
     }
+
+    edges
 }
 
 fn build_node_array(line: &LineString) -> Array2<f64> {

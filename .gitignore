@@ -36,5 +36,9 @@ tests/
 # README quarto stuff
 README_files
 
+<<<<<<< HEAD
 # uv stuff
+=======
+# uv
+>>>>>>> caa7e768e9026d3666b20a660792b4d17e200102
 uv.lock

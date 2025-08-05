@@ -16,14 +16,10 @@ jobs:
         platform:
           - runner: ubuntu-22.04
             target: x86_64
-          # - runner: ubuntu-22.04
-          #   target: x86
           - runner: ubuntu-22.04
             target: aarch64
           - runner: ubuntu-22.04
             target: armv7
-          # - runner: ubuntu-22.04
-          #  target: s390x
           - runner: ubuntu-22.04
             target: ppc64le
     steps:
@@ -31,13 +27,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
+      - name: Store RUSTFLAGS in ENV for x86_64
+        if: matrix.platform.target == 'x86_64'
+        id: features
+        run: |
+          FEATURES=+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe
+          echo "features=$FEATURES" >> $GITHUB_OUTPUT
+      - name: Set RUSTFLAGS for x86_64
+        if: matrix.platform.target == 'x86_64'
+        env:
+          FEATURES: ${{ steps.features.outputs.features }}
+        run: |
+          echo "RUSTFLAGS=-C target-feature=$FEATURES" >> $GITHUB_ENV
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
           args: --profile dist-release --out dist --find-interpreter
           sccache: "true"
-          manylinux: auto
+          manylinux: manylinux_2_28
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -52,8 +60,6 @@ jobs:
         platform:
           - runner: ubuntu-22.04
             target: x86_64
-          # - runner: ubuntu-22.04
-          #   target: x86
           - runner: ubuntu-22.04
             target: aarch64
           - runner: ubuntu-22.04
@@ -63,13 +69,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
+      - name: Store RUSTFLAGS in ENV for x86_64
+        if: matrix.platform.target == 'x86_64'
+        id: features
+        run: |
+          FEATURES=+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe
+          echo "features=$FEATURES" >> $GITHUB_OUTPUT
+      - name: Set RUSTFLAGS for x86_64
+        if: matrix.platform.target == 'x86_64'
+        env:
+          FEATURES: ${{ steps.features.outputs.features }}
+        run: |
+          echo "RUSTFLAGS=-C target-feature=$FEATURES" >> $GITHUB_ENV
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
           args: --profile dist-release --out dist --find-interpreter
           sccache: "true"
-          manylinux: musllinux_1_2
+          manylinux: manylinux_2_28
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -84,14 +102,25 @@ jobs:
         platform:
           - runner: windows-latest
             target: x64
-          # - runner: windows-latest
-          #   target: x86
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
           architecture: ${{ matrix.platform.target }}
+      - name: Store RUSTFLAGS in ENV for x86_64
+        if: matrix.platform.target == 'x86_64'
+        id: features
+        shell: bash
+        run: |
+          FEATURES=+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe
+          echo "features=$FEATURES" >> $GITHUB_OUTPUT
+      - name: Set RUSTFLAGS for x64
+        if: matrix.platform.target == 'x64'
+        env:
+          FEATURES: ${{ steps.features.outputs.features }}
+        run: |
+          echo "RUSTFLAGS=-C target-feature=$FEATURES" >> $GITHUB_ENV
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -103,6 +132,7 @@ jobs:
         with:
           name: wheels-windows-${{ matrix.platform.target }}
           path: dist
+
 
   macos:
     runs-on: ${{ matrix.platform.runner }}
@@ -119,6 +149,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
+      - name: Store RUSTFLAGS in ENV for x86_64
+        if: matrix.platform.target == 'x86_64'
+        id: features
+        run: |
+          FEATURES=+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe
+          echo "features=$FEATURES" >> $GITHUB_OUTPUT
+      - name: Set RUSTFLAGS for x86_64
+        if: matrix.platform.target == 'x86_64'
+        env:
+          FEATURES: ${{ steps.features.outputs.features }}
+        run: |
+          echo "RUSTFLAGS=-C target-feature=$FEATURES" >> $GITHUB_ENV
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -146,22 +188,3 @@ jobs:
           name: wheels-sdist
           path: dist
 
-  publish-to-pypi:
-    name: Publish to PyPI
-    needs: [ linux, musllinux, windows, macos, sdist ]
-    runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/rusterize
-    permissions:
-      id-token: write
-    steps:
-      - name: Download sdists and wheels
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          verbose: true

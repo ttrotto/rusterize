@@ -1,12 +1,12 @@
 /*
 Check unsupported geometries and adjust bounding box if necessary.
  */
+
 use crate::structs::raster::RasterInfo;
 use geo::BoundingRect;
-use geo_types::{coord, Geometry, Rect};
+use geo_types::{Geometry, Rect, coord};
 use polars::prelude::*;
 use pyo3::prelude::*;
-use pyo3::types::PyModule;
 
 // https://github.com/georust/geo/blob/main/geo/src/algorithm/bounding_rect.rs#L186
 fn bounding_rect(geometry: &[Geometry]) -> Option<Rect> {
@@ -43,7 +43,7 @@ pub fn validate_geometries(
 ) -> (Vec<Geometry>, Option<DataFrame>) {
     // check if any bad geometry
     let mut good_geom: Vec<bool> = Vec::with_capacity(geometry.len());
-    let mut has_invalid = false;
+    let mut has_invalid = 0u32;
     for geom in &geometry {
         let valid = matches!(
             geom,
@@ -51,21 +51,24 @@ pub fn validate_geometries(
                 | &Geometry::MultiPolygon(_)
                 | &Geometry::LineString(_)
                 | &Geometry::MultiLineString(_)
+                | &Geometry::GeometryCollection(_)
         );
         if !valid {
-            has_invalid = true;
+            has_invalid += 1;
         }
         good_geom.push(valid);
     }
 
-    if has_invalid {
+    if has_invalid > 0 {
         // issue warning if bad geometries
         Python::with_gil(|py| {
-            let warnings = PyModule::import_bound(py, "warnings").unwrap();
+            let warnings = Python::import(py, "warnings").unwrap();
             warnings
                 .call_method1(
                     "warn",
-                    ("Detected unsupported geometries, will be dropped.",),
+                    (format!(
+                        "Detected {has_invalid} unsupported geometries, will be dropped."
+                    ),),
                 )
                 .unwrap();
         });
@@ -73,6 +76,11 @@ pub fn validate_geometries(
         // retain only good geometries
         let mut iter = good_geom.iter();
         geometry.retain(|_| *iter.next().unwrap());
+
+        // early stop if no supported geometries are left
+        if geometry.is_empty() {
+            panic!("There are no supported geometries left to rasterize")
+        }
 
         // retain dataframe rows accordingly
         if let Some(inner_df) = df {
