@@ -36,7 +36,7 @@ jobs:
       - name: Set RUSTFLAGS for x86_64
         if: matrix.platform.target == 'x86_64'
         env:
-	  FEATURES: ${{ steps.features.outputs.features }}
+          FEATURES: ${{ steps.features.outputs.features }}
         run: |
           echo "RUSTFLAGS=-C target-feature=$FEATURES" >> $GITHUB_ENV
       - name: Build wheels
@@ -77,7 +77,7 @@ jobs:
       - name: Set RUSTFLAGS for x86_64
         if: matrix.platform.target == 'x86_64'
         env:
-	  FEATURES: ${{ steps.features.outputs.features }}
+          FEATURES: ${{ steps.features.outputs.features }}
         run: |
           echo "RUSTFLAGS=-C target-feature=$FEATURES" >> $GITHUB_ENV
       - name: Build wheels
@@ -117,7 +117,7 @@ jobs:
       - name: Set RUSTFLAGS for x86_64
         if: matrix.platform.target == 'x86_64'
         env:
-	  FEATURES: ${{ steps.features.outputs.features }}
+          FEATURES: ${{ steps.features.outputs.features }}
         run: |
           echo "RUSTFLAGS=-C target-feature=$FEATURES" >> $GITHUB_ENV
       - name: Build wheels
@@ -155,7 +155,7 @@ jobs:
       - name: Set RUSTFLAGS for x86_64
         if: matrix.platform.target == 'x86_64'
         env:
-	  FEATURES: ${{ steps.features.outputs.features }}
+          FEATURES: ${{ steps.features.outputs.features }}
         run: |
           echo "RUSTFLAGS=-C target-feature=$FEATURES" >> $GITHUB_ENV
       - name: Build wheels
