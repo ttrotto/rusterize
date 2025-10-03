@@ -4,13 +4,13 @@ High performance rasterization tool for Python built in Rust. This
 repository stems from the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package built in C++
 for R and ports parts of the logics into Python with a Rust backend, in addition to some useful improvements (see [API](#API)).
 
-**rusterize** is designed to work on *(multi)polygons* and *(multi)linestrings*, even when they are nested inside complex geometry collections. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/). 
+**rusterize** is designed to work on _(multi)polygons_ and _(multi)linestrings_, even when they are nested inside complex geometry collections. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/).
 
 # Installation
 
 Install the current version with pip:
 
-``` shell
+```shell
 pip install rusterize
 ```
 
@@ -22,7 +22,7 @@ package. For this to work, you’ll need to have [Rust](https://www.rust-lang.or
 [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 installed.
 
-``` shell
+```shell
 # Clone repo
 git clone https://github.com/<username>/rusterize.git
 cd rusterize
@@ -41,25 +41,29 @@ maturin develop --profile dist-release
 
 This package has a simple API:
 
-``` python
+```python
 from rusterize import rusterize
 
 # gdf = <import/modify dataframe as needed>
 
 # rusterize
-rusterize(gdf,
-          res=(30, 30),
-          out_shape=(10, 10)
-          extent=(0, 10, 10, 20)
-          field="field",
-          by="by",
-          burn=None,
-          fun="sum",
-          background=0,
-          dtype="uint8") 
+rusterize(
+    gdf,
+    like=None,
+    res=(30, 30),
+    out_shape=(10, 10),
+    extent=(0, 10, 10, 20),
+    field="field",
+    by="by",
+    burn=None,
+    fun="sum",
+    background=0,
+    dtype="uint8"
+)
 ```
 
 - `gdf`: geopandas dataframe to rasterize
+- `like`: xr.DataArray to use as template for `res`, `out_shape`, and `extent`. Mutually exclusive with these parameters (default: `None`)
 - `res`: (xres, yres) for desired resolution (default: `None`)
 - `out_shape`: (nrows, ncols) for desired output shape (default: `None`)
 - `extent`: (xmin, ymin, xmax, ymax) for desired output extent (default: `None`)
@@ -82,7 +86,7 @@ shape, the extent is maintained. This mimics the logics of `gdal_rasterize`.
 returns a dictionary that is converted to a xarray on the Python side
 for simpliicty.
 
-``` python
+```python
 from rusterize import rusterize
 import geopandas as gpd
 from shapely import wkt
@@ -123,7 +127,7 @@ plt.show()
 
 **rusterize** is fast! Let’s try it on small and large datasets.
 
-``` python
+```python
 from rusterize import rusterize
 import geopandas as gpd
 import requests
@@ -137,7 +141,7 @@ response = requests.get(url)
 # unzip
 with zipfile.ZipFile(BytesIO(response.content), 'r') as zip_ref:
     zip_ref.extractall()
-    
+
 # read
 gdf_large = gpd.read_file("Mammals_Terrestrial/Mammals_Terrestrial.shp")
 
@@ -147,12 +151,13 @@ gdf_small = gdf_large.iloc[:1000, :]
 # rusterize at 1/6 degree resolution
 def test_large(benchmark):
   benchmark(rusterize, gdf_large, res=(1/6, 1/6), fun="sum")
-   
+
 def test_small(benchmark):
-  benchmark(rusterize, gdf_small, res=(1/6, 1/6), fun="sum")  
+  benchmark(rusterize, gdf_small, res=(1/6, 1/6), fun="sum")
 ```
 
 Then you can run it with [pytest](https://docs.pytest.org/en/stable/) and [pytest-benchmark](https://pytest-benchmark.readthedocs.io/en/stable/):
+
 ```
 pytest <python file> --benchmark-min-rounds=20 --benchmark-time-unit='s'
 
@@ -163,8 +168,10 @@ rusterize_small       0.0791    0.0899   0.0812  0.0027   0.0803  0.0020       2
 rusterize_large     1.379545    1.4474   1.4006  0.0178   1.3966  0.0214       5;1   0.7140     20          1
 -------------------------------------------------------------------------------------------------------------
 ```
+
 And fasterize:
-``` r
+
+```r
 library(sf)
 library(raster)
 library(fasterize)
@@ -183,13 +190,16 @@ microbenchmark(
   unit='s'
 )
 ```
+
 ```
 Unit: seconds
             expr       min         lq       mean     median        uq        max neval
  fasterize_small 0.4741043  0.4926114  0.5191707  0.5193289  0.536741  0.5859029    20
  fasterize_large 9.2199426 10.3595465 10.6653139 10.5369429 11.025771 11.7944567    20
 ```
+
 And on an even larger datasets? Here we use a layer from the province of Quebec, Canada representing ~2M polygons of forest stands, rasterized at 30 meters (20 rounds) with no field value and pixel function `any`. The comparison with `gdal_rasterize` was run with `hyperfine --runs 20 "gdal_rasterize -tr 30 30 -burn 1 <data_in> <data_out>"`.
+
 ```
 # rusterize
 --------------------------------------------- benchmark: 1 tests --------------------------------------------
@@ -207,7 +217,9 @@ Unit: seconds
 Time (mean ± σ):      5.495 s ±  0.038 s    [User: 4.268 s, System: 1.225 s]
 Range (min … max):    5.452 s …  5.623 s    20 runs
 ```
+
 In terms of (multi)line rasterization speed, here's a benchmark against `gdal_rasterize` using a layer from the province of Quebec, Canada, representing a subset of the road network for a total of ~535K multilinestrings.
+
 ```
 # rusterize
 --------------------------------------------- benchmark: 1 tests --------------------------------------------
@@ -220,11 +232,13 @@ test                  4.5272   5.9488   4.7171  0.3236   4.6360  0.1680       2;
 Time (mean ± σ):      8.719 s ±  0.063 s    [User: 3.782 s, System: 4.917 s]
 Range (min … max):    8.658 s …  8.874 s    20 runs
 ```
+
 # Comparison with other tools
 
 While **rusterize** is fast, there are other fast alternatives out there, including `GDAL`, `rasterio` and `geocube`. However, **rusterize** allows for a seamless, Rust-native processing with similar or lower memory footprint that doesn't require you to leave Python, and returns the geoinformation you need for downstream processing with ample control over resolution, shape, extent, and data type.
 
 The following is a time comparison on a single run on the same forest stands dataset used earlier.
+
 ```
 rusterize:    5.9 sec
 rasterio:     68  sec (but no spatial information)
