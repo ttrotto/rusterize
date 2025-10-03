@@ -1,14 +1,15 @@
 from __future__ import annotations
-import importlib.metadata
 
+import importlib.metadata
 from types import NoneType
 from typing import List, Tuple
 
 import numpy as np
 import polars as pl
-from geopandas import GeoDataFrame
 import rioxarray
+from geopandas import GeoDataFrame
 from xarray import DataArray
+
 from .rusterize import _rusterize
 
 __version__ = importlib.metadata.version("rusterize")
@@ -16,6 +17,7 @@ __version__ = importlib.metadata.version("rusterize")
 
 def rusterize(
     gdf: GeoDataFrame,
+    like: DataArray | None = None,
     res: Tuple | List | None = None,
     out_shape: Tuple | List | None = None,
     extent: Tuple | List | None = None,
@@ -31,6 +33,7 @@ def rusterize(
 
     Args:
         :param gdf: geopandas dataframe to rasterize.
+        :param like: array to use as blueprint for spatial matching (resolution, shape, extent). Mutually exlusive with res, out_shape, and extent.
         :param res: (xres, yres) for rasterized data.
         :param out_shape: (nrows, ncols) for regularized output shape.
         :param extent: (xmin, xmax, ymin, ymax) for regularized extent.
@@ -46,17 +49,20 @@ def rusterize(
 
     Notes:
         When any of `res`, `out_shape`, or `extent` is not provided, it is inferred from the other arguments when applicable.
+        If `like` is specified, `res`, `out_shape`, and `extent` are inferred from the `like` DataArray.
         Unless `extent` is specified, a half-pixel buffer is applied to avoid missing points on the border.
         The logics dictating the final spatial properties of the rasterized geometries follow those of GDAL.
-        
+
         If `field` is not in `gdf`, then a default `burn` value of 1 is rasterized.
-        
+
         A `None` value for `dtype` corresponds to the default of that dtype. An illegal value for a dtype will be replaced with the default of
         that dtype. For example, a `background=np.nan` for `dtype="uint8"` will become `background=0`, where `0` is the default for `uint8`.
     """
     # type checks
     if not isinstance(gdf, GeoDataFrame):
         raise TypeError("`gdf` must be a geopandas dataframe.")
+    if not isinstance(like, (DataArray, NoneType)):
+        raise TypeError("`'ike' must be a xarray.DataArray")
     if not isinstance(res, (tuple, list, NoneType)):
         raise TypeError("`resolution` must be a tuple or list of (x, y).")
     if not isinstance(out_shape, (tuple, list, NoneType)):
@@ -74,26 +80,39 @@ def rusterize(
     if not isinstance(background, (int, float, NoneType)):
         raise TypeError("`background` must be integer, float, or None.")
     if not isinstance(dtype, str):
-        raise TypeError("`dtype` must be a one of uint8, uint16, uint32, uint64, int8, int16, int32, int64, float32, float64")
+        raise TypeError(
+            "`dtype` must be a one of uint8, uint16, uint32, uint64, int8, int16, int32, int64, float32, float64"
+        )
 
-    # value checks
-    if not res and not out_shape and not extent:
-        raise ValueError("One of `res`, `out_shape`, or `extent` must be provided.")
-    if extent and not res and not out_shape:
-        raise ValueError("Must also specify `res` or `out_shape` with extent.")
-    if res and (len(res) != 2 or any(r <= 0 for r in res) or any(not isinstance(r, (int, float)) for r in res)):
-        raise ValueError("Resolution must be 2 positive numbers.")
-    if out_shape and (len(out_shape) != 2 or any(s <= 0 for s in out_shape) or any(not isinstance(s, int) for s in out_shape)):
-        raise ValueError("Output shape must be 2 positive integers.")
-    if extent and len(extent) != 4:
-        raise ValueError("Extent must be 4 numbers (xmin, ymin, xmax, ymax).")
+    # value checks and defaults
     if field and burn:
         raise ValueError("Only one of `field` or `burn` can be specified.")
+    if like is not None:
+        if any((res, out_shape, extent)):
+            raise ValueError("`like` is mutually exclusive with `res`, `out_shape`, and `extent`.")
+        else:
+            affine = like.rio.transform()
+            _res = (affine.a, abs(affine.e))
+            _shape = like.squeeze().shape
+            _bounds, _has_extent = like.rio.bounds(), True
+    else:
+        if not res and not out_shape and not extent:
+            raise ValueError("One of `res`, `out_shape`, or `extent` must be provided.")
+        if extent and not res and not out_shape:
+            raise ValueError("Must also specify `res` or `out_shape` with extent.")
+        if res and (len(res) != 2 or any(r <= 0 for r in res) or any(not isinstance(r, (int, float)) for r in res)):
+            raise ValueError("`res` must be 2 positive numbers.")
+        if out_shape and (
+            len(out_shape) != 2 or any(s <= 0 for s in out_shape) or any(not isinstance(s, int) for s in out_shape)
+        ):
+            raise ValueError("`out_shape` must be 2 positive integers.")
+        if extent and len(extent) != 4:
+            raise ValueError("`extent` must be a tuple or list of (xmin, ymin, xmax, ymax).")
 
-    # defaults
-    _res = res if res else (0, 0)
-    _shape = out_shape if out_shape else (0, 0)
-    (_bounds, _has_extent) = (extent, True) if extent else (gdf.total_bounds, False)
+        # defaults
+        _res = res if res else (0, 0)
+        _shape = out_shape if out_shape else (0, 0)
+        (_bounds, _has_extent) = (extent, True) if extent else (gdf.total_bounds, False)
 
     # RasterInfo
     raster_info = {
@@ -113,7 +132,7 @@ def rusterize(
     try:
         df = pl.from_pandas(gdf[cols]) if cols else None
     except KeyError as e:
-        raise KeyError("Column not found in GeoDataFrame") from e
+        raise KeyError("Column not found in GeoDataFrame.") from e
 
     # rusterize
     r = _rusterize(gdf.geometry, raster_info, fun, df, field, by, burn, background, dtype)
