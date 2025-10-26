@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 import rioxarray
 from geopandas import GeoDataFrame
-from xarray import DataArray
+from xarray import DataArray, Dataset
 
 from .rusterize import _rusterize
 
@@ -17,7 +17,7 @@ __version__ = importlib.metadata.version("rusterize")
 
 def rusterize(
     gdf: GeoDataFrame,
-    like: DataArray | None = None,
+    like: DataArray | Dataset | None = None,
     res: Tuple | List | None = None,
     out_shape: Tuple | List | None = None,
     extent: Tuple | List | None = None,
@@ -61,8 +61,8 @@ def rusterize(
     # type checks
     if not isinstance(gdf, GeoDataFrame):
         raise TypeError("`gdf` must be a geopandas dataframe.")
-    if not isinstance(like, (DataArray, NoneType)):
-        raise TypeError("`'ike' must be a xarray.DataArray")
+    if not isinstance(like, (DataArray, Dataset, NoneType)):
+        raise TypeError("`like' must be a xarray.DataArray or xarray.Dataset")
     if not isinstance(res, (tuple, list, NoneType)):
         raise TypeError("`resolution` must be a tuple or list of (x, y).")
     if not isinstance(out_shape, (tuple, list, NoneType)):
