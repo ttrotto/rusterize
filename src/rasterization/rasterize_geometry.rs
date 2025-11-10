@@ -1,12 +1,10 @@
-/*
-Rasterize a single (multi)polygon or (multi)linestring.
- */
+/* Rasterize a single (multi)polygon or (multi)linestring */
 
 use crate::{
-    edge_collection,
-    pixel_functions::PixelFn,
-    structs::{
+    encoding::writers::PixelWriter,
+    geo::{
         edge::{EdgeCollection, LineEdge, PolyEdge, less_by_x, less_by_ystart},
+        edge_collection,
         raster::RasterInfo,
     },
 };
@@ -14,17 +12,18 @@ use crate::{
 use edge_collection::build_edges;
 use geo_types::Geometry;
 use num_traits::Num;
-use numpy::ndarray::ArrayViewMut2;
 use rayon::prelude::*;
 
-pub fn rasterize<T: Num>(
+pub fn rasterize_geometry<T, W>(
     raster_info: &RasterInfo,
     geom: &Geometry,
-    field_value: &T,
-    ndarray: &mut ArrayViewMut2<T>,
-    pxfn: &PixelFn<T>,
-    background: &T,
-) {
+    field_value: T,
+    writer: &mut W,
+    background: T,
+) where
+    T: Num + Copy,
+    W: PixelWriter<T>,
+{
     // build edge collection
     let edges = build_edges(geom, raster_info);
 
@@ -32,43 +31,31 @@ pub fn rasterize<T: Num>(
         // early return if no edges
         EdgeCollection::Empty => (),
         EdgeCollection::PolyEdges(polyedges) => {
-            rasterize_polygon(
-                raster_info,
-                polyedges,
-                field_value,
-                ndarray,
-                pxfn,
-                background,
-            );
+            rasterize_polygon(raster_info, polyedges, field_value, writer, background);
         }
         EdgeCollection::LineEdges(linedges) => {
-            rasterize_line(linedges, field_value, ndarray, pxfn, background);
+            rasterize_line(linedges, field_value, writer, background);
         }
         EdgeCollection::Mixed {
             polyedges,
             linedges,
         } => {
-            rasterize_polygon(
-                raster_info,
-                polyedges,
-                field_value,
-                ndarray,
-                pxfn,
-                background,
-            );
-            rasterize_line(linedges, field_value, ndarray, pxfn, background);
+            rasterize_polygon(raster_info, polyedges, field_value, writer, background);
+            rasterize_line(linedges, field_value, writer, background);
         }
     }
 }
 
-fn rasterize_polygon<T: Num>(
+fn rasterize_polygon<T, W>(
     raster_info: &RasterInfo,
     mut polyedges: Vec<PolyEdge>,
-    field_value: &T,
-    ndarray: &mut ArrayViewMut2<T>,
-    pxfn: &PixelFn<T>,
-    background: &T,
-) {
+    field_value: T,
+    writer: &mut W,
+    background: T,
+) where
+    T: Num + Copy,
+    W: PixelWriter<T>,
+{
     // sort edges
     polyedges.par_sort_by(less_by_ystart);
 
@@ -98,7 +85,7 @@ fn rasterize_polygon<T: Num>(
 
             // fill the pixels between xstart and xend
             for xpix in xstart..xend {
-                pxfn(ndarray, yline, xpix, field_value, background);
+                writer.write(yline, xpix, field_value, background);
             }
         }
         yline += 1;
@@ -116,20 +103,18 @@ fn rasterize_polygon<T: Num>(
     }
 }
 
-fn rasterize_line<T: Num>(
-    mut linedges: Vec<LineEdge>,
-    field_value: &T,
-    ndarray: &mut ArrayViewMut2<T>,
-    pxfn: &PixelFn<T>,
-    background: &T,
-) {
+fn rasterize_line<T, W>(mut linedges: Vec<LineEdge>, field_value: T, writer: &mut W, background: T)
+where
+    T: Num + Copy,
+    W: PixelWriter<T>,
+{
     let last_idx = linedges.len() - 1;
     for (idx, edge) in linedges.iter_mut().enumerate() {
         // rasterize all pixels except very last
         while edge.ix0 != edge.ix1 || edge.iy0 != edge.iy1 {
             let ix0 = edge.ix0 as usize;
             let iy0 = edge.iy0 as usize;
-            pxfn(ndarray, iy0, ix0, field_value, background);
+            writer.write(iy0, ix0, field_value, background);
 
             // update the error term and coordinates
             let e2 = 2 * edge.err;
@@ -147,7 +132,7 @@ fn rasterize_line<T: Num>(
         if idx == last_idx && !edge.is_closed {
             let ix0 = edge.ix0 as usize;
             let iy0 = edge.iy0 as usize;
-            pxfn(ndarray, iy0, ix0, field_value, background);
+            writer.write(iy0, ix0, field_value, background);
         }
     }
 }
