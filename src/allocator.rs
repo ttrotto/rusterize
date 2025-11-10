@@ -1,6 +1,4 @@
-/*
-OS-dependent memory allocator for better performance.
- */
+/* OS-dependent memory allocator for better performance */
 
 #[cfg(not(target_family = "unix"))]
 use mimalloc::MiMalloc;
