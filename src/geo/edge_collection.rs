@@ -4,7 +4,7 @@ If multi or GeometryCollection, then iterates over each inner geometry.
 From the Geometry, the values are extracted and reconstructed as an array of nodes.
  */
 
-use crate::structs::{
+use crate::geo::{
     edge::{EdgeCollection, LineEdge, PolyEdge},
     raster::RasterInfo,
 };

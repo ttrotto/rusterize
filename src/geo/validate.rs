@@ -1,8 +1,6 @@
-/*
-Check unsupported geometries and adjust bounding box if necessary.
- */
+/* Check unsupported geometries and adjust bounding box if necessary */
 
-use crate::structs::raster::RasterInfo;
+use crate::geo::raster::RasterInfo;
 use geo::BoundingRect;
 use geo_types::{Geometry, Rect, coord};
 use polars::prelude::*;
@@ -86,7 +84,7 @@ pub fn validate_geometries(
         if let Some(inner_df) = df {
             df = inner_df
                 .filter(&BooleanChunked::from_iter_values(
-                    PlSmallStr::from("good_geom"),
+                    "good_geom".into(),
                     good_geom.into_iter(),
                 ))
                 .ok();

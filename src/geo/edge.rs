@@ -1,8 +1,6 @@
-/*
-Structure to contain information on polygon and line edges.
- */
+/* Structure to contain information on polygon and line edges */
 
-use crate::structs::raster::RasterInfo;
+use crate::geo::raster::RasterInfo;
 use std::cmp::Ordering;
 
 // collection of edges
