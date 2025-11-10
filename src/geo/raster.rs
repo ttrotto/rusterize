@@ -1,6 +1,4 @@
-/*
-Structure to contain information on raster data.
- */
+/* Structure to contain information on raster data */
 
 use geo::Rect;
 use num_traits::Num;
@@ -10,7 +8,7 @@ use numpy::{
 };
 use pyo3::prelude::*;
 
-#[derive(FromPyObject)]
+#[derive(FromPyObject, Clone)]
 #[pyo3(from_item_all)]
 pub struct RasterInfo {
     pub nrows: usize,
@@ -22,6 +20,7 @@ pub struct RasterInfo {
     pub xres: f64,
     pub yres: f64,
     pub has_extent: bool,
+    pub epsg: u16,
 }
 
 impl RasterInfo {
