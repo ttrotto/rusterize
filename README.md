@@ -4,7 +4,7 @@ High performance rasterization tool for Python built in Rust. This
 repository stems from the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package built in C++
 for R and ports parts of the logics into Python with a Rust backend, in addition to some useful improvements (see [API](#API)).
 
-**rusterize** is designed to work on _(multi)polygons_ and _(multi)linestrings_, even when they are nested inside complex geometry collections. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/).
+**rusterize** is designed to work on _(multi)polygons_ and _(multi)linestrings_, even when they are nested inside complex geometry collections. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/) or a sparse array in COOrdinate format.
 
 # Installation
 
@@ -58,6 +58,7 @@ rusterize(
     burn=None,
     fun="sum",
     background=0,
+    encoding="dense",
     dtype="uint8"
 )
 ```
@@ -72,6 +73,7 @@ rusterize(
 - `burn`: a single value to burn. Mutually exclusive with `field`. (default: `None`). If no field is found in `gdf` or if `field` is `None`, then `burn=1`
 - `fun`: pixel function to use when multiple values overlap. Available options are `sum`, `first`, `last`, `min`, `max`, `count`, or `any`. (default: `last`)
 - `background`: background value in final raster. (default: `np.nan`). A `None` value corresponds to the default of the specified dtype. An illegal value for a dtype will be replaced with the default of that dtype. For example, a `background=np.nan` for `dtype="uint8"` will become `background=0`, where `0` is the default for `uint8`.
+- `encoding`: defines the output format of the rasterization. This is either a dense xarray representing the burned rasterized geometries, or a sparse array in COOrdinate format good for sparse observations and low memory consumption.
 - `dtype`: dtype of the final raster. Possible values are `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64` (default: `float64`)
 
 Note that control over the desired extent is not as strict as for resolution and shape. That is,
@@ -80,11 +82,13 @@ So, extent is not guaranteed, but resolution and shape are. If extent is not giv
 from the polygons and is not modified, unless you specify a resolution value. If you only specify an output
 shape, the extent is maintained. This mimics the logics of `gdal_rasterize`.
 
+# Encoding
+
+Version 0.5.0 introduces a new `encoding` parameter to control the output format of the rasterization. This means that you can return a xarray with the burned rasterized geometries, or a new structure `SparseArray`. This `SparseArray` structure stores the band/row/column triplets of where the geometries should be burned onto the final raster, as well as their corresponding values before applying any pixel function. This can be used as an intermediate output to avoid allocating memory before materializing the final raster, or as a final product. `SparseArray` has two convenience functions: `to_xarray()` and `to_frame()`. The first returns the final xarray, the second produces a polars dataframe with only the coordinates and values of the rasterized geometries. Note that `SparseArray` avoids allocating memory for the array during rasterization until when it's actually needed (calling `to_xarray()`). See below for an example.
+
 # Usage
 
-**rusterize** consists of a single function `rusterize()`. The Rust implementation
-returns a dictionary that is converted to a xarray on the Python side
-for simpliicty.
+**rusterize** consists of a single function `rusterize()`.
 
 ```python
 from rusterize import rusterize
@@ -98,7 +102,7 @@ geoms = [
     "POLYGON ((-10 0, 140 60, 160 0, 140 -55, -10 0))",
     "POLYGON ((-125 0, 0 60, 40 5, 15 -45, -125 0))",
     "MULTILINESTRING ((-180 -70, -140 -50), (-140 -50, -100 -70), (-100 -70, -60 -50), (-60 -50, -20 -70), (-20 -70, 20 -50), (20 -50, 60 -70), (60 -70, 100 -50), (100 -50, 140 -70), (140 -70, 180 -50))",
-    "GEOMETRYCOLLECTION (POINT (50 -40), POLYGON ((75 -40, 75 -30, 100 -30, 100 -40, 75 -40)), LINESTRING (80 -40, 100 0), GEOMETRYCOLLECTION (POLYGON ((100 20, 100 30, 110 30, 110 20, 100 20))))"
+    "GEOMETRYCOLLECTION (POINT (50 -40), POLYGON ((75 -40, 75 -30, 100 -30, 100 -40, 75 -40)), LINESTRING (60 -40, 80 0), GEOMETRYCOLLECTION (POLYGON ((100 20, 100 30, 110 30, 110 20, 100 20))))"
 ]
 
 # Convert WKT strings to Shapely geometries
@@ -107,7 +111,7 @@ geometries = [wkt.loads(geom) for geom in geoms]
 # Create a GeoDataFrame
 gdf = gpd.GeoDataFrame({'value': range(1, len(geoms) + 1)}, geometry=geometries, crs='EPSG:32619')
 
-# rusterize
+# rusterize to "dense" -> return a xarray with the burned geometries (default)
 output = rusterize(
     gdf,
     res=(1, 1),
@@ -119,6 +123,46 @@ output = rusterize(
 fig, ax = plt.subplots(figsize=(12, 6))
 output.plot.imshow(ax=ax)
 plt.show()
+
+# rusterize to "sparse" -> custom structure storing the coordinates and values of the rasterized geometries
+output = rusterize(
+    gdf,
+    res=(1, 1),
+    field="value",
+    fun="sum",
+    encoding="sparse"
+)
+output
+# SparseArray:
+# - Shape: (131, 361)
+# - Extent: (-180.5, -70.5, 180.5, 60.5)
+# - Resolution: (1.0, 1.0)
+# - EPSG: 32619
+# - Estimated size: 369.46 KB
+
+# materialize into xarray
+array = output.to_xarray()
+
+# get only coordinates and values
+coo = output.to_frame()
+# shape: (29_340, 3)
+# ┌─────┬─────┬──────┐
+# │ row ┆ col ┆ data │
+# │ --- ┆ --- ┆ ---  │
+# │ u32 ┆ u32 ┆ f64  │
+# ╞═════╪═════╪══════╡
+# │ 6   ┆ 40  ┆ 1.0  │
+# │ 6   ┆ 41  ┆ 1.0  │
+# │ 6   ┆ 42  ┆ 1.0  │
+# │ 7   ┆ 39  ┆ 1.0  │
+# │ 7   ┆ 40  ┆ 1.0  │
+# │ …   ┆ …   ┆ …    │
+# │ 64  ┆ 258 ┆ 1.0  │
+# │ 63  ┆ 259 ┆ 1.0  │
+# │ 62  ┆ 259 ┆ 1.0  │
+# │ 61  ┆ 260 ┆ 1.0  │
+# │ 60  ┆ 260 ┆ 1.0  │
+# └─────┴─────┴──────┘
 ```
 
 ![](img/plot.png)
@@ -198,7 +242,7 @@ Unit: seconds
  fasterize_large 9.2199426 10.3595465 10.6653139 10.5369429 11.025771 11.7944567    20
 ```
 
-And on an even larger datasets? Here we use a layer from the province of Quebec, Canada representing ~2M polygons of forest stands, rasterized at 30 meters (20 rounds) with no field value and pixel function `any`. The comparison with `gdal_rasterize` was run with `hyperfine --runs 20 "gdal_rasterize -tr 30 30 -burn 1 <data_in> <data_out>"`.
+And on an even larger datasets? Here we use a layer from the province of Quebec, Canada representing ~2M polygons of forest stands, rasterized at 30 meters (20 rounds) with no field value, pixel function `any`, and `dense` encoding. The comparison with `gdal_rasterize` was run with `hyperfine --runs 20 "gdal_rasterize -tr 30 30 -burn 1 <data_in> <data_out>"`.
 
 ```
 # rusterize
