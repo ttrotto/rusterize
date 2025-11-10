@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import importlib.metadata
 from types import NoneType
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 
 import numpy as np
 import polars as pl
-import rioxarray
 from geopandas import GeoDataFrame
 from xarray import DataArray, Dataset
 
+# if TYPE_CHECKING:
 from .rusterize import _rusterize
+
+if TYPE_CHECKING:
+    from .rusterize import SparseArray
 
 __version__ = importlib.metadata.version("rusterize")
 
@@ -26,8 +29,9 @@ def rusterize(
     burn: int | float | None = None,
     fun: str = "last",
     background: int | float | None = np.nan,
+    encoding: str = "dense",
     dtype: str = "float64",
-) -> DataArray:
+) -> DataArray | SparseArray:
     """
     Fast geopandas rasterization into xarray.DataArray
 
@@ -42,10 +46,11 @@ def rusterize(
         :param burn: burn a value onto the raster, mutually exclusive with `field`. Default is None.
         :param fun: pixel function to use. Available options are `sum`, `first`, `last`, `min`, `max`, `count`, or `any`. Default is `last`.
         :param background: background value in final raster. Default is np.nan.
+        :param encoding: return a dense array (burned geometries onto a raster) or a sparse array in COOrdinate format (coordinates and values of the rasterized geometries). Default is `dense`.
         :param dtype: specify the output dtype. Default is `float64`.
 
     Returns:
-        Rasterized xarray.DataArray.
+        Rasterized xarray.DataArray in dense or COO sparse format.
 
     Notes:
         When any of `res`, `out_shape`, or `extent` is not provided, it is inferred from the other arguments when applicable.
@@ -79,14 +84,18 @@ def rusterize(
         raise TypeError("`pixel_fn` must be one of sum, first, last, min, max, count, or any.")
     if not isinstance(background, (int, float, NoneType)):
         raise TypeError("`background` must be integer, float, or None.")
+    if not isinstance(encoding, str):
+        raise TypeError("`encoding` must be one of 'dense' or 'sparse'.")
     if not isinstance(dtype, str):
         raise TypeError(
-            "`dtype` must be a one of uint8, uint16, uint32, uint64, int8, int16, int32, int64, float32, float64"
+            "`dtype` must be a one of 'uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64'"
         )
 
     # value checks and defaults
     if field and burn:
         raise ValueError("Only one of `field` or `burn` can be specified.")
+    if encoding not in ["dense", "sparse"]:
+        raise ValueError("`encoding` must be one of `dense` or `sparse`.")
     if like is not None:
         if any((res, out_shape, extent)):
             raise ValueError("`like` is mutually exclusive with `res`, `out_shape`, and `extent`.")
@@ -125,6 +134,7 @@ def rusterize(
         "xres": _res[0],
         "yres": _res[1],
         "has_extent": _has_extent,
+        "epsg": gdf.crs.to_epsg(),
     }
 
     # extract columns of interest and convert to polars
@@ -134,6 +144,4 @@ def rusterize(
     except KeyError as e:
         raise KeyError("Column not found in GeoDataFrame.") from e
 
-    # rusterize
-    r = _rusterize(gdf.geometry, raster_info, fun, df, field, by, burn, background, dtype)
-    return DataArray.from_dict(r).rio.write_crs(gdf.crs, inplace=True)
+    return _rusterize(gdf.geometry, raster_info, fun, df, field, by, burn, background, encoding, dtype)
