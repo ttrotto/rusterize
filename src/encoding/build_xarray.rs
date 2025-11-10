@@ -1,7 +1,6 @@
-/*
-Build dictionary for xarray construction.
- */
-use crate::structs::raster::RasterInfo;
+/* Build xarray object from a dictionary */
+
+use crate::geo::raster::RasterInfo;
 use ndarray::Array3;
 use num_traits::Num;
 use numpy::{Element, IntoPyArray};
@@ -15,7 +14,7 @@ pub fn build_xarray<T>(
     raster_info: RasterInfo,
     ret: Array3<T>,
     band_names: Vec<String>,
-) -> PyResult<Bound<PyDict>>
+) -> PyResult<Bound<PyAny>>
 where
     T: Num + Element,
 {
@@ -43,10 +42,24 @@ where
     coords.set_item("y", dim_y)?;
     coords.set_item("bands", dim_bands)?;
 
+    // xarray dict
+    let dict = PyDict::new(py);
+    dict.set_item("data", data)?;
+    dict.set_item("dims", dims)?;
+    dict.set_item("coords", coords)?;
+
     // xarray
-    let xarray = PyDict::new(py);
-    xarray.set_item("data", data)?;
-    xarray.set_item("dims", dims)?;
-    xarray.set_item("coords", coords)?;
-    Ok(xarray)
+    let xarray = py.import("xarray")?;
+    let _rio = py.import("rioxarray")?;
+
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("inplace", true)?;
+
+    let result = xarray
+        .getattr("DataArray")?
+        .call_method1("from_dict", (dict,))?
+        .getattr("rio")?
+        .call_method("write_crs", (raster_info.epsg,), Some(&kwargs))?;
+
+    Ok(result)
 }
