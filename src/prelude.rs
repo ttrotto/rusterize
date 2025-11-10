@@ -1,6 +1,5 @@
-/*
-Traits to handle dtype runtime polymorphism
- */
+/* Traits to handle dtype runtime polymorphism */
+
 use polars::prelude::*;
 use std::ops::AddAssign;
 
@@ -10,7 +9,10 @@ pub trait PolarsHandler: Literal + Send + Sync {
     fn from_anyvalue(val: AnyValue) -> Option<Self>
     where
         Self: Sized;
-    fn into_column(self, len: usize) -> Column;
+    fn into_column(self, name: &str, len: usize) -> Column;
+    fn from_named_vec(name: &str, vec: &[Self]) -> Column
+    where
+        Self: Sized;
 }
 
 macro_rules! impl_polars_handler {
@@ -31,8 +33,12 @@ macro_rules! impl_polars_handler {
                     }
                 }
 
-                fn into_column(self, len: usize) -> Column {
-                    Column::new("field_casted".into(), vec![self; len])
+                fn into_column(self, name: &str, len: usize) -> Column {
+                    Column::new(name.into(), vec![self; len])
+                }
+
+                fn from_named_vec(name: &str, vec: &[Self]) -> Column {
+                    Column::new(name.into(), vec)
                 }
             }
         )*
@@ -114,3 +120,7 @@ impl_maybe_nan_for_int!(u8, u16, u32, u64, i8, i16, i32, i64);
 // super trait to group all pixel operations
 pub trait PixelOps: AddAssign + PartialOrd + NaNAware + Sized {}
 impl<T: AddAssign + PartialOrd + NaNAware> PixelOps for T {}
+
+// structures for selecting encoding type and rasterization logic
+pub struct Dense;
+pub struct Sparse;
