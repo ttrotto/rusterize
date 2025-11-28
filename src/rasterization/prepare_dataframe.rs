@@ -26,10 +26,10 @@ where
                 (Some(field_col), Some(by_col)) => {
                     // case 2: both `field` and `by` specified
                     let (new_field_col, new_by_col) = if field_col != by_col {
-                        lf = lf.rename(&[field_col, by_col], &["field_casted", "by_str"], true);
+                        lf = lf.rename([field_col, by_col], ["field_casted", "by_str"], true);
                         ("field_casted", "by_str")
                     } else {
-                        lf = lf.rename(&[field_col], &["field_casted"], true);
+                        lf = lf.rename([field_col], ["field_casted"], true);
                         ("field_casted", "field_casted")
                     };
 
@@ -42,7 +42,7 @@ where
                 }
                 (Some(field_col), None) => {
                     // case 3: only `field` specified
-                    lf = lf.rename(&[field_col], &["field_casted"], true);
+                    lf = lf.rename([field_col], ["field_casted"], true);
                     lf = lf.with_column(
                         col("field_casted")
                             .cast(T::polars_dtype())
@@ -51,7 +51,7 @@ where
                 }
                 (None, Some(by_col)) => {
                     // case 4: only `by` specified
-                    lf = lf.rename(&[by_col], &["by_str"], true);
+                    lf = lf.rename([by_col], ["by_str"], true);
                     lf = lf.with_columns([
                         lit(burn_value).alias("field_casted"), // dummy `field`
                         col("by_str").cast(DataType::String).alias("by_str"),
