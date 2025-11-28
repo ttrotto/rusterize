@@ -1,24 +1,29 @@
-/* Build xarray object from a dictionary */
+/*
+Build xarray object from a dictionary.
+
+The xarray module is passed as a function argument to avoid importing
+it twice for DenseSparse and SparseArray
+
+*/
 
 use crate::geo::raster::RasterInfo;
-use ndarray::Array3;
 use num_traits::Num;
-use numpy::{Element, IntoPyArray};
+use numpy::{Element, PyArray3};
 use pyo3::{
     prelude::*,
     types::{PyDict, PyList},
 };
 
-pub fn build_xarray<T>(
-    py: Python,
+pub fn build_xarray<'py, T>(
+    py: Python<'py>,
+    xarray_module: Bound<'py, PyModule>,
     raster_info: RasterInfo,
-    ret: Array3<T>,
+    data: Bound<'py, PyArray3<T>>,
     band_names: Vec<String>,
-) -> PyResult<Bound<PyAny>>
+) -> PyResult<Bound<'py, PyAny>>
 where
     T: Num + Element,
 {
-    let data = ret.into_pyarray(py);
     let (y, x) = raster_info.make_coordinates(py);
     let bands = PyList::new(py, band_names)?;
     let dims = PyList::new(py, vec!["bands", "y", "x"])?;
@@ -48,14 +53,10 @@ where
     dict.set_item("dims", dims)?;
     dict.set_item("coords", coords)?;
 
-    // xarray
-    let xarray = py.import("xarray")?;
-    let _rio = py.import("rioxarray")?;
-
     let kwargs = PyDict::new(py);
     kwargs.set_item("inplace", true)?;
 
-    let result = xarray
+    let result = xarray_module
         .getattr("DataArray")?
         .call_method1("from_dict", (dict,))?
         .getattr("rio")?
