@@ -1,25 +1,26 @@
 # rusterize
 
-High performance rasterization tool for Python built in Rust. This
-repository stems from the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package built in C++
-for R and ports parts of the logics into Python with a Rust backend, in addition to some useful improvements (see [API](#API)).
+High performance rasterization tool for Python built in Rust. This repository stems from the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package built in C++ for R and ports parts of the logics into Python with a Rust backend, in addition to some useful improvements (see [API](#API)).
 
-**rusterize** is designed to work on _(multi)polygons_ and _(multi)linestrings_, even when they are nested inside complex geometry collections. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/) or a sparse array in COOrdinate format.
+**rusterize** is designed to work on _(multi)polygons_ and _(multi)linestrings_, even when they are nested inside complex geometry collections. Functionally, it takes an input [geopandas](https://geopandas.org/en/stable/) dataframe and returns a [xarray](https://docs.xarray.dev/en/stable/), a [numpy](https://numpy.org/), or a sparse array in COOrdinate format.
 
 # Installation
+
+`rusterize` is distributed in two flavors. A `core` library that performs the rasterization and returns a bare `numpy` array, or a `xarray`-flavored version that returns a georeferenced `xarray`. This latter requires `xarray` and `rioxarray` to be installed. This is the recommended flavor.
 
 Install the current version with pip:
 
 ```shell
+# Core library
 pip install rusterize
+
+# With xarray capabilities
+pip install 'rusterize[xarray]'
 ```
 
 # Contributing
 
-Any contribution is welcome! You can install **rusterize** directly
-from this repo using [maturin](https://www.maturin.rs/) as an editable
-package. For this to work, you’ll need to have [Rust](https://www.rust-lang.org/tools/install) and
-[cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
+Any contribution is welcome! You can install **rusterize** directly from this repo using [maturin](https://www.maturin.rs/) as an editable package. For this to work, you’ll need to have [Rust](https://www.rust-lang.org/tools/install) and [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 installed.
 
 ```shell
@@ -44,7 +45,7 @@ This package has a simple API:
 ```python
 from rusterize import rusterize
 
-# gdf = <import/modify dataframe as needed>
+# gdf = <geodataframe>
 
 # rusterize
 rusterize(
@@ -58,7 +59,7 @@ rusterize(
     burn=None,
     fun="sum",
     background=0,
-    encoding="dense",
+    encoding="xarray",
     dtype="uint8"
 )
 ```
@@ -68,13 +69,13 @@ rusterize(
 - `res`: (xres, yres) for desired resolution (default: `None`)
 - `out_shape`: (nrows, ncols) for desired output shape (default: `None`)
 - `extent`: (xmin, ymin, xmax, ymax) for desired output extent (default: `None`)
-- `field`: column to rasterize. Mutually exclusive with `burn`. (default: `None` -> a value of `1` is rasterized)
-- `by`: column for grouping. Assign each group to a band in the stack. Values are taken from `field` if specified, else `burn` is rasterized. (default: `None` -> singleband raster)
-- `burn`: a single value to burn. Mutually exclusive with `field`. (default: `None`). If no field is found in `gdf` or if `field` is `None`, then `burn=1`
-- `fun`: pixel function to use when multiple values overlap. Available options are `sum`, `first`, `last`, `min`, `max`, `count`, or `any`. (default: `last`)
-- `background`: background value in final raster. (default: `np.nan`). A `None` value corresponds to the default of the specified dtype. An illegal value for a dtype will be replaced with the default of that dtype. For example, a `background=np.nan` for `dtype="uint8"` will become `background=0`, where `0` is the default for `uint8`.
-- `encoding`: defines the output format of the rasterization. This is either a dense xarray representing the burned rasterized geometries, or a sparse array in COOrdinate format good for sparse observations and low memory consumption.
-- `dtype`: dtype of the final raster. Possible values are `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64` (default: `float64`)
+- `field`: column to rasterize. Mutually exclusive with `burn` (default: `None` -> a value of `1` is rasterized)
+- `by`: column for grouping. Assign each group to a band in the stack. Values are taken from `field` if specified, else `burn` is rasterized (default: `None` -> singleband raster)
+- `burn`: a single value to burn. Mutually exclusive with `field` (default: `None`). If no field is found in `gdf` or if `field` is `None`, then `burn=1`
+- `fun`: pixel function to use when multiple values overlap. Available options are `sum`, `first`, `last`, `min`, `max`, `count`, or `any` (default: `last`)
+- `background`: background value in final raster (default: `np.nan`). A `None` value corresponds to the default of the specified dtype. An illegal value for a dtype will be replaced with the default of that dtype. For example, a `background=np.nan` for `dtype="uint8"` will become `background=0`, where `0` is the default for `uint8`.
+- `encoding`: defines the output format of the rasterization. This is either a dense xarray/numpy representing the burned rasterized geometries, or a sparse array in COOrdinate format good for sparse observations and low memory consumption. Available options are `xarray`, `numpy`, `sparse` (default: `xarray` -> will trigger an error if `xarray` and `rioxarray` are not found).
+- `dtype`: dtype of the final raster. Available options are `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64` (default: `float64`)
 
 Note that control over the desired extent is not as strict as for resolution and shape. That is,
 when resolution, output shape, and extent are specified, priority is given to resolution and shape.
@@ -84,7 +85,7 @@ shape, the extent is maintained. This mimics the logics of `gdal_rasterize`.
 
 # Encoding
 
-Version 0.5.0 introduces a new `encoding` parameter to control the output format of the rasterization. This means that you can return a xarray with the burned rasterized geometries, or a new structure `SparseArray`. This `SparseArray` structure stores the band/row/column triplets of where the geometries should be burned onto the final raster, as well as their corresponding values before applying any pixel function. This can be used as an intermediate output to avoid allocating memory before materializing the final raster, or as a final product. `SparseArray` has two convenience functions: `to_xarray()` and `to_frame()`. The first returns the final xarray, the second produces a polars dataframe with only the coordinates and values of the rasterized geometries. Note that `SparseArray` avoids allocating memory for the array during rasterization until when it's actually needed (calling `to_xarray()`). See below for an example.
+Version 0.5.0 introduced a new `encoding` parameter to control the output format of the rasterization. This means that you can return a xarray/numpy with the burned rasterized geometries, or a new `SparseArray` structure. This `SparseArray` structure stores the band/row/column triplets of where the geometries should be burned onto the final raster, as well as their corresponding values before applying any pixel function. This can be used as an intermediate output to avoid allocating memory before materializing the final raster, or as a final product. `SparseArray` has three convenience functions: `to_xarray()`, `to_numpy()`, and `to_frame()`. The first two return the final xarray/numpy, the last returns a polars dataframe with only the coordinates and values of the rasterized geometries. Note that `SparseArray` avoids allocating memory for the array during rasterization until when it's actually needed (e.g. calling `to_xarray()`). See below for an example.
 
 # Usage
 
@@ -111,7 +112,8 @@ geometries = [wkt.loads(geom) for geom in geoms]
 # Create a GeoDataFrame
 gdf = gpd.GeoDataFrame({'value': range(1, len(geoms) + 1)}, geometry=geometries, crs='EPSG:32619')
 
-# rusterize to "dense" -> return a xarray with the burned geometries (default)
+# rusterize to "xarray" -> return a xarray with the burned geometries and spatial reference (default)
+# will raise a ModuleNotFoundError if xarray and rioxarray are not found
 output = rusterize(
     gdf,
     res=(1, 1),
@@ -144,7 +146,7 @@ output
 array = output.to_xarray()
 
 # get only coordinates and values
-coo = output.to_frame()
+output.to_frame()
 # shape: (29_340, 3)
 # ┌─────┬─────┬──────┐
 # │ row ┆ col ┆ data │
