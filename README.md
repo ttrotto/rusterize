@@ -142,8 +142,9 @@ output
 # - EPSG: 32619
 # - Estimated size: 369.46 KB
 
-# materialize into xarray
+# materialize into xarray or numpy
 array = output.to_xarray()
+array = output.to_numpy()
 
 # get only coordinates and values
 output.to_frame()
