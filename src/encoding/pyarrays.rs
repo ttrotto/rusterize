@@ -4,6 +4,8 @@ use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
 use std::sync::Arc;
 
+use crate::prelude::OutputType;
+
 #[derive(IntoPyObject)]
 pub enum PyOut<'py> {
     Dense(Bound<'py, PyAny>),
@@ -12,7 +14,7 @@ pub enum PyOut<'py> {
 
 pub trait Pythonize {
     // convert rusterization output into python object
-    fn pythonize(self, py: Python) -> PyResult<PyOut>;
+    fn pythonize(self, py: Python, out_type: OutputType) -> PyResult<PyOut>;
 }
 
 pub trait PySparseArrayTraits: Send + Sync {
@@ -21,7 +23,8 @@ pub trait PySparseArrayTraits: Send + Sync {
     fn resolution(&self) -> (&f64, &f64);
     fn extent(&self) -> (&f64, &f64, &f64, &f64);
     fn epsg(&self) -> &u16;
-    fn to_xarray<'py>(&'py self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>>;
+    fn to_xarray<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>>;
+    fn to_numpy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>>;
     fn to_frame(&self) -> PyDataFrame;
 }
 
@@ -41,8 +44,12 @@ impl PySparseArray {
         )
     }
 
-    fn to_xarray<'py>(&'py self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_xarray<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         self.0.to_xarray(py)
+    }
+
+    fn to_numpy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        self.0.to_numpy(py)
     }
 
     fn to_frame(&self) -> PyDataFrame {

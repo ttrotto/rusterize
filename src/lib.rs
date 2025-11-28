@@ -37,7 +37,7 @@ use polars::prelude::DataFrame;
 use pyo3::{prelude::*, types::PyAny};
 use pyo3_polars::PyDataFrame;
 
-struct Metadata<'py> {
+struct Context<'py> {
     geometry: Vec<Geometry>,
     raster_info: RasterInfo,
     pypixel_fn: &'py str,
@@ -46,42 +46,43 @@ struct Metadata<'py> {
     pyfield: Option<&'py str>,
     pyby: Option<&'py str>,
     pyburn: Option<&'py Bound<'py, PyAny>>,
+    out_type: OutputType,
 }
 
 #[allow(clippy::too_many_arguments)]
-fn execute_rusterize<'py, T, R>(py: Python<'py>, meta: Metadata<'py>) -> PyResult<PyOut<'py>>
+fn execute_rusterize<'py, T, R>(py: Python<'py>, ctx: Context<'py>) -> PyResult<PyOut<'py>>
 where
     T: Num + Copy + PixelOps + PolarsHandler + FromPyObject<'py> + Element + Default + 'static,
     R: Rasterize<T>,
     R::Output: Pythonize,
 {
-    let background = meta
+    let background = ctx
         .pybackground
         .and_then(|inner| inner.extract().ok())
         .unwrap_or_default();
-    let burn = meta
+    let burn = ctx
         .pyburn
         .and_then(|inner| inner.extract().ok())
         .unwrap_or(T::one());
-    let pixel_fn = set_pixel_function(meta.pypixel_fn);
+    let pixel_fn = set_pixel_function(ctx.pypixel_fn);
 
     // rusterize
-    let array = rusterize_impl::<T, R>(
-        meta.geometry,
-        meta.raster_info,
+    let ret = rusterize_impl::<T, R>(
+        ctx.geometry,
+        ctx.raster_info,
         pixel_fn,
         background,
-        meta.df,
-        meta.pyfield,
-        meta.pyby,
+        ctx.df,
+        ctx.pyfield,
+        ctx.pyby,
         burn,
     );
-    array.pythonize(py)
+    ret.pythonize(py, ctx.out_type)
 }
 
 #[pyfunction]
 #[pyo3(name = "_rusterize")]
-#[pyo3(signature = (pygeometry, pyinfo, pypixel_fn, pydf=None, pyfield=None, pyby=None, pyburn=None, pybackground=None, pyencoding="dense", pydtype="float64"))]
+#[pyo3(signature = (pygeometry, pyinfo, pypixel_fn, pydf=None, pyfield=None, pyby=None, pyburn=None, pybackground=None, pyencoding="xarray", pydtype="float64"))]
 #[allow(clippy::too_many_arguments)]
 fn rusterize_py<'py>(
     py: Python<'py>,
@@ -105,7 +106,10 @@ fn rusterize_py<'py>(
     // extract raster information
     let raster_info = RasterInfo::from(pyinfo);
 
-    let meta = Metadata {
+    // runtime-specific encoding for Dense
+    let out_type = OutputType::new(pyencoding);
+
+    let ctx = Context {
         geometry,
         raster_info,
         pypixel_fn,
@@ -114,42 +118,43 @@ fn rusterize_py<'py>(
         pyfield,
         pyby,
         pyburn,
+        out_type,
     };
 
     match (pydtype, pyencoding) {
-        ("uint8", "dense") => execute_rusterize::<u8, Dense>(py, meta),
-        ("uint8", "sparse") => execute_rusterize::<u8, Sparse>(py, meta),
+        ("uint8", "xarray" | "numpy") => execute_rusterize::<u8, Dense>(py, ctx),
+        ("uint8", "sparse") => execute_rusterize::<u8, Sparse>(py, ctx),
 
-        ("uint16", "dense") => execute_rusterize::<u16, Dense>(py, meta),
-        ("uint16", "sparse") => execute_rusterize::<u16, Sparse>(py, meta),
+        ("uint16", "xarray" | "numpy") => execute_rusterize::<u16, Dense>(py, ctx),
+        ("uint16", "sparse") => execute_rusterize::<u16, Sparse>(py, ctx),
 
-        ("uint32", "dense") => execute_rusterize::<u32, Dense>(py, meta),
-        ("uint32", "sparse") => execute_rusterize::<u32, Sparse>(py, meta),
+        ("uint32", "xarray" | "numpy") => execute_rusterize::<u32, Dense>(py, ctx),
+        ("uint32", "sparse") => execute_rusterize::<u32, Sparse>(py, ctx),
 
-        ("uint64", "dense") => execute_rusterize::<u64, Dense>(py, meta),
-        ("uint64", "sparse") => execute_rusterize::<u64, Sparse>(py, meta),
+        ("uint64", "xarray" | "numpy") => execute_rusterize::<u64, Dense>(py, ctx),
+        ("uint64", "sparse") => execute_rusterize::<u64, Sparse>(py, ctx),
 
-        ("int8", "dense") => execute_rusterize::<i8, Dense>(py, meta),
-        ("int8", "sparse") => execute_rusterize::<i8, Sparse>(py, meta),
+        ("int8", "xarray" | "numpy") => execute_rusterize::<i8, Dense>(py, ctx),
+        ("int8", "sparse") => execute_rusterize::<i8, Sparse>(py, ctx),
 
-        ("int16", "dense") => execute_rusterize::<i16, Dense>(py, meta),
-        ("int16", "sparse") => execute_rusterize::<i16, Sparse>(py, meta),
+        ("int16", "xarray" | "numpy") => execute_rusterize::<i16, Dense>(py, ctx),
+        ("int16", "sparse") => execute_rusterize::<i16, Sparse>(py, ctx),
 
-        ("int32", "dense") => execute_rusterize::<i32, Dense>(py, meta),
-        ("int32", "sparse") => execute_rusterize::<i32, Sparse>(py, meta),
+        ("int32", "xarray" | "numpy") => execute_rusterize::<i32, Dense>(py, ctx),
+        ("int32", "sparse") => execute_rusterize::<i32, Sparse>(py, ctx),
 
-        ("int64", "dense") => execute_rusterize::<i64, Dense>(py, meta),
-        ("int64", "sparse") => execute_rusterize::<i64, Sparse>(py, meta),
+        ("int64", "xarray" | "numpy") => execute_rusterize::<i64, Dense>(py, ctx),
+        ("int64", "sparse") => execute_rusterize::<i64, Sparse>(py, ctx),
 
-        ("float32", "dense") => execute_rusterize::<f32, Dense>(py, meta),
-        ("float32", "sparse") => execute_rusterize::<f32, Sparse>(py, meta),
+        ("float32", "xarray" | "numpy") => execute_rusterize::<f32, Dense>(py, ctx),
+        ("float32", "sparse") => execute_rusterize::<f32, Sparse>(py, ctx),
 
-        ("float64", "dense") => execute_rusterize::<f64, Dense>(py, meta),
-        ("float64", "sparse") => execute_rusterize::<f64, Sparse>(py, meta),
+        ("float64", "xarray" | "numpy") => execute_rusterize::<f64, Dense>(py, ctx),
+        ("float64", "sparse") => execute_rusterize::<f64, Sparse>(py, ctx),
 
         _ => unimplemented!(
             "`dtype` must be one of uint8, uint16, uint32, uint64, int8, int16, int32, int64, float32, float64; \
-             and `encoding` must be either 'dense' or 'sparse'"
+             and `encoding` must be either 'xarray', 'numpy', or 'sparse'"
         ),
     }
 }

@@ -6,12 +6,12 @@ use crate::{
         pyarrays::{PyOut, PySparseArray, PySparseArrayTraits, Pythonize},
     },
     geo::raster::RasterInfo,
-    prelude::PolarsHandler,
+    prelude::{OutputType, PolarsHandler},
     rasterization::{pixel_functions::PixelFn, rusterize_impl::RasterizeConfig},
 };
 use ndarray::Array3;
 use num_traits::Num;
-use numpy::Element;
+use numpy::{Element, IntoPyArray};
 use polars::prelude::*;
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
@@ -37,9 +37,19 @@ impl<N> Pythonize for DenseArray<N>
 where
     N: Num + Element,
 {
-    fn pythonize(self, py: Python) -> PyResult<PyOut> {
-        let xarray = build_xarray(py, self.raster_info, self.raster, self.band_names)?;
-        Ok(PyOut::Dense(xarray))
+    fn pythonize(self, py: Python, out_type: OutputType) -> PyResult<PyOut> {
+        let data = self.raster.into_pyarray(py);
+
+        match out_type {
+            OutputType::Numpy => Ok(PyOut::Dense(data.into_any())),
+            OutputType::Xarray => {
+                // check dependencies before building the array
+                let xarray_module = py.import("xarray")?;
+                let xarray =
+                    build_xarray(py, xarray_module, self.raster_info, data, self.band_names)?;
+                Ok(PyOut::Dense(xarray))
+            }
+        }
     }
 }
 
@@ -69,7 +79,7 @@ pub struct SparseArray<N> {
     background: N,
 }
 
-impl<N: Num> SparseArray<N> {
+impl<N: Num + Copy> SparseArray<N> {
     pub fn new(
         band_names: Vec<String>,
         rows: Vec<usize>,
@@ -87,12 +97,34 @@ impl<N: Num> SparseArray<N> {
             background: config.background,
         }
     }
+
+    fn build_raster(&self) -> Array3<N> {
+        let mut raster = self
+            .raster_info
+            .build_raster(self.band_names.len(), self.background);
+
+        let mut offset = 0;
+
+        // works with single and multiband rasters
+        raster
+            .outer_iter_mut()
+            .zip(self.lengths.iter())
+            .for_each(|(mut band, n)| {
+                // `skip` jumps to the beginning of the next band and takes `n` pixels
+                for ((row, col), value) in self.triplets.iter().skip(offset).take(*n) {
+                    (self.pxfn)(&mut band, *row, *col, *value, self.background);
+                }
+                offset += *n
+            });
+        raster
+    }
 }
 
 impl<N> PySparseArrayTraits for SparseArray<N>
 where
     N: Num + Element + Copy + PolarsHandler,
 {
+    // estimated size of the materialized array
     fn size_str(&self) -> String {
         let bytesize = size_of_val(&self.background);
         let bytes = bytesize * self.raster_info.nrows * self.raster_info.ncols;
@@ -129,31 +161,27 @@ where
         &self.raster_info.epsg
     }
 
-    fn to_xarray<'py>(&'py self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let mut raster = self
-            .raster_info
-            .build_raster(self.band_names.len(), self.background);
+    fn to_xarray<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        // check dependencies before building the array
+        let xarray_module = py.import("xarray")?;
+        py.import("rioxarray")?;
 
-        let mut offset = 0;
+        let raster = self.build_raster();
 
-        // works with single and multiband rasters
-        raster
-            .outer_iter_mut()
-            .zip(self.lengths.iter())
-            .for_each(|(mut band, n)| {
-                // `skip` jumps to the beginning of the next band and takes `n` pixels
-                for ((row, col), value) in self.triplets.iter().skip(offset).take(*n) {
-                    (self.pxfn)(&mut band, *row, *col, *value, self.background);
-                }
-                offset += *n
-            });
+        let data = raster.into_pyarray(py);
 
         build_xarray(
             py,
+            xarray_module,
             self.raster_info.clone(),
-            raster,
+            data,
             self.band_names.clone(),
         )
+    }
+
+    fn to_numpy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let raster = self.build_raster();
+        Ok(raster.into_pyarray(py).into_any())
     }
 
     fn to_frame(&self) -> PyDataFrame {
@@ -200,7 +228,7 @@ impl<N> Pythonize for SparseArray<N>
 where
     N: Num + Element + Copy + PolarsHandler + 'static,
 {
-    fn pythonize(self, _py: Python) -> PyResult<PyOut> {
+    fn pythonize(self, _py: Python, _out_type: OutputType) -> PyResult<PyOut> {
         Ok(PyOut::Sparse(PySparseArray(Arc::new(self))))
     }
 }

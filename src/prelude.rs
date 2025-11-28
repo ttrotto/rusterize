@@ -124,3 +124,18 @@ impl<T: AddAssign + PartialOrd + NaNAware> PixelOps for T {}
 // structures for selecting encoding type and rasterization logic
 pub struct Dense;
 pub struct Sparse;
+
+pub enum OutputType {
+    Numpy,
+    Xarray,
+}
+
+impl OutputType {
+    pub fn new(encoding: &str) -> Self {
+        match encoding {
+            "numpy" => Self::Numpy,
+            "xarray" => Self::Xarray,
+            _ => Self::Numpy, // fallback placeholder
+        }
+    }
+}
