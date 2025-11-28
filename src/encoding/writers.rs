@@ -48,7 +48,10 @@ impl<N: Num> PixelWriter<N> for SparseArrayWriter<N> {
     }
 }
 
-impl<N: Num> ToSparseArray<N> for SparseArrayWriter<N> {
+impl<N> ToSparseArray<N> for SparseArrayWriter<N>
+where
+    N: Num + Copy,
+{
     fn finish(self, config: RasterizeConfig<N>) -> SparseArray<N> {
         let lengths = vec![self.values.len()];
         let band_names = vec![self.band_name];
@@ -63,7 +66,10 @@ impl<N: Num> ToSparseArray<N> for SparseArrayWriter<N> {
     }
 }
 
-impl<N: Num> ToSparseArray<N> for Vec<SparseArrayWriter<N>> {
+impl<N> ToSparseArray<N> for Vec<SparseArrayWriter<N>>
+where
+    N: Num + Copy,
+{
     fn finish(self, config: RasterizeConfig<N>) -> SparseArray<N> {
         let (band_names, rows, cols, data, lengths) = self.into_iter().fold(
             (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()),
