@@ -7,12 +7,12 @@ from typing import TYPE_CHECKING, List, Tuple
 import numpy as np
 import polars as pl
 from geopandas import GeoDataFrame
-from xarray import DataArray, Dataset
 
-# if TYPE_CHECKING:
 from .rusterize import _rusterize
 
 if TYPE_CHECKING:
+    from xarray import DataArray, Dataset
+
     from .rusterize import SparseArray
 
 __version__ = importlib.metadata.version("rusterize")
@@ -29,11 +29,11 @@ def rusterize(
     burn: int | float | None = None,
     fun: str = "last",
     background: int | float | None = np.nan,
-    encoding: str = "dense",
+    encoding: str = "xarray",
     dtype: str = "float64",
-) -> DataArray | SparseArray:
+) -> DataArray | np.ndarray | SparseArray:
     """
-    Fast geopandas rasterization into xarray.DataArray
+    Fast geopandas rasterization in Rust.
 
     Args:
         :param gdf: geopandas dataframe to rasterize.
@@ -46,13 +46,15 @@ def rusterize(
         :param burn: burn a value onto the raster, mutually exclusive with `field`. Default is None.
         :param fun: pixel function to use. Available options are `sum`, `first`, `last`, `min`, `max`, `count`, or `any`. Default is `last`.
         :param background: background value in final raster. Default is np.nan.
-        :param encoding: return a dense array (burned geometries onto a raster) or a sparse array in COOrdinate format (coordinates and values of the rasterized geometries). Default is `dense`.
+        :param encoding: return a dense array (burned geometries onto a raster) or a sparse array in COOrdinate format (coordinates and values of the rasterized geometries). Available options are `xarray`, `numpy`, or `sparse`. The `xarray` encoding requires `xarray` and `rioxarray` to be installed. Default is `xarray`.
         :param dtype: specify the output dtype. Default is `float64`.
 
     Returns:
-        Rasterized xarray.DataArray in dense or COO sparse format.
+        xarray.DataArray, numpy.ndarray, or a sparse array in COO format.
 
     Notes:
+        If `encoding` is `numpy`, the array is returned without any spatial reference.
+
         When any of `res`, `out_shape`, or `extent` is not provided, it is inferred from the other arguments when applicable.
         If `like` is specified, `res`, `out_shape`, and `extent` are inferred from the `like` DataArray.
         Unless `extent` is specified, a half-pixel buffer is applied to avoid missing points on the border.
@@ -60,13 +62,12 @@ def rusterize(
 
         If `field` is not in `gdf`, then a default `burn` value of 1 is rasterized.
 
-        A `None` value for `dtype` corresponds to the default of that dtype. An illegal value for a dtype will be replaced with the default of
-        that dtype. For example, a `background=np.nan` for `dtype="uint8"` will become `background=0`, where `0` is the default for `uint8`.
+        A `None` value for `dtype` corresponds to the default of that dtype. An illegal value for a dtype will be replaced with the default of that dtype. For example, a `background=np.nan` for `dtype="uint8"` will become `background=0`, where `0` is the default for `uint8`.
     """
     # type checks
     if not isinstance(gdf, GeoDataFrame):
         raise TypeError("`gdf` must be a geopandas dataframe.")
-    if not isinstance(like, (DataArray, Dataset, NoneType)):
+    if type(like).__name__ not in ("DataArray", "Dataset", "NoneType"):
         raise TypeError("`like' must be a xarray.DataArray or xarray.Dataset")
     if not isinstance(res, (tuple, list, NoneType)):
         raise TypeError("`resolution` must be a tuple or list of (x, y).")
@@ -85,7 +86,7 @@ def rusterize(
     if not isinstance(background, (int, float, NoneType)):
         raise TypeError("`background` must be integer, float, or None.")
     if not isinstance(encoding, str):
-        raise TypeError("`encoding` must be one of 'dense' or 'sparse'.")
+        raise TypeError("`encoding` must be one of 'xarray', 'numpy', or 'sparse'.")
     if not isinstance(dtype, str):
         raise TypeError(
             "`dtype` must be a one of 'uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64'"
@@ -94,16 +95,26 @@ def rusterize(
     # value checks and defaults
     if field and burn:
         raise ValueError("Only one of `field` or `burn` can be specified.")
-    if encoding not in ["dense", "sparse"]:
-        raise ValueError("`encoding` must be one of `dense` or `sparse`.")
+    if encoding not in ["xarray", "numpy", "sparse"]:
+        raise ValueError("`encoding` must be one of `xarray`, 'numpy', or `sparse`.")
+    if encoding == "xarray":
+        try:
+            import rioxarray
+            import xarray
+        except ModuleNotFoundError as e:
+            raise ModuleNotFoundError(
+                "`xarray` and `rioxarray` must be installed if encoding is `xarray`. Install with `pip install xarray rioxarray`."
+            ) from e
     if like is not None:
         if any((res, out_shape, extent)):
             raise ValueError("`like` is mutually exclusive with `res`, `out_shape`, and `extent`.")
-        else:
+        elif hasattr(like, "rio"):
             affine = like.rio.transform()
             _res = (affine.a, abs(affine.e))
             _shape = like.squeeze().shape
             _bounds, _has_extent = like.rio.bounds(), True
+        else:
+            raise AttributeError("The `like` object must have a `rioxarray` accessor.")
     else:
         if not res and not out_shape and not extent:
             raise ValueError("One of `res`, `out_shape`, or `extent` must be provided.")
