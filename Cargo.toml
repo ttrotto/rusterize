@@ -2,7 +2,7 @@ cargo-features = ["profile-rustflags"]
 
 [package]
 name = "rusterize"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 resolver = "2"
 
@@ -21,7 +21,7 @@ polars = { version = "0.51.0", features = ["lazy", "simd", "performant", "nightl
 pyo3 = { version = "0.25.1", features = ["extension-module", "abi3-py311", "generate-import-lib"] }
 pyo3-polars = "0.24.0"
 rayon = "1.11.0"
-wkb = "0.9.1"
+wkb = "0.9.2"
 
 # OS-specific allocators
 [target.'cfg(not(target_family = "unix"))'.dependencies]
