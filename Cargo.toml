@@ -2,7 +2,7 @@ cargo-features = ["profile-rustflags"]
 
 [package]
 name = "rusterize"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2024"
 resolver = "2"
 
@@ -13,7 +13,7 @@ crate-type = ["cdylib"]
 [dependencies]
 geo = "0.30.0"
 geo-traits = "0.3.0"
-geo-types = "0.7.17"
+geo-types = "0.7.18"
 ndarray = { version = "0.16.1", features = ["rayon"] }
 num-traits = "0.2.19"
 numpy = "0.25.0"
