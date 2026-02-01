@@ -145,7 +145,7 @@ def rusterize(
         "xres": _res[0],
         "yres": _res[1],
         "has_extent": _has_extent,
-        "epsg": gdf.crs.to_epsg(),
+        "epsg": gdf.crs.to_epsg() if gdf.crs else None,
     }
 
     # extract columns of interest and convert to polars

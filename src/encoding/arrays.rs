@@ -157,7 +157,7 @@ where
         (&self.raster_info.yres, &self.raster_info.yres)
     }
 
-    fn epsg(&self) -> &u16 {
+    fn epsg(&self) -> &Option<u16> {
         &self.raster_info.epsg
     }
 

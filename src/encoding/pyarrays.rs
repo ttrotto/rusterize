@@ -22,7 +22,7 @@ pub trait PySparseArrayTraits: Send + Sync {
     fn shape(&self) -> (&usize, &usize);
     fn resolution(&self) -> (&f64, &f64);
     fn extent(&self) -> (&f64, &f64, &f64, &f64);
-    fn epsg(&self) -> &u16;
+    fn epsg(&self) -> &Option<u16>;
     fn to_xarray<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>>;
     fn to_numpy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>>;
     fn to_frame(&self) -> PyDataFrame;
@@ -34,12 +34,18 @@ pub struct PySparseArray(pub Arc<dyn PySparseArrayTraits>);
 #[pymethods]
 impl PySparseArray {
     fn __repr__(&self) -> String {
+        let epsg = if let Some(epsg) = self.0.epsg() {
+            epsg.to_string()
+        } else {
+            String::from("None")
+        };
+
         format!(
             "SparseArray:\n- Shape: {:?}\n- Extent: {:?}\n- Resolution: {:?}\n- EPSG: {}\n- Estimated size: {}",
             self.0.shape(),
             self.0.extent(),
             self.0.resolution(),
-            self.0.epsg(),
+            epsg,
             self.0.size_str()
         )
     }

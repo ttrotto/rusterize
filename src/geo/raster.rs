@@ -20,7 +20,7 @@ pub struct RasterInfo {
     pub xres: f64,
     pub yres: f64,
     pub has_extent: bool,
-    pub epsg: u16,
+    pub epsg: Option<u16>,
 }
 
 impl RasterInfo {
