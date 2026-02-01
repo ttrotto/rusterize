@@ -64,10 +64,6 @@ impl<N: Num> Triplets<N> {
     fn new(rows: Vec<usize>, cols: Vec<usize>, data: Vec<N>) -> Self {
         Self { rows, cols, data }
     }
-
-    fn iter(&self) -> impl Iterator<Item = ((&usize, &usize), &N)> {
-        self.rows.iter().zip(self.cols.iter()).zip(self.data.iter())
-    }
 }
 
 pub struct SparseArray<N> {
@@ -103,18 +99,32 @@ impl<N: Num + Copy> SparseArray<N> {
             .raster_info
             .build_raster(self.band_names.len(), self.background);
 
-        let mut offset = 0;
+        let offset = 0;
+        let rows = self.triplets.rows.as_slice();
+        let cols = self.triplets.cols.as_slice();
+        let data = self.triplets.data.as_slice();
 
         // works with single and multiband rasters
         raster
             .outer_iter_mut()
             .zip(self.lengths.iter())
             .for_each(|(mut band, n)| {
-                // `skip` jumps to the beginning of the next band and takes `n` pixels
-                for ((row, col), value) in self.triplets.iter().skip(offset).take(*n) {
-                    (self.pxfn)(&mut band, *row, *col, *value, self.background);
+                let end = offset + *n;
+                let band_rows = &rows[offset..end];
+                let band_cols = &cols[offset..end];
+                let band_data = &data[offset..end];
+
+                for ((band_row, band_col), band_value) in
+                    band_rows.iter().zip(band_cols).zip(band_data)
+                {
+                    (self.pxfn)(
+                        &mut band,
+                        *band_row,
+                        *band_col,
+                        *band_value,
+                        self.background,
+                    );
                 }
-                offset += *n
             });
         raster
     }
@@ -194,8 +204,8 @@ where
                 .iter()
                 .enumerate()
                 .flat_map(|(i, v)| std::iter::repeat_n(i + 1, *v))
-                .map(|b| b as u32)
-                .collect::<Vec<u32>>();
+                .map(|b| b as u64)
+                .collect::<Vec<u64>>();
             let bands_column = Column::new("band".into(), bands);
             columns.push(bands_column);
         }
@@ -204,16 +214,16 @@ where
             .triplets
             .rows
             .iter()
-            .map(|v| *v as u32)
-            .collect::<Vec<u32>>();
+            .map(|v| *v as u64)
+            .collect::<Vec<u64>>();
         columns.push(Column::new("row".into(), rows));
 
         let cols = self
             .triplets
             .cols
             .iter()
-            .map(|v| *v as u32)
-            .collect::<Vec<u32>>();
+            .map(|v| *v as u64)
+            .collect::<Vec<u64>>();
         columns.push(Column::new("col".into(), cols));
 
         columns.push(N::from_named_vec("data", &self.triplets.data));
