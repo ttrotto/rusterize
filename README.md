@@ -140,7 +140,7 @@ output
 # - Extent: (-180.5, -70.5, 180.5, 60.5)
 # - Resolution: (1.0, 1.0)
 # - EPSG: 32619
-# - Estimated size: 369.46 KB
+# - Estimated size: 378.33 KB
 
 # materialize into xarray or numpy
 array = output.to_xarray()
@@ -175,48 +175,67 @@ output.to_frame()
 **rusterize** is fast! Let’s try it on small and large datasets.
 
 ```python
-from rusterize import rusterize
-import geopandas as gpd
-import requests
 import zipfile
 from io import BytesIO
 
-# large dataset (~380 MB)
-url = "https://s3.amazonaws.com/hp3-shapefiles/Mammals_Terrestrial.zip"
+from pyogrio import read_dataframe
+import requests
+from rusterize import rusterize
+
+# POLYGON ~468MB
+url = "https://ftp.maps.canada.ca/pub/nrcan_rncan/vector/canvec/shp/Hydro/canvec_50K_BC_Hydro_shp.zip"  # ~3.8GB
 response = requests.get(url)
 
-# unzip
-with zipfile.ZipFile(BytesIO(response.content), 'r') as zip_ref:
+with zipfile.ZipFile(BytesIO(response.content), "r") as zip_ref:
+    for file_name in zip_ref.namelist():
+        if file_name == "canvec_50K_BC_Hydro/waterbody_2":
+            zip_ref.extract(file_name)
+
+water_large = read_dataframe("canvec_50K_BC_Hydro/waterbody_2.shp")
+water_small = water_large.iloc[:1000, :]
+
+
+# LINESTRING ~900MB
+url = "https://www12.statcan.gc.ca/census-recensement/2011/geo/RNF-FRR/files-fichiers/lrnf000r25p_e.zip"
+response = requests.get(url)
+
+with zipfile.ZipFile(BytesIO(response.content), "r") as zip_ref:
     zip_ref.extractall()
 
-# read
-gdf_large = gpd.read_file("Mammals_Terrestrial/Mammals_Terrestrial.shp")
+roads = read_dataframe("lrnf000r25p_e/lrnf000r25p_e.gpkg")
 
-# small dataset (first 1000 rows)
-gdf_small = gdf_large.iloc[:1000, :]
 
-# rusterize at 1/6 degree resolution
-def test_large(benchmark):
-  benchmark(rusterize, gdf_large, res=(1/6, 1/6), fun="sum")
+# BENCHMARK
+def test_water_large(benchmark):
+    # 1/6 degree resolution
+    benchmark(rusterize, water_large, res=(1 / 6, 1 / 6), dtype="uint8")
 
-def test_small(benchmark):
-  benchmark(rusterize, gdf_small, res=(1/6, 1/6), fun="sum")
+
+def test_water_small(benchmark):
+    # 1/6 degree resolution
+    benchmark(rusterize, water_small, res=(1 / 6, 1 / 6), dtype="uint8")
+
+
+def test_roads(benchmark):
+    # 50 meters, else OOM error on my machine
+    benchmark(rusterize, roads, res=(50, 50), dtype="uint8")
 ```
 
 Then you can run it with [pytest](https://docs.pytest.org/en/stable/) and [pytest-benchmark](https://pytest-benchmark.readthedocs.io/en/stable/):
 
 ```
-pytest <python file> --benchmark-min-rounds=20 --benchmark-time-unit='s'
+pytest <python file> --benchmark-min-rounds=10 --benchmark-time-unit='s'
 
---------------------------------------------- benchmark: 1 tests --------------------------------------------
-Name (time in s)         Min      Max     Mean  StdDev   Median     IQR  Outliers     OPS  Rounds  Iterations
--------------------------------------------------------------------------------------------------------------
-rusterize_small       0.0791    0.0899   0.0812  0.0027   0.0803  0.0020       2;2  12.3214     20          1
-rusterize_large     1.379545    1.4474   1.4006  0.0178   1.3966  0.0214       5;1   0.7140     20          1
--------------------------------------------------------------------------------------------------------------
+--------------------------------------------- benchmark: 1 tests ---------------------------------------------------
+Name (time in s)         Min      Max     Mean    StdDev   Median      IQR  Outliers        OPS  Rounds  Iterations
+--------------------------------------------------------------------------------------------------------------------
+test_water_small      0.0037    0.0048   0.0039   0.0002   0.0039   0.0002      35;5  255.1552     202            1
+test_water_large      1.0108    1.1280   1.0355   0.0437   1.0165   0.0077       2;2    0.9657      10            1
+test_roads            3.5131    3.8548   3.5942   0.1115   3.5450   0.0622       2;2    0.2782      10            1
+--------------------------------------------------------------------------------------------------------------------
 ```
 
-And fasterize:
+And fasterize (note that it doesn't support custom `dtype` so the returning raster is `float64`):
 
 ```r
 library(sf)
@@ -224,71 +243,56 @@ library(raster)
 library(fasterize)
 library(microbenchmark)
 
-large <- st_read("Mammals_Terrestrial/Mammals_Terrestrial.shp", quiet = TRUE)
+# polygon data only
+large <- st_read("canvec_50K_BC_Hydro/waterbody_2.shp", quiet = TRUE)
 small <- large[1:1000, ]
+
 fn <- function(v) {
-  r <- raster(v, res = 1/6)
-  return(fasterize(v, r, fun = "sum"))
+  r <- raster(v, res = 1 / 6)
+  fasterize(v, r)
 }
+
 microbenchmark(
   fasterize_large = f <- fn(large),
   fasterize_small = f <- fn(small),
-  times=20L,
-  unit='s'
+  times = 10L,
+  unit = "s"
 )
 ```
 
 ```
 Unit: seconds
-            expr       min         lq       mean     median        uq        max neval
- fasterize_small 0.4741043  0.4926114  0.5191707  0.5193289  0.536741  0.5859029    20
- fasterize_large 9.2199426 10.3595465 10.6653139 10.5369429 11.025771 11.7944567    20
+            expr         min          lq       mean      median         uq        max neval
+ fasterize_small  0.05764281  0.06274373  0.1286875  0.06520358  0.1128432  0.6000182    10
+ fasterize_large 36.91321005 37.71877265 41.0140303 40.81343803 43.9201820 46.5596799    10
 ```
 
-And on an even larger datasets? Here we use a layer from the province of Quebec, Canada representing ~2M polygons of forest stands, rasterized at 30 meters (20 rounds) with no field value, pixel function `any`, and `dense` encoding. The comparison with `gdal_rasterize` was run with `hyperfine --runs 20 "gdal_rasterize -tr 30 30 -burn 1 <data_in> <data_out>"`.
+The comparison with `gdal_rasterize` was run with `hyperfine --runs 10 "gdal_rasterize -tr <xres> <yres> -burn 1 -ot Byte <data_in> <data_out>"`. Note that GDAL needs to read the geometries first, hence the great discrepancy with `rusterize` for linestring rasterization. Including the read time using [pyogrio](https://github.com/geopandas/pyogrio) adds approximately 19 seconds.
 
 ```
-# rusterize
---------------------------------------------- benchmark: 1 tests --------------------------------------------
-Name (time in s)         Min      Max     Mean  StdDev   Median     IQR  Outliers     OPS  Rounds  Iterations
--------------------------------------------------------------------------------------------------------------
-rusterize             5.9331   7.2308   6.1302  0.3183  5.9903   0.1736       2;4  0.1631      20           1
--------------------------------------------------------------------------------------------------------------
+# POLYGONS: gdal_rasterize (CLI) - read from fast drive, write to fast drive
+Time (mean ± σ):      2.306 s ±  0.016 s    [User: 1.978 s, System: 0.327 s]
+Range (min … max):    2.278 s …  2.333 s    10 runs
 
-# fasterize
-Unit: seconds
-      expr      min       lq     mean   median       uq      max neval
- fasterize 157.4734 177.2055 194.3222 194.6455 213.9195 230.6504    20
-
-# gdal_rasterize (CLI) - read from fast drive, write to fast drive
-Time (mean ± σ):      5.495 s ±  0.038 s    [User: 4.268 s, System: 1.225 s]
-Range (min … max):    5.452 s …  5.623 s    20 runs
-```
-
-In terms of (multi)line rasterization speed, here's a benchmark against `gdal_rasterize` using a layer from the province of Quebec, Canada, representing a subset of the road network for a total of ~535K multilinestrings.
-
-```
-# rusterize
---------------------------------------------- benchmark: 1 tests --------------------------------------------
-Name (time in s)         Min      Max     Mean  StdDev   Median     IQR  Outliers     OPS  Rounds  Iterations
--------------------------------------------------------------------------------------------------------------
-test                  4.5272   5.9488   4.7171  0.3236   4.6360  0.1680       2;2  0.2120      20           1
--------------------------------------------------------------------------------------------------------------
-
-# gdal_rasterize (CLI) - read from fast drive, write to fast drive
-Time (mean ± σ):      8.719 s ±  0.063 s    [User: 3.782 s, System: 4.917 s]
-Range (min … max):    8.658 s …  8.874 s    20 runs
+# LINESTRINGS: gdal_rasterize (CLI) - read from fast drive, write to fast drive
+Time (mean ± σ):     10.970 s ±  0.779 s    [User: 4.996 s, System: 5.951 s]
+Range (min … max):   10.633 s … 13.162 s    10 runs
 ```
 
 # Comparison with other tools
 
-While **rusterize** is fast, there are other fast alternatives out there, including `GDAL`, `rasterio` and `geocube`. However, **rusterize** allows for a seamless, Rust-native processing with similar or lower memory footprint that doesn't require you to leave Python, and returns the geoinformation you need for downstream processing with ample control over resolution, shape, extent, and data type.
+While **rusterize** is fast, there are other fast alternatives out there, including `rasterio` and `geocube`. However, **rusterize** allows for a seamless, Rust-native processing with similar or lower memory footprint that doesn't require you to install GDAL and returns the geoinformation you need for downstream processing with ample control over resolution, shape, extent, and data type.
 
-The following is a time comparison on a single run on the same forest stands dataset used earlier.
+The following is a time comparison on 10 runs (median) on the same large water bodies dataset used earlier.
 
 ```
-rusterize:    5.9 sec
-rasterio:     68  sec (but no spatial information)
-fasterize:    157 sec (including raster creation)
-geocube:      260 sec (larger memory footprint)
+rusterize: 1.0 sec
+rasterio:  14.8 sec
+geocube:   129.2 sec
 ```
+
+# Integrations
+
+Happy to share that **rusterize** has been integrated into the following libraries:
+
+- [rasterix](https://github.com/xarray-contrib/rasterix)
