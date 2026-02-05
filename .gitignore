@@ -26,6 +26,6 @@ target/
 # other stuff
 README_files
 .ruff_cache
-tests
+benchmarks/data
 .git
 uv.lock
