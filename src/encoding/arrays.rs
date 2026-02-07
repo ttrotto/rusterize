@@ -6,7 +6,7 @@ use crate::{
         pyarrays::{PyOut, PySparseArray, PySparseArrayTraits, Pythonize},
     },
     geo::raster::RasterInfo,
-    prelude::{OutputType, PolarsHandler},
+    prelude::{OptFlags, PolarsHandler},
     rasterization::{pixel_functions::PixelFn, rusterize_impl::RasterizeConfig},
 };
 use ndarray::Array3;
@@ -37,18 +37,16 @@ impl<N> Pythonize for DenseArray<N>
 where
     N: Num + Element,
 {
-    fn pythonize(self, py: Python, out_type: OutputType) -> PyResult<PyOut> {
+    fn pythonize(self, py: Python, opt_flags: OptFlags) -> PyResult<PyOut> {
         let data = self.raster.into_pyarray(py);
 
-        match out_type {
-            OutputType::Numpy => Ok(PyOut::Dense(data.into_any())),
-            OutputType::Xarray => {
-                // check dependencies before building the array
-                let xarray_module = py.import("xarray")?;
-                let xarray =
-                    build_xarray(py, xarray_module, self.raster_info, data, self.band_names)?;
-                Ok(PyOut::Dense(xarray))
-            }
+        if opt_flags.with_xarray_output() {
+            // check dependencies before building the array
+            let xarray_module = py.import("xarray")?;
+            let xarray = build_xarray(py, xarray_module, self.raster_info, data, self.band_names)?;
+            Ok(PyOut::Dense(xarray))
+        } else {
+            Ok(PyOut::Dense(data.into_any()))
         }
     }
 }
@@ -238,7 +236,7 @@ impl<N> Pythonize for SparseArray<N>
 where
     N: Num + Element + Copy + PolarsHandler + 'static,
 {
-    fn pythonize(self, _py: Python, _out_type: OutputType) -> PyResult<PyOut> {
+    fn pythonize(self, _py: Python, _opt_flags: OptFlags) -> PyResult<PyOut> {
         Ok(PyOut::Sparse(PySparseArray(Arc::new(self))))
     }
 }

@@ -46,7 +46,7 @@ struct Context<'py> {
     pyfield: Option<&'py str>,
     pyby: Option<&'py str>,
     pyburn: Option<&'py Bound<'py, PyAny>>,
-    out_type: OutputType,
+    opt_flags: OptFlags,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -76,13 +76,14 @@ where
         ctx.pyfield,
         ctx.pyby,
         burn,
+        ctx.opt_flags,
     );
-    ret.pythonize(py, ctx.out_type)
+    ret.pythonize(py, ctx.opt_flags)
 }
 
 #[pyfunction]
 #[pyo3(name = "_rusterize")]
-#[pyo3(signature = (pygeometry, pyinfo, pypixel_fn, pydf=None, pyfield=None, pyby=None, pyburn=None, pybackground=None, pyencoding="xarray", pydtype="float64"))]
+#[pyo3(signature = (pygeometry, pyinfo, pypixel_fn, pydf=None, pyfield=None, pyby=None, pyburn=None, pybackground=None, pytouched=false, pyencoding="xarray", pydtype="float64"))]
 #[allow(clippy::too_many_arguments)]
 fn rusterize_py<'py>(
     py: Python<'py>,
@@ -94,6 +95,7 @@ fn rusterize_py<'py>(
     pyby: Option<&'py str>,
     pyburn: Option<&'py Bound<'py, PyAny>>,
     pybackground: Option<&'py Bound<'py, PyAny>>,
+    pytouched: bool,
     pyencoding: &str,
     pydtype: &str,
 ) -> PyResult<PyOut<'py>> {
@@ -106,8 +108,8 @@ fn rusterize_py<'py>(
     // extract raster information
     let raster_info = RasterInfo::from(pyinfo);
 
-    // runtime-specific encoding for Dense
-    let out_type = OutputType::new(pyencoding);
+    // optional runtime flags
+    let opt_flags = OptFlags::new(pytouched, pyencoding);
 
     let ctx = Context {
         geometry,
@@ -118,7 +120,7 @@ fn rusterize_py<'py>(
         pyfield,
         pyby,
         pyburn,
-        out_type,
+        opt_flags,
     };
 
     match (pydtype, pyencoding) {
