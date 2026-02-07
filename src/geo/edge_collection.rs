@@ -4,16 +4,74 @@ If multi or GeometryCollection, then iterates over each inner geometry.
 From the Geometry, the values are extracted and reconstructed as an array of nodes.
  */
 
-use crate::geo::{
-    edge::{EdgeCollection, LineEdge, PolyEdge},
-    raster::RasterInfo,
+use crate::{
+    geo::{
+        edge::{LineEdge, PolyEdge},
+        raster::RasterInfo,
+    },
+    prelude::OptFlags,
 };
 
 use geo::prelude::*;
 use geo_types::{Geometry, LineString};
 use numpy::ndarray::Array2;
 
-pub fn build_edges(geom: &Geometry, raster_info: &RasterInfo) -> EdgeCollection {
+// collection of edges
+pub enum EdgeCollection {
+    Empty,
+    PolyEdges(Vec<PolyEdge>),
+    LineEdges(Vec<LineEdge>),
+    Mixed {
+        polyedges: Vec<PolyEdge>,
+        linedges: Vec<LineEdge>,
+    },
+}
+
+impl EdgeCollection {
+    pub fn add_polyedges(&mut self, new_polyedges: Vec<PolyEdge>) {
+        if new_polyedges.is_empty() {
+            return;
+        }
+        match self {
+            EdgeCollection::Empty => *self = EdgeCollection::PolyEdges(new_polyedges),
+            EdgeCollection::PolyEdges(polyedges) => polyedges.extend(new_polyedges),
+            EdgeCollection::LineEdges(linedges) => {
+                *self = {
+                    EdgeCollection::Mixed {
+                        polyedges: new_polyedges,
+                        linedges: std::mem::take(linedges),
+                    }
+                }
+            }
+            EdgeCollection::Mixed { polyedges, .. } => polyedges.extend(new_polyedges),
+        }
+    }
+
+    pub fn add_linedges(&mut self, new_linedges: Vec<LineEdge>) {
+        if new_linedges.is_empty() {
+            return;
+        }
+        match self {
+            EdgeCollection::Empty => *self = EdgeCollection::LineEdges(new_linedges),
+            EdgeCollection::PolyEdges(polyedges) => {
+                *self = {
+                    EdgeCollection::Mixed {
+                        polyedges: std::mem::take(polyedges),
+                        linedges: new_linedges,
+                    }
+                }
+            }
+            EdgeCollection::LineEdges(linedges) => linedges.extend(new_linedges),
+            EdgeCollection::Mixed { linedges, .. } => linedges.extend(new_linedges),
+        }
+    }
+}
+
+pub fn build_edges(
+    geom: &Geometry,
+    raster_info: &RasterInfo,
+    opt_flags: &OptFlags,
+) -> EdgeCollection {
     let mut edges = EdgeCollection::Empty;
     let mut stack = vec![geom];
 
@@ -76,28 +134,18 @@ fn build_node_array(line: &LineString) -> Array2<f64> {
 
 fn process_ring(edges: &mut Vec<PolyEdge>, line: &LineString<f64>, raster_info: &RasterInfo) {
     let node_array = build_node_array(line);
-    // drop last entry for correct comperison inside loop
     let nrows = node_array.nrows() - 1;
-    // add PolyEdge
+
     for i in 0..nrows {
-        let y0 = (raster_info.ymax - node_array[[i, 1]]) / raster_info.yres - 0.5;
-        let y1 = (raster_info.ymax - node_array[[i + 1, 1]]) / raster_info.yres - 0.5;
-        // only add edges that are inside the raster
-        if y0 > 0.0 || y1 > 0.0 {
-            let y0c = y0.ceil();
-            let y1c = y1.ceil();
-            // only add edges if non-horizontal
-            if y0c != y1c {
-                edges.push(PolyEdge::new(
-                    node_array[[i, 0]],
-                    y0,
-                    node_array[[i + 1, 0]],
-                    y1,
-                    y0c,
-                    y1c,
-                    raster_info,
-                ));
-            }
+        // world-to-pixel conversion
+        let x0 = (node_array[[i, 0]] - raster_info.xmin) / raster_info.xres;
+        let x1 = (node_array[[i + 1, 0]] - raster_info.xmin) / raster_info.xres;
+        let y0 = (raster_info.ymax - node_array[[i, 1]]) / raster_info.yres;
+        let y1 = (raster_info.ymax - node_array[[i + 1, 1]]) / raster_info.yres;
+
+        // skip horizontal
+        if (y0 - y1).abs() >= f64::EPSILON {
+            edges.push(PolyEdge::new(x0, y0, x1, y1));
         }
     }
 }

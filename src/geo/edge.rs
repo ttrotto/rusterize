@@ -1,100 +1,49 @@
 /* Structure to contain information on polygon and line edges */
 
 use crate::geo::raster::RasterInfo;
-use std::cmp::Ordering;
-
-// collection of edges
-pub enum EdgeCollection {
-    Empty,
-    PolyEdges(Vec<PolyEdge>),
-    LineEdges(Vec<LineEdge>),
-    Mixed {
-        polyedges: Vec<PolyEdge>,
-        linedges: Vec<LineEdge>,
-    },
-}
-
-impl EdgeCollection {
-    pub fn add_polyedges(&mut self, new_polyedges: Vec<PolyEdge>) {
-        if new_polyedges.is_empty() {
-            return;
-        }
-        match self {
-            EdgeCollection::Empty => *self = EdgeCollection::PolyEdges(new_polyedges),
-            EdgeCollection::PolyEdges(polyedges) => polyedges.extend(new_polyedges),
-            EdgeCollection::LineEdges(linedges) => {
-                *self = {
-                    EdgeCollection::Mixed {
-                        polyedges: new_polyedges,
-                        linedges: std::mem::take(linedges),
-                    }
-                }
-            }
-            EdgeCollection::Mixed { polyedges, .. } => polyedges.extend(new_polyedges),
-        }
-    }
-
-    pub fn add_linedges(&mut self, new_linedges: Vec<LineEdge>) {
-        if new_linedges.is_empty() {
-            return;
-        }
-        match self {
-            EdgeCollection::Empty => *self = EdgeCollection::LineEdges(new_linedges),
-            EdgeCollection::PolyEdges(polyedges) => {
-                *self = {
-                    EdgeCollection::Mixed {
-                        polyedges: std::mem::take(polyedges),
-                        linedges: new_linedges,
-                    }
-                }
-            }
-            EdgeCollection::LineEdges(linedges) => linedges.extend(new_linedges),
-            EdgeCollection::Mixed { linedges, .. } => linedges.extend(new_linedges),
-        }
-    }
-}
 
 pub struct PolyEdge {
-    pub ystart: usize, // first row intersection
-    pub yend: usize,   // last row below intersection
-    pub x: f64,        // x location of ystart
-    pub dxdy: f64,     // step
+    pub ystart: usize,
+    pub yend: usize,
+    x0: f64,
+    y0: f64,
+    dxdy: f64,           // slope
+    pub x_at_yline: f64, // x intersection with y line,
 }
 
 impl PolyEdge {
-    pub fn new(
-        mut x0: f64,
-        y0: f64,
-        mut x1: f64,
-        y1: f64,
-        y0c: f64,
-        y1c: f64,
-        raster_info: &RasterInfo,
-    ) -> Self {
-        // world-to-pixel conversion
-        x0 = (x0 - raster_info.xmin) / raster_info.xres - 0.5;
-        x1 = (x1 - raster_info.xmin) / raster_info.xres - 0.5;
-
-        let (fystart, dxdy, x, yend): (f64, f64, f64, usize);
-        // assert edges run from top to bottom of the matrix
-        if y1c > y0c {
-            fystart = y0c.max(0.0);
-            dxdy = (x1 - x0) / (y1 - y0);
-            x = x0 + (fystart - y0) * dxdy;
-            yend = y1c as usize;
+    pub fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> Self {
+        // make sure we go from top to bottom
+        let (x_top, y_top, x_bot, y_bot) = if y0 < y1 {
+            (x0, y0, x1, y1)
         } else {
-            fystart = y1c.max(0.0);
-            dxdy = (x0 - x1) / (y0 - y1);
-            x = x1 + (fystart - y1) * dxdy;
-            yend = y0c as usize;
-        }
-        let ystart = fystart as usize;
+            (x1, y1, x0, y0)
+        };
+
+        // first and last y lines
+        let ystart = (y_top - 0.5).ceil() as usize;
+        let yend = (y_bot - 0.5).ceil() as usize;
+
+        // slope
+        let dxdy = (x_bot - x_top) / (y_bot - y_top);
+
         Self {
             ystart,
             yend,
-            x,
+            x0: x_top,
+            y0: y_top,
             dxdy,
+            x_at_yline: f64::NAN, // dummy
         }
+    }
+
+    // sort by x intersection at y line
+    #[inline]
+    pub fn intersect_at(&self, yline: usize) -> f64 {
+        // y line center
+        let center_y = yline as f64 + 0.5;
+
+        self.x0 + (center_y - self.y0) * self.dxdy
     }
 }
 
@@ -145,16 +94,4 @@ impl LineEdge {
             is_closed,
         }
     }
-}
-
-// compare on usize Y coordinate for polygons
-#[inline]
-pub fn less_by_ystart(edge1: &PolyEdge, edge2: &PolyEdge) -> Ordering {
-    edge1.ystart.cmp(&edge2.ystart)
-}
-
-// partial compare on f64 X coordinate for polygons
-#[inline]
-pub fn less_by_x(edge1: &PolyEdge, edge2: &PolyEdge) -> Ordering {
-    edge1.x.partial_cmp(&edge2.x).unwrap_or(Ordering::Equal)
 }
