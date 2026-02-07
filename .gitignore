@@ -29,3 +29,4 @@ README_files
 benchmarks/data
 .git
 uv.lock
+**/*.xml
