@@ -7,6 +7,7 @@ use crate::{
         edge_collection,
         raster::RasterInfo,
     },
+    prelude::OptFlags,
 };
 
 use edge_collection::build_edges;
@@ -20,6 +21,7 @@ pub fn rasterize_geometry<T, W>(
     field_value: T,
     writer: &mut W,
     background: T,
+    opt_flags: &OptFlags,
 ) where
     T: Num + Copy,
     W: PixelWriter<T>,
@@ -34,14 +36,14 @@ pub fn rasterize_geometry<T, W>(
             rasterize_polygon(raster_info, polyedges, field_value, writer, background);
         }
         EdgeCollection::LineEdges(linedges) => {
-            rasterize_line(linedges, field_value, writer, background);
+            rasterize_line(linedges, field_value, writer, background, opt_flags);
         }
         EdgeCollection::Mixed {
             polyedges,
             linedges,
         } => {
             rasterize_polygon(raster_info, polyedges, field_value, writer, background);
-            rasterize_line(linedges, field_value, writer, background);
+            rasterize_line(linedges, field_value, writer, background, opt_flags);
         }
     }
 }
@@ -103,36 +105,66 @@ fn rasterize_polygon<T, W>(
     }
 }
 
-fn rasterize_line<T, W>(mut linedges: Vec<LineEdge>, field_value: T, writer: &mut W, background: T)
-where
+fn rasterize_line<T, W>(
+    linedges: Vec<LineEdge>,
+    field_value: T,
+    writer: &mut W,
+    background: T,
+    opt_flags: &OptFlags,
+) where
     T: Num + Copy,
     W: PixelWriter<T>,
 {
     let last_idx = linedges.len() - 1;
-    for (idx, edge) in linedges.iter_mut().enumerate() {
-        // rasterize all pixels except very last
-        while edge.ix0 != edge.ix1 || edge.iy0 != edge.iy1 {
-            let ix0 = edge.ix0 as usize;
-            let iy0 = edge.iy0 as usize;
-            writer.write(iy0, ix0, field_value, background);
+    for (idx, edge) in linedges.iter().enumerate() {
+        let mut x0 = edge.ix0;
+        let mut y0 = edge.iy0;
 
-            // update the error term and coordinates
-            let e2 = 2 * edge.err;
-            if e2 >= edge.dy {
-                edge.err += edge.dy;
-                edge.ix0 += edge.sx;
+        // rasterize all pixels except very last
+        if opt_flags.with_all_touched() {
+            let (mut ix, mut iy) = (0, 0);
+            let (dx, dy) = (edge.dx, edge.dy.abs());
+            while ix < dx || iy < dy {
+                writer.write(y0 as usize, x0 as usize, field_value, background);
+
+                let decision = (1 + 2 * ix) * dy - (1 + 2 * iy) * dx;
+                if decision == 0 {
+                    // exactly diagonal
+                    x0 += edge.sx;
+                    y0 += edge.sy;
+                    ix += 1;
+                    iy += 1;
+                } else if decision < 0 {
+                    // horizonal step
+                    x0 += edge.sx;
+                    ix += 1;
+                } else {
+                    // vertical step
+                    y0 += edge.sy;
+                    iy += 1;
+                }
             }
-            if e2 <= edge.dx {
-                edge.err += edge.dx;
-                edge.iy0 += edge.sy;
+        } else {
+            let mut err = edge.dx + edge.dy;
+            while x0 != edge.ix1 || y0 != edge.iy1 {
+                writer.write(y0 as usize, x0 as usize, field_value, background);
+
+                // update the error term and coordinates
+                let e2 = 2 * err;
+                if e2 >= edge.dy {
+                    err += edge.dy;
+                    x0 += edge.sx;
+                }
+                if e2 <= edge.dx {
+                    err += edge.dx;
+                    y0 += edge.sy;
+                }
             }
         }
 
         // rasterize last pixel if very last and geometry is not closed
         if idx == last_idx && !edge.is_closed {
-            let ix0 = edge.ix0 as usize;
-            let iy0 = edge.iy0 as usize;
-            writer.write(iy0, ix0, field_value, background);
+            writer.write(y0 as usize, x0 as usize, field_value, background);
         }
     }
 }

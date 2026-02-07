@@ -107,20 +107,21 @@ pub struct LineEdge {
     pub dy: isize, // vertical step
     pub sx: isize, // horizontal slope
     pub sy: isize, // vertical slope
-    pub err: isize,
     pub is_closed: bool,
 }
 
 impl LineEdge {
     pub fn new(
-        ix0: isize,
-        iy0: isize,
+        x0: f64,
+        y0: f64,
         x1: f64,
         y1: f64,
         raster_info: &RasterInfo,
         is_closed: bool,
     ) -> Self {
         // world-to-pixel conversion
+        let ix0 = ((x0 - raster_info.xmin) / raster_info.xres).floor() as isize;
+        let iy0 = ((raster_info.ymax - y0) / raster_info.yres).floor() as isize;
         let ix1 = ((x1 - raster_info.xmin) / raster_info.xres).floor() as isize;
         let iy1 = ((raster_info.ymax - y1) / raster_info.yres).floor() as isize;
 
@@ -132,9 +133,6 @@ impl LineEdge {
         let sx = if ix0 < ix1 { 1 } else { -1 };
         let sy = if iy0 < iy1 { 1 } else { -1 };
 
-        // initialize the error term
-        let err = dx + dy;
-
         Self {
             ix0,
             iy0,
@@ -144,7 +142,6 @@ impl LineEdge {
             dy,
             sx,
             sy,
-            err,
             is_closed,
         }
     }

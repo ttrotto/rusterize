@@ -7,7 +7,7 @@ use crate::{
         writers::{DenseArrayWriter, PixelWriter, SparseArrayWriter, ToSparseArray},
     },
     geo::{raster::RasterInfo, validate::validate_geometries},
-    prelude::{Dense, PolarsHandler, Sparse},
+    prelude::{Dense, OptFlags, PolarsHandler, Sparse},
     rasterization::{
         pixel_functions::PixelFn, prepare_dataframe::cast_df,
         rasterize_geometry::rasterize_geometry,
@@ -26,6 +26,7 @@ pub struct RasterizeConfig<N> {
     pub field: Column,
     pub pixel_fn: PixelFn<N>,
     pub background: N,
+    pub opt_flags: OptFlags,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -38,6 +39,7 @@ pub fn rusterize_impl<T, R>(
     field_name: Option<&str>,
     by_name: Option<&str>,
     burn_value: T,
+    opt_flags: OptFlags,
 ) -> R::Output
 where
     T: Num + PolarsHandler,
@@ -59,6 +61,7 @@ where
         field,
         pixel_fn,
         background,
+        opt_flags,
     };
 
     R::rasterize(config, by)
@@ -175,7 +178,14 @@ where
         .for_each(|(field_value, geom)| {
             if let Some(fv) = N::from_anyvalue(field_value) {
                 // process only non-empty field values
-                rasterize_geometry(&config.raster_info, geom, fv, writer, config.background)
+                rasterize_geometry(
+                    &config.raster_info,
+                    geom,
+                    fv,
+                    writer,
+                    config.background,
+                    &config.opt_flags,
+                )
             }
         });
 }
@@ -191,7 +201,14 @@ where
             (N::from_anyvalue(anyvalue), config.geom.get(i as usize))
         } {
             // process only non-empty field values
-            rasterize_geometry(&config.raster_info, geom, fv, writer, config.background);
+            rasterize_geometry(
+                &config.raster_info,
+                geom,
+                fv,
+                writer,
+                config.background,
+                &config.opt_flags,
+            );
         }
     }
 }

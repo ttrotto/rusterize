@@ -29,6 +29,7 @@ def rusterize(
     burn: int | float | None = None,
     fun: str = "last",
     background: int | float | None = np.nan,
+    all_touched: bool = False,
     encoding: str = "xarray",
     dtype: str = "float64",
 ) -> DataArray | np.ndarray | SparseArray:
@@ -46,6 +47,7 @@ def rusterize(
         :param burn: burn a value onto the raster, mutually exclusive with `field`. Default is None.
         :param fun: pixel function to use. Available options are `sum`, `first`, `last`, `min`, `max`, `count`, or `any`. Default is `last`.
         :param background: background value in final raster. Default is np.nan.
+        :param all_touched: if True, every pixel touched by the geometry is burned. Default is `False`.
         :param encoding: return a dense array (burned geometries onto a raster) or a sparse array in COOrdinate format (coordinates and values of the rasterized geometries). Available options are `xarray`, `numpy`, or `sparse`. The `xarray` encoding requires `xarray` and `rioxarray` to be installed. Default is `xarray`.
         :param dtype: specify the output dtype. Default is `float64`.
 
@@ -85,6 +87,8 @@ def rusterize(
         raise TypeError("`pixel_fn` must be one of sum, first, last, min, max, count, or any.")
     if not isinstance(background, (int, float, NoneType)):
         raise TypeError("`background` must be integer, float, or None.")
+    if not isinstance(all_touched, bool):
+        raise TypeError("`all_touched` must be a boolean.")
     if not isinstance(encoding, str):
         raise TypeError("`encoding` must be one of 'xarray', 'numpy', or 'sparse'.")
     if not isinstance(dtype, str):
@@ -155,4 +159,4 @@ def rusterize(
     except KeyError as e:
         raise KeyError("Column not found in GeoDataFrame.") from e
 
-    return _rusterize(gdf.geometry, raster_info, fun, df, field, by, burn, background, encoding, dtype)
+    return _rusterize(gdf.geometry, raster_info, fun, df, field, by, burn, background, all_touched, encoding, dtype)

@@ -107,22 +107,25 @@ fn process_line(edges: &mut Vec<LineEdge>, line: &LineString<f64>, raster_info: 
     let node_array = build_node_array(line);
     // add LineEdge
     let nrows = node_array.nrows() - 1;
-    let irows = raster_info.nrows as isize;
-    let icols = raster_info.ncols as isize;
+    let rows = raster_info.nrows as f64;
+    let cols = raster_info.ncols as f64;
     for i in 0..nrows {
         // world-to-pixel conversion
-        let ix0 = ((node_array[[i, 0]] - raster_info.xmin) / raster_info.xres).floor() as isize;
-        let iy0 = ((raster_info.ymax - node_array[[i, 1]]) / raster_info.yres).floor() as isize;
+        let x0 = (node_array[[i, 0]] - raster_info.xmin) / raster_info.xres;
+        let y0 = (raster_info.ymax - node_array[[i, 1]]) / raster_info.yres;
+
+        // TODO: Should this be clamped to to raster size if larger than raster?
+
         // only add edges that are inside the raster
-        if ix0 >= 0 && ix0 < icols && iy0 >= 0 && iy0 < irows {
+        if x0 >= 0.0 && x0 < cols && y0 >= 0.0 && y0 < rows {
             edges.push(LineEdge::new(
-                ix0,
-                iy0,
+                node_array[[i, 0]],
+                node_array[[i, 1]],
                 node_array[[i + 1, 0]],
                 node_array[[i + 1, 1]],
                 raster_info,
                 line.is_closed(),
             ))
-        }
+        };
     }
 }
