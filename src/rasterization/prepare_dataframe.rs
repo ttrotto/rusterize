@@ -34,20 +34,14 @@ where
                     };
 
                     lf = lf.with_columns([
-                        col(new_field_col)
-                            .cast(T::polars_dtype())
-                            .alias("field_casted"),
+                        col(new_field_col).cast(T::polars_dtype()).alias("field_casted"),
                         col(new_by_col).cast(DataType::String).alias("by_str"),
                     ]);
                 }
                 (Some(field_col), None) => {
                     // case 3: only `field` specified
                     lf = lf.rename([field_col], ["field_casted"], true);
-                    lf = lf.with_column(
-                        col("field_casted")
-                            .cast(T::polars_dtype())
-                            .alias("field_casted"),
-                    );
+                    lf = lf.with_column(col("field_casted").cast(T::polars_dtype()).alias("field_casted"));
                 }
                 (None, Some(by_col)) => {
                     // case 4: only `by` specified

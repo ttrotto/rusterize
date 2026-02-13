@@ -7,7 +7,7 @@ use crate::{
     },
     geo::raster::RasterInfo,
     prelude::{OptFlags, PolarsHandler},
-    rasterization::{pixel_functions::PixelFn, rusterize_impl::RasterizeConfig},
+    rasterization::{pixel_functions::PixelFn, rusterize_impl::RasterizeContext},
 };
 use ndarray::Array3;
 use num_traits::Num;
@@ -80,22 +80,20 @@ impl<N: Num + Copy> SparseArray<N> {
         cols: Vec<usize>,
         data: Vec<N>,
         lengths: Vec<usize>,
-        config: RasterizeConfig<N>,
+        ctx: RasterizeContext<N>,
     ) -> Self {
         Self {
             band_names,
             triplets: Triplets::new(rows, cols, data),
             lengths,
-            raster_info: config.raster_info,
-            pxfn: config.pixel_fn,
-            background: config.background,
+            raster_info: ctx.raster_info,
+            pxfn: ctx.pixel_fn,
+            background: ctx.background,
         }
     }
 
     fn build_raster(&self) -> Array3<N> {
-        let mut raster = self
-            .raster_info
-            .build_raster(self.band_names.len(), self.background);
+        let mut raster = self.raster_info.build_raster(self.band_names.len(), self.background);
 
         let offset = 0;
         let rows = self.triplets.rows.as_slice();
@@ -112,16 +110,8 @@ impl<N: Num + Copy> SparseArray<N> {
                 let band_cols = &cols[offset..end];
                 let band_data = &data[offset..end];
 
-                for ((band_row, band_col), band_value) in
-                    band_rows.iter().zip(band_cols).zip(band_data)
-                {
-                    (self.pxfn)(
-                        &mut band,
-                        *band_row,
-                        *band_col,
-                        *band_value,
-                        self.background,
-                    );
+                for ((band_row, band_col), band_value) in band_rows.iter().zip(band_cols).zip(band_data) {
+                    (self.pxfn)(&mut band, *band_row, *band_col, *band_value, self.background);
                 }
             });
         raster
@@ -208,20 +198,10 @@ where
             columns.push(bands_column);
         }
 
-        let rows = self
-            .triplets
-            .rows
-            .iter()
-            .map(|v| *v as u64)
-            .collect::<Vec<u64>>();
+        let rows = self.triplets.rows.iter().map(|v| *v as u64).collect::<Vec<u64>>();
         columns.push(Column::new("row".into(), rows));
 
-        let cols = self
-            .triplets
-            .cols
-            .iter()
-            .map(|v| *v as u64)
-            .collect::<Vec<u64>>();
+        let cols = self.triplets.cols.iter().map(|v| *v as u64).collect::<Vec<u64>>();
         columns.push(Column::new("col".into(), cols));
 
         columns.push(N::from_named_vec("data", &self.triplets.data));

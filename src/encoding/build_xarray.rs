@@ -53,9 +53,7 @@ where
     dict.set_item("dims", dims)?;
     dict.set_item("coords", coords)?;
 
-    let mut result = xarray_module
-        .getattr("DataArray")?
-        .call_method1("from_dict", (dict,))?;
+    let mut result = xarray_module.getattr("DataArray")?.call_method1("from_dict", (dict,))?;
 
     if let Some(epsg) = raster_info.epsg {
         result = result.getattr("rio")?.call_method1("write_crs", (epsg,))?;
