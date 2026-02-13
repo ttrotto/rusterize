@@ -1,6 +1,5 @@
 /* Structure to contain information on raster data */
 
-use geo::Rect;
 use num_traits::Num;
 use numpy::{
     IntoPyArray, PyArray1,
@@ -24,15 +23,14 @@ pub struct RasterInfo {
 }
 
 impl RasterInfo {
-    pub fn from(pyinfo: &Bound<PyAny>) -> Self {
+    pub fn from(pyinfo: &Bound<PyAny>) -> PyResult<Self> {
         // map PyAny to RasterInfo
-        let raster_info: RasterInfo = pyinfo
-            .extract()
-            .expect("Wrong mapping passed to RasterInfo struct");
+        let raster_info: RasterInfo = pyinfo.extract()?;
 
-        raster_info
+        Ok(raster_info)
     }
 
+    #[inline]
     pub fn update_dims(&mut self) {
         // extend bounds by half pixel to avoid missing points on the border
         if !self.has_extent && self.xres != 0.0 {
@@ -53,22 +51,16 @@ impl RasterInfo {
         }
     }
 
+    #[inline]
     fn shape(&mut self) {
         self.nrows = ((self.ymax - self.ymin) / self.yres).round() as usize;
         self.ncols = ((self.xmax - self.xmin) / self.xres).round() as usize;
     }
 
+    #[inline]
     fn resolution(&mut self) {
         self.xres = (self.xmax - self.xmin) / self.ncols as f64;
         self.yres = (self.ymax - self.ymin) / self.nrows as f64;
-    }
-
-    pub fn update_bounds(&mut self, rect: Rect) {
-        // update bounding box
-        self.xmin = rect.min().x;
-        self.xmax = rect.max().x;
-        self.ymin = rect.min().y;
-        self.ymax = rect.max().y;
     }
 
     pub fn build_raster<T>(&self, bands: usize, background: T) -> Array3<T>
