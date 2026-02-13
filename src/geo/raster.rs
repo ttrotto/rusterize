@@ -71,10 +71,7 @@ impl RasterInfo {
     }
 
     // construct coordinates for xarray (start from pixel's center)
-    pub fn make_coordinates<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> (Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>) {
+    pub fn make_coordinates<'py>(&self, py: Python<'py>) -> (Bound<'py, PyArray1<f64>>, Bound<'py, PyArray1<f64>>) {
         let y_coords = Array::range(
             self.ymax - self.yres / 2.0,
             self.ymax - self.nrows as f64 * self.yres,
