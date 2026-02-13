@@ -1,6 +1,6 @@
 /*
 Serialize geopandas geoemetries into WKB for Rust and deserialize into geo::Geometry
-This is faster than parsing geometries directly via __geo_interface__ or via arrow
+This is faster than parsing geometries directly via __geo_interface__
 Adapted from https://github.com/geoarrow/geoarrow-rs/blob/main/python/geoarrow-core/src/interop/shapely/from_shapely.rs
  */
 
@@ -15,16 +15,14 @@ use pyo3::{
 };
 use wkb::reader::read_wkb;
 
-fn parse_wkb_to_geometry(wkb: &[u8]) -> Geometry<f64> {
+fn parse_wkb_to_geometry(wkb: &[u8]) -> Option<Geometry<f64>> {
     let wkb_result = read_wkb(wkb).unwrap();
-    ToGeoGeometry::to_geometry(&wkb_result)
+    ToGeoGeometry::try_to_geometry(&wkb_result)
 }
 
 fn import_shapely(py: Python) -> PyResult<Bound<PyModule>> {
     let shapely_mod = py.import(intern!(py, "shapely"))?;
-    let shapely_version_string = shapely_mod
-        .getattr(intern!(py, "__version__"))?
-        .extract::<String>()?;
+    let shapely_version_string = shapely_mod.getattr(intern!(py, "__version__"))?.extract::<String>()?;
     if !shapely_version_string.starts_with('2') {
         Err(PyValueError::new_err("Shapely version 2 required"))
     } else {
@@ -32,11 +30,7 @@ fn import_shapely(py: Python) -> PyResult<Bound<PyModule>> {
     }
 }
 
-fn to_wkb<'a>(
-    py: Python<'a>,
-    shapely_mod: &'a Bound<PyModule>,
-    input: &'a Bound<PyAny>,
-) -> PyResult<Bound<'a, PyAny>> {
+fn to_wkb<'a>(py: Python<'a>, shapely_mod: &'a Bound<PyModule>, input: &'a Bound<PyAny>) -> PyResult<Bound<'a, PyAny>> {
     let args = (input,);
 
     let kwargs = PyDict::new(py);
@@ -57,8 +51,9 @@ pub fn from_shapely(py: Python, input: &Bound<PyAny>) -> PyResult<Vec<Geometry<f
     for item in wkb_result.try_iter()? {
         // extract bytes and deserialize
         let buf = item?.extract::<PyBackedBytes>()?;
-        let parsed = parse_wkb_to_geometry(&buf);
-        wkb_output.push(parsed);
+        if let Some(parsed) = parse_wkb_to_geometry(&buf) {
+            wkb_output.push(parsed);
+        }
     }
 
     Ok(wkb_output)
