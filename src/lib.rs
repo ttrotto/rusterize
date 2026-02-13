@@ -1,10 +1,8 @@
 mod allocator;
 mod geo {
-    pub mod edge;
-    pub mod edge_collection;
+    pub mod edges;
     pub mod from_shapely;
     pub mod raster;
-    pub mod validate;
 }
 mod encoding {
     pub mod arrays;
@@ -13,9 +11,9 @@ mod encoding {
     pub mod writers;
 }
 mod rasterization {
+    pub mod burn_geometry;
     pub mod pixel_functions;
     pub mod prepare_dataframe;
-    pub mod rasterize_geometry;
     pub mod rusterize_impl;
 }
 mod prelude;
@@ -60,10 +58,8 @@ where
         .pybackground
         .and_then(|inner| inner.extract().ok())
         .unwrap_or_default();
-    let burn = ctx
-        .pyburn
-        .and_then(|inner| inner.extract().ok())
-        .unwrap_or(T::one());
+    let burn = ctx.pyburn.and_then(|inner| inner.extract().ok()).unwrap_or(T::one());
+
     let pixel_fn = set_pixel_function(ctx.pypixel_fn);
 
     // rusterize
@@ -106,10 +102,11 @@ fn rusterize_py<'py>(
     let geometry = from_shapely(py, pygeometry)?;
 
     // extract raster information
-    let raster_info = RasterInfo::from(pyinfo);
+    let mut raster_info = RasterInfo::from(pyinfo)?;
+    raster_info.update_dims();
 
     // optional runtime flags
-    let opt_flags = OptFlags::new(pytouched, pyencoding);
+    let opt_flags = OptFlags::new(pytouched, pyencoding, pypixel_fn);
 
     let ctx = Context {
         geometry,

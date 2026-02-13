@@ -1,5 +1,3 @@
-/* Traits to handle dtype runtime polymorphism */
-
 use bitflags::bitflags;
 use polars::prelude::*;
 use std::ops::AddAssign;
@@ -128,17 +126,23 @@ bitflags! {
     pub struct OptFlags: u32 {
         // burn all pixels that are touched by the geometry
         const ALL_TOUCHED = 1;
+        // same as ALL_TOUCHED but requires cache
+        const ALL_TOUCHED_CACHED = 1 << 2;
         // output return type is Xarray
-        const OUT_AS_XARRAY = 1 << 2;
+        const OUT_AS_XARRAY = 1 << 3;
     }
 }
 
 impl OptFlags {
-    pub fn new(all_touched: bool, encoding: &str) -> Self {
+    pub fn new(all_touched: bool, encoding: &str, pixel_fn: &str) -> Self {
         let mut opt_flags = OptFlags::empty();
 
         if all_touched {
             opt_flags.insert(OptFlags::ALL_TOUCHED);
+
+            if pixel_fn == "sum" || pixel_fn == "count" {
+                opt_flags.insert(OptFlags::ALL_TOUCHED_CACHED);
+            }
         }
 
         if encoding == "xarray" {
@@ -148,11 +152,15 @@ impl OptFlags {
         opt_flags
     }
 
-    pub fn with_all_touched(self) -> bool {
+    pub fn with_all_touched(&self) -> bool {
         self.contains(OptFlags::ALL_TOUCHED)
     }
 
-    pub fn with_xarray_output(self) -> bool {
+    pub fn requires_deduplication(&self) -> bool {
+        self.contains(OptFlags::ALL_TOUCHED_CACHED)
+    }
+
+    pub fn with_xarray_output(&self) -> bool {
         self.contains(OptFlags::OUT_AS_XARRAY)
     }
 }
