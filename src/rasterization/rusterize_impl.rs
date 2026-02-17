@@ -8,7 +8,12 @@ use crate::{
     },
     geo::{edges::LineEdge, raster::RasterInfo},
     prelude::{Dense, OptFlags, PolarsHandler, Sparse},
-    rasterization::{burn_geometry::Burn, pixel_functions::PixelFn, prepare_dataframe::cast_df},
+    rasterization::{
+        burn_geometry::Burn,
+        burners::{AllTouched, LineBurnStrategy, Standard},
+        pixel_functions::PixelFn,
+        prepare_dataframe::cast_df,
+    },
 };
 use fixedbitset::FixedBitSet;
 use geo_types::Geometry;
@@ -24,39 +29,39 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterato
 pub struct PixelCache {
     bits: FixedBitSet,
     width: usize,
-    min_x: usize,
-    min_y: usize,
+    min_x: isize,
+    min_y: isize,
 }
 
 impl PixelCache {
     pub fn new(linedges: &[LineEdge]) -> Self {
         let (min_x, max_x, min_y, max_y) = linedges.iter().fold(
-            (isize::MAX, isize::MIN, isize::MAX, isize::MIN),
+            (f64::MAX, f64::MIN, f64::MAX, f64::MIN),
             |(min_x, max_x, min_y, max_y), edge| {
                 (
-                    min_x.min(edge.ix0).min(edge.ix1),
-                    max_x.max(edge.ix0).max(edge.ix1),
-                    min_y.min(edge.iy0).min(edge.iy1),
-                    max_y.max(edge.iy0).max(edge.iy1),
+                    min_x.min(edge.x0).min(edge.x1),
+                    max_x.max(edge.x0).max(edge.x1),
+                    min_y.min(edge.y0).min(edge.y1),
+                    max_y.max(edge.y0).max(edge.y1),
                 )
             },
         );
 
-        let width = (max_x - min_x) as usize + 1;
-        let length = (max_y - min_y) as usize + 1;
+        let width = (max_x.floor() - min_x.floor()) as usize + 1;
+        let length = (max_y.floor() - min_y.floor()) as usize + 1;
 
         Self {
             bits: FixedBitSet::with_capacity(width * length),
             width,
-            min_x: min_x as usize,
-            min_y: min_y as usize,
+            min_x: min_x as isize,
+            min_y: min_y as isize,
         }
     }
 
     #[inline]
     fn unravel_index(&self, x: usize, y: usize) -> usize {
-        let local_x = x - self.min_x;
-        let local_y = y - self.min_y;
+        let local_x = (x as isize - self.min_x) as usize;
+        let local_y = (y as isize - self.min_y) as usize;
         local_y * self.width + local_x
     }
 
@@ -146,7 +151,11 @@ where
                     .map(|(band, (group_idx, idxs))| {
                         let mut writer = DenseArrayWriter::new(band, ctx.pixel_fn);
 
-                        process_multi(&ctx, &mut writer, &idxs);
+                        if ctx.opt_flags.with_all_touched() {
+                            process_multi::<N, _, AllTouched>(&ctx, &mut writer, &idxs);
+                        } else {
+                            process_multi::<N, _, Standard>(&ctx, &mut writer, &idxs);
+                        }
 
                         by.get(group_idx as usize).unwrap().to_string()
                     })
@@ -159,7 +168,11 @@ where
                 let mut raster = ctx.raster_info.build_raster(1, ctx.background);
                 let mut writer = DenseArrayWriter::new(raster.index_axis_mut(Axis(0), 0), ctx.pixel_fn);
 
-                process_single(&ctx, &mut writer);
+                if ctx.opt_flags.with_all_touched() {
+                    process_single::<N, _, AllTouched>(&ctx, &mut writer);
+                } else {
+                    process_single::<N, _, Standard>(&ctx, &mut writer);
+                }
 
                 DenseArray::new(raster, band_names, ctx.raster_info)
             }
@@ -185,7 +198,11 @@ where
                         let band_name = by.get(group_idx as usize).unwrap().to_string();
                         let mut writer = SparseArrayWriter::new(band_name);
 
-                        process_multi(&ctx, &mut writer, &idxs);
+                        if ctx.opt_flags.with_all_touched() {
+                            process_multi::<N, _, AllTouched>(&ctx, &mut writer, &idxs);
+                        } else {
+                            process_multi::<N, _, Standard>(&ctx, &mut writer, &idxs);
+                        }
 
                         writer
                     })
@@ -196,8 +213,11 @@ where
             None => {
                 let mut writer = SparseArrayWriter::new(String::from("band_1"));
 
-                process_single(&ctx, &mut writer);
-
+                if ctx.opt_flags.with_all_touched() {
+                    process_single::<N, _, AllTouched>(&ctx, &mut writer);
+                } else {
+                    process_single::<N, _, Standard>(&ctx, &mut writer);
+                }
                 writer.finish(ctx)
             }
         }
@@ -210,32 +230,34 @@ fn get_groups(by: &ChunkedArray<StringType>) -> (usize, GroupsIdx) {
     (groups.len(), groups.into_idx())
 }
 
-fn process_single<N, W>(ctx: &RasterizeContext<N>, writer: &mut W)
+fn process_single<N, W, S>(ctx: &RasterizeContext<N>, writer: &mut W)
 where
     N: Num + PolarsHandler + Copy,
     W: PixelWriter<N>,
+    S: LineBurnStrategy,
 {
     ctx.field
         .phys_iter()
         .zip(&ctx.geometry)
         .for_each(|(field_value, geom)| {
             if let Some(fv) = N::from_anyvalue(field_value) {
-                geom.burn(&ctx.raster_info, fv, writer, ctx.background, &ctx.opt_flags)
+                geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background, &ctx.opt_flags)
             }
         });
 }
 
-fn process_multi<N, W>(ctx: &RasterizeContext<N>, writer: &mut W, idxs: &[u32])
+fn process_multi<N, W, S>(ctx: &RasterizeContext<N>, writer: &mut W, idxs: &[u32])
 where
     N: Num + PolarsHandler + Copy,
     W: PixelWriter<N>,
+    S: LineBurnStrategy,
 {
     for &i in idxs.iter() {
         if let (Some(fv), Some(geom)) = {
             let anyvalue = ctx.field.get(i as usize).unwrap();
             (N::from_anyvalue(anyvalue), ctx.geometry.get(i as usize))
         } {
-            geom.burn(&ctx.raster_info, fv, writer, ctx.background, &ctx.opt_flags)
+            geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background, &ctx.opt_flags)
         }
     }
 }
