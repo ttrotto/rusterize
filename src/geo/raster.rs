@@ -7,54 +7,89 @@ use numpy::{
 };
 use pyo3::prelude::*;
 
-#[derive(FromPyObject, Clone)]
-#[pyo3(from_item_all)]
+#[derive(Clone)]
 pub struct RasterInfo {
-    pub nrows: usize,
     pub ncols: usize,
+    pub nrows: usize,
     pub xmin: f64,
     pub xmax: f64,
     pub ymin: f64,
     pub ymax: f64,
     pub xres: f64,
     pub yres: f64,
-    pub has_extent: bool,
     pub epsg: Option<u16>,
 }
 
-impl RasterInfo {
-    pub fn from(pyinfo: &Bound<PyAny>) -> PyResult<Self> {
-        // map PyAny to RasterInfo
-        let raster_info: RasterInfo = pyinfo.extract()?;
+#[derive(FromPyObject)]
+#[pyo3(from_item_all)]
+struct RawRasterInfo {
+    ncols: usize,
+    nrows: usize,
+    xmin: f64,
+    xmax: f64,
+    ymin: f64,
+    ymax: f64,
+    xres: f64,
+    yres: f64,
+    has_extent: bool,
+    tap: bool,
+    epsg: Option<u16>,
+}
 
-        Ok(raster_info)
+impl<'py> FromPyObject<'py> for RasterInfo {
+    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
+        let raw: RawRasterInfo = ob.extract()?;
+        let info = RasterInfo::from(raw);
+        Ok(info)
     }
+}
 
+impl RasterInfo {
     #[inline]
-    pub fn update_dims(&mut self) {
-        // extend bounds by half pixel to avoid missing points on the border
-        if !self.has_extent && self.xres != 0.0 {
-            self.xmin -= self.xres / 2.0;
-            self.xmax += self.xres / 2.0;
-            self.ymin -= self.yres / 2.0;
-            self.ymax += self.yres / 2.0;
+    fn from(raw: RawRasterInfo) -> Self {
+        let mut info = RasterInfo {
+            ncols: raw.ncols,
+            nrows: raw.nrows,
+            xmin: raw.xmin,
+            xmax: raw.xmax,
+            ymin: raw.ymin,
+            ymax: raw.ymax,
+            xres: raw.xres,
+            yres: raw.yres,
+            epsg: raw.epsg,
+        };
+
+        let has_res = info.xres != 0.0;
+        let has_shape = info.nrows != 0;
+
+        // extent by half pixel if custom extent not provided
+        if !raw.has_extent && !raw.tap && has_res {
+            info.xmin -= info.xres / 2.0;
+            info.xmax += info.xres / 2.0;
+            info.ymin -= info.yres / 2.0;
+            info.ymax += info.yres / 2.0;
         }
 
-        // calculate resolution
-        if self.xres == 0.0 {
-            self.resolution();
+        if !has_res {
+            info.resolution();
+        } else if raw.tap && has_res {
+            info.xmin = (info.xmin / info.xres).floor() * info.xres;
+            info.xmax = (info.xmax / info.xres).ceil() * info.xres;
+            info.ymin = (info.ymin / info.yres).floor() * info.yres;
+            info.ymax = (info.ymax / info.yres).ceil() * info.yres;
         }
 
-        // calculate shape
-        if self.nrows == 0 {
-            self.shape();
+        if !has_shape {
+            info.shape();
         }
+
+        info
     }
 
     #[inline]
     fn shape(&mut self) {
-        self.nrows = ((self.ymax - self.ymin) / self.yres).round() as usize;
-        self.ncols = ((self.xmax - self.xmin) / self.xres).round() as usize;
+        self.nrows = (0.5 + (self.ymax - self.ymin) / self.yres) as usize;
+        self.ncols = (0.5 + (self.xmax - self.xmin) / self.xres) as usize
     }
 
     #[inline]
