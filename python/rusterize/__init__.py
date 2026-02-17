@@ -29,8 +29,9 @@ def rusterize(
     burn: int | float | None = None,
     fun: str = "last",
     background: int | float | None = np.nan,
-    all_touched: bool = False,
     encoding: str = "xarray",
+    all_touched: bool = False,
+    tap: bool = False,
     dtype: str = "float64",
 ) -> DataArray | np.ndarray | SparseArray:
     """
@@ -41,14 +42,15 @@ def rusterize(
         :param like: array to use as blueprint for spatial matching (resolution, shape, extent). Mutually exlusive with res, out_shape, and extent.
         :param res: (xres, yres) for rasterized data.
         :param out_shape: (nrows, ncols) for regularized output shape.
-        :param extent: (xmin, xmax, ymin, ymax) for regularized extent.
+        :param extent: (xmin, ymin, xmax, ymax) for regularized extent.
         :param field: field to rasterize, mutually exclusive with `burn`. Default is None.
         :param by: column to rasterize, assigns each unique value to a layer in the stack based on field. Default is None.
         :param burn: burn a value onto the raster, mutually exclusive with `field`. Default is None.
         :param fun: pixel function to use. Available options are `sum`, `first`, `last`, `min`, `max`, `count`, or `any`. Default is `last`.
         :param background: background value in final raster. Default is np.nan.
-        :param all_touched: if True, every pixel touched by the geometry is burned. Default is `False`.
         :param encoding: return a dense array (burned geometries onto a raster) or a sparse array in COOrdinate format (coordinates and values of the rasterized geometries). Available options are `xarray`, `numpy`, or `sparse`. The `xarray` encoding requires `xarray` and `rioxarray` to be installed. Default is `xarray`.
+        :param all_touched: if True, every pixel touched by the geometry is burned. Default is `False`.
+        :param tap: target aligned pixel to align the extent to the pixel resolution. Defaul is `False`.
         :param dtype: specify the output dtype. Default is `float64`.
 
     Returns:
@@ -87,10 +89,12 @@ def rusterize(
         raise TypeError("`pixel_fn` must be one of sum, first, last, min, max, count, or any.")
     if not isinstance(background, (int, float, NoneType)):
         raise TypeError("`background` must be integer, float, or None.")
-    if not isinstance(all_touched, bool):
-        raise TypeError("`all_touched` must be a boolean.")
     if not isinstance(encoding, str):
         raise TypeError("`encoding` must be one of 'xarray', 'numpy', or 'sparse'.")
+    if not isinstance(all_touched, bool):
+        raise TypeError("`all_touched` must be a boolean.")
+    if not isinstance(tap, bool):
+        raise TypeError("`tap` must be a boolean.")
     if not isinstance(dtype, str):
         raise TypeError(
             "`dtype` must be a one of 'uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64'"
@@ -138,8 +142,8 @@ def rusterize(
         _shape = out_shape if out_shape else (0, 0)
         (_bounds, _has_extent) = (extent, True) if extent else (gdf.total_bounds, False)
 
-    # RasterInfo
-    raster_info = {
+    # RawRasterInfo
+    raw_raster_info = {
         "nrows": _shape[0],
         "ncols": _shape[1],
         "xmin": _bounds[0],
@@ -149,6 +153,7 @@ def rusterize(
         "xres": _res[0],
         "yres": _res[1],
         "has_extent": _has_extent,
+        "tap": tap,
         "epsg": gdf.crs.to_epsg() if gdf.crs else None,
     }
 
@@ -159,4 +164,4 @@ def rusterize(
     except KeyError as e:
         raise KeyError("Column not found in GeoDataFrame.") from e
 
-    return _rusterize(gdf.geometry, raster_info, fun, df, field, by, burn, background, all_touched, encoding, dtype)
+    return _rusterize(gdf.geometry, raw_raster_info, fun, df, field, by, burn, background, all_touched, encoding, dtype)
