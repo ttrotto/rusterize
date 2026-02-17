@@ -2,16 +2,17 @@ cargo-features = ["profile-rustflags"]
 
 [package]
 name = "rusterize"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2024"
-resolver = "2"
+resolver = "3"
 
 [lib]
 name = "rusterize"
 crate-type = ["cdylib"]
 
 [dependencies]
-bitflags = "2.10.0"
+bitflags = "2.11.0"
+fixedbitset = "0.5.7"
 geo = "0.30.0"
 geo-traits = "0.3.0"
 geo-types = "0.7.18"
