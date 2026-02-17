@@ -6,8 +6,8 @@ use crate::{
         pyarrays::{PyOut, PySparseArray, PySparseArrayTraits, Pythonize},
     },
     geo::raster::RasterInfo,
-    prelude::{OutputType, PolarsHandler},
-    rasterization::{pixel_functions::PixelFn, rusterize_impl::RasterizeConfig},
+    prelude::{OptFlags, PolarsHandler},
+    rasterization::{pixel_functions::PixelFn, rusterize_impl::RasterizeContext},
 };
 use ndarray::Array3;
 use num_traits::Num;
@@ -37,18 +37,16 @@ impl<N> Pythonize for DenseArray<N>
 where
     N: Num + Element,
 {
-    fn pythonize(self, py: Python, out_type: OutputType) -> PyResult<PyOut> {
+    fn pythonize(self, py: Python, opt_flags: OptFlags) -> PyResult<PyOut> {
         let data = self.raster.into_pyarray(py);
 
-        match out_type {
-            OutputType::Numpy => Ok(PyOut::Dense(data.into_any())),
-            OutputType::Xarray => {
-                // check dependencies before building the array
-                let xarray_module = py.import("xarray")?;
-                let xarray =
-                    build_xarray(py, xarray_module, self.raster_info, data, self.band_names)?;
-                Ok(PyOut::Dense(xarray))
-            }
+        if opt_flags.with_xarray_output() {
+            // check dependencies before building the array
+            let xarray_module = py.import("xarray")?;
+            let xarray = build_xarray(py, xarray_module, self.raster_info, data, self.band_names)?;
+            Ok(PyOut::Dense(xarray))
+        } else {
+            Ok(PyOut::Dense(data.into_any()))
         }
     }
 }
@@ -82,22 +80,20 @@ impl<N: Num + Copy> SparseArray<N> {
         cols: Vec<usize>,
         data: Vec<N>,
         lengths: Vec<usize>,
-        config: RasterizeConfig<N>,
+        ctx: RasterizeContext<N>,
     ) -> Self {
         Self {
             band_names,
             triplets: Triplets::new(rows, cols, data),
             lengths,
-            raster_info: config.raster_info,
-            pxfn: config.pixel_fn,
-            background: config.background,
+            raster_info: ctx.raster_info,
+            pxfn: ctx.pixel_fn,
+            background: ctx.background,
         }
     }
 
     fn build_raster(&self) -> Array3<N> {
-        let mut raster = self
-            .raster_info
-            .build_raster(self.band_names.len(), self.background);
+        let mut raster = self.raster_info.build_raster(self.band_names.len(), self.background);
 
         let offset = 0;
         let rows = self.triplets.rows.as_slice();
@@ -114,16 +110,8 @@ impl<N: Num + Copy> SparseArray<N> {
                 let band_cols = &cols[offset..end];
                 let band_data = &data[offset..end];
 
-                for ((band_row, band_col), band_value) in
-                    band_rows.iter().zip(band_cols).zip(band_data)
-                {
-                    (self.pxfn)(
-                        &mut band,
-                        *band_row,
-                        *band_col,
-                        *band_value,
-                        self.background,
-                    );
+                for ((band_row, band_col), band_value) in band_rows.iter().zip(band_cols).zip(band_data) {
+                    (self.pxfn)(&mut band, *band_row, *band_col, *band_value, self.background);
                 }
             });
         raster
@@ -210,20 +198,10 @@ where
             columns.push(bands_column);
         }
 
-        let rows = self
-            .triplets
-            .rows
-            .iter()
-            .map(|v| *v as u64)
-            .collect::<Vec<u64>>();
+        let rows = self.triplets.rows.iter().map(|v| *v as u64).collect::<Vec<u64>>();
         columns.push(Column::new("row".into(), rows));
 
-        let cols = self
-            .triplets
-            .cols
-            .iter()
-            .map(|v| *v as u64)
-            .collect::<Vec<u64>>();
+        let cols = self.triplets.cols.iter().map(|v| *v as u64).collect::<Vec<u64>>();
         columns.push(Column::new("col".into(), cols));
 
         columns.push(N::from_named_vec("data", &self.triplets.data));
@@ -238,7 +216,7 @@ impl<N> Pythonize for SparseArray<N>
 where
     N: Num + Element + Copy + PolarsHandler + 'static,
 {
-    fn pythonize(self, _py: Python, _out_type: OutputType) -> PyResult<PyOut> {
+    fn pythonize(self, _py: Python, _opt_flags: OptFlags) -> PyResult<PyOut> {
         Ok(PyOut::Sparse(PySparseArray(Arc::new(self))))
     }
 }

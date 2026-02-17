@@ -90,8 +90,6 @@ where
         "max" => max_values,
         "count" => count_values,
         "any" => any_values,
-        _ => panic!(
-            "'fun' has an invalid value: {fstr}. One of sum, first, last, min, max, count, or any",
-        ),
+        _ => panic!("'fun' has an invalid value: {fstr}. One of sum, first, last, min, max, count, or any",),
     }
 }
