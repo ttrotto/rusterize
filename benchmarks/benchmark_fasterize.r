@@ -13,8 +13,8 @@ fn <- function(v) {
 }
 
 microbenchmark(
-  fasterize_large = f <- fn(large),
-  fasterize_small = f <- fn(small),
+  fasterize_large_f64 = f <- fn(large),
+  fasterize_small_f64 = f <- fn(small),
   times = 10L,
   unit = "s"
 )
