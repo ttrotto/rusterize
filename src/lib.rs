@@ -12,6 +12,7 @@ mod encoding {
 }
 mod rasterization {
     pub mod burn_geometry;
+    pub mod burners;
     pub mod pixel_functions;
     pub mod prepare_dataframe;
     pub mod rusterize_impl;
@@ -102,8 +103,7 @@ fn rusterize_py<'py>(
     let geometry = from_shapely(py, pygeometry)?;
 
     // extract raster information
-    let mut raster_info = RasterInfo::from(pyinfo)?;
-    raster_info.update_dims();
+    let raster_info = RasterInfo::extract_bound(pyinfo)?;
 
     // optional runtime flags
     let opt_flags = OptFlags::new(pytouched, pyencoding, pypixel_fn);
