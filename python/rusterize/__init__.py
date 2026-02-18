@@ -3,10 +3,13 @@ from __future__ import annotations
 import importlib.metadata
 from types import NoneType
 from typing import TYPE_CHECKING, List, Tuple
+from collections.abc import Iterable
 
 import numpy as np
 import polars as pl
+import polars_st as st
 from geopandas import GeoDataFrame
+from shapely import total_bounds, from_wkb
 
 from .rusterize import _rusterize
 
@@ -19,7 +22,9 @@ __version__ = importlib.metadata.version("rusterize")
 
 
 def rusterize(
-    gdf: GeoDataFrame,
+    gdf: GeoDataFrame | pl.DataFrame | list | np.ndarray,
+    geom_col : str = None,
+    value : list | np.ndarray | None = None,
     like: DataArray | Dataset | None = None,
     res: Tuple | List | None = None,
     out_shape: Tuple | List | None = None,
@@ -38,11 +43,13 @@ def rusterize(
     Fast geopandas rasterization in Rust.
 
     Args:
-        :param gdf: geopandas dataframe to rasterize.
+        :param gdf: geopandas dataframe or polars dataframe to rasterize.
+        :param geom_col: geometry column for polars dataframe. Has to be provided if polars dataframe is used. Default to None.
+        :param value: value to use in case numpy array or list is used as input. 
         :param like: array to use as blueprint for spatial matching (resolution, shape, extent). Mutually exlusive with res, out_shape, and extent.
         :param res: (xres, yres) for rasterized data.
         :param out_shape: (nrows, ncols) for regularized output shape.
-        :param extent: (xmin, ymin, xmax, ymax) for regularized extent.
+        :param extent: (xmin, xmax, ymin, ymax) for regularized extent.
         :param field: field to rasterize, mutually exclusive with `burn`. Default is None.
         :param by: column to rasterize, assigns each unique value to a layer in the stack based on field. Default is None.
         :param burn: burn a value onto the raster, mutually exclusive with `field`. Default is None.
@@ -69,8 +76,8 @@ def rusterize(
         A `None` value for `dtype` corresponds to the default of that dtype. An illegal value for a dtype will be replaced with the default of that dtype. For example, a `background=np.nan` for `dtype="uint8"` will become `background=0`, where `0` is the default for `uint8`.
     """
     # type checks
-    if not isinstance(gdf, GeoDataFrame):
-        raise TypeError("`gdf` must be a geopandas dataframe.")
+    if not isinstance(gdf, (GeoDataFrame, pl.DataFrame, list, np.ndarray)):
+        raise TypeError("`gdf` must be either geopandas dataframe, polars DataFrame, list, or numpy array")
     if type(like).__name__ not in ("DataArray", "Dataset", "NoneType"):
         raise TypeError("`like' must be a xarray.DataArray or xarray.Dataset")
     if not isinstance(res, (tuple, list, NoneType)):
@@ -101,6 +108,8 @@ def rusterize(
         )
 
     # value checks and defaults
+    if isinstance(gdf, pl.DataFrame) and not geom_col:
+        raise ValueError("Geometry column has to be provided when polars DataFrame is used.")
     if field and burn:
         raise ValueError("Only one of `field` or `burn` can be specified.")
     if encoding not in ["xarray", "numpy", "sparse"]:
@@ -140,7 +149,41 @@ def rusterize(
         # defaults
         _res = res if res else (0, 0)
         _shape = out_shape if out_shape else (0, 0)
-        (_bounds, _has_extent) = (extent, True) if extent else (gdf.total_bounds, False)
+
+        # extract columns of interest and convert to polars
+        cols = list(set([col for col in (field, by) if col]))
+
+        # Type checking to determin how the information for bounds are to be generated
+        if isinstance(gdf, GeoDataFrame):
+            (_bounds, _has_extent) = (extent, True) if extent else (gdf.total_bounds, False)
+            epsg = gdf.crs.to_epsg() if gdf.crs else None
+            try:
+                df = pl.from_pandas(gdf[cols]) if cols else None
+            except KeyError as e:
+                raise KeyError("Column not found in GeoDataFrame.") from e
+
+        elif isinstance(gdf, pl.DataFrame):
+            (_bounds, _has_extent) = (extent, True) if extent else (gdf.select(pl.col(geom_col).st.total_bounds()).item().to_numpy(), False)
+            # Check whether the geometry has srid. When it is 0 (no srid)
+            # If the first one is zero --> meaning no srid --> give None back
+            # If otherwise assume epsg is all consistent --> take first srid
+            epsg = (gdf.select(pl.col("geometry").st.srid().alias("srid"))
+                        .select(
+                            pl.when(pl.col("srid").first().eq(0))
+                            .then(None)
+                            .otherwise(pl.col("srid").first())
+                            ).item())
+            try:
+                df = gdf.select(pl.col(cols)) if cols else None
+            except KeyError as e:
+                raise KeyError("Column not found in polars DataFrame.") from e
+        
+        else:
+            (_bounds, _has_extent) = (extent, True) if extent else (total_bounds([from_wkb(g) for g in gdf]), False)
+            # Simplification for now.
+            # Parsing epsg theoretically possible but spared for now
+            epsg = None
+            df = pl.DataFrame({"value":value})
 
     # RawRasterInfo
     raw_raster_info = {
@@ -154,14 +197,12 @@ def rusterize(
         "yres": _res[1],
         "has_extent": _has_extent,
         "tap": tap,
-        "epsg": gdf.crs.to_epsg() if gdf.crs else None,
+        "epsg": epsg,
     }
 
-    # extract columns of interest and convert to polars
-    cols = list(set([col for col in (field, by) if col]))
-    try:
-        df = pl.from_pandas(gdf[cols]) if cols else None
-    except KeyError as e:
-        raise KeyError("Column not found in GeoDataFrame.") from e
-
-    return _rusterize(gdf.geometry, raw_raster_info, fun, df, field, by, burn, background, all_touched, encoding, dtype)
+    if isinstance(gdf, GeoDataFrame):
+        return _rusterize(gdf.geometry, raw_raster_info, fun, df, field, by, burn, background, all_touched, encoding, dtype)
+    elif isinstance(gdf, pl.DataFrame):
+        return _rusterize(gdf.select(pl.col(geom_col)).to_series(), raw_raster_info, fun, df, field, by, burn, background, all_touched, encoding, dtype)
+    else:
+        return _rusterize(gdf, raw_raster_info, fun, df, field, by, burn, background, all_touched, encoding, dtype)

@@ -32,3 +32,11 @@ uv.lock
 
 # Rust outputs
 target/
+
+# Temporary maturin development
+*.pyd
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+dev_notebooks/

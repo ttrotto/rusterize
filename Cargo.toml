@@ -2,7 +2,7 @@ cargo-features = ["profile-rustflags"]
 
 [package]
 name = "rusterize"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2024"
 resolver = "3"
 
