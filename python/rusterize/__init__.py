@@ -49,7 +49,7 @@ def rusterize(
         :param like: array to use as blueprint for spatial matching (resolution, shape, extent). Mutually exlusive with res, out_shape, and extent.
         :param res: (xres, yres) for rasterized data.
         :param out_shape: (nrows, ncols) for regularized output shape.
-        :param extent: (xmin, xmax, ymin, ymax) for regularized extent.
+        :param extent: (xmin, ymin, xmax, ymax) for regularized extent.
         :param field: field to rasterize, mutually exclusive with `burn`. Default is None.
         :param by: column to rasterize, assigns each unique value to a layer in the stack based on field. Default is None.
         :param burn: burn a value onto the raster, mutually exclusive with `field`. Default is None.
