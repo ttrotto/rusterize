@@ -29,4 +29,14 @@ README_files
 benchmarks/data
 .git
 uv.lock
-**/*.xml
+
+# Rust outputs
+target/
+
+# Temporary maturin development
+*.pyd
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+dev_notebooks/

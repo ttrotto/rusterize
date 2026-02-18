@@ -1,7 +1,7 @@
 mod allocator;
 mod geo {
     pub mod edges;
-    pub mod from_shapely;
+    pub mod geo_inputs;
     pub mod raster;
 }
 mod encoding {
@@ -21,7 +21,7 @@ mod prelude;
 
 use crate::{
     encoding::pyarrays::{PyOut, Pythonize},
-    geo::from_shapely::from_shapely,
+    geo::geo_inputs::from_input,
     prelude::*,
     rasterization::{
         pixel_functions::set_pixel_function,
@@ -100,7 +100,7 @@ fn rusterize_py<'py>(
     let df: Option<DataFrame> = pydf.map(|inner| inner.into());
 
     // parse geometries
-    let geometry = from_shapely(py, pygeometry)?;
+    let geometry = from_input(py, pygeometry)?;
 
     // extract raster information
     let raster_info = RasterInfo::extract_bound(pyinfo)?;

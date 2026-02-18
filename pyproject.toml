@@ -23,6 +23,7 @@ dependencies = [
     "pandas>=2.2.3",
     "pyarrow>=18.1.0",
     "polars>=1.19.0",
+    "polars-st>=0.4.3",
 ]
 
 [project.optional-dependencies]
