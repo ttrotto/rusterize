@@ -1,8 +1,12 @@
 name: CI
 
+# on:
+#   release:
+#     types: [published]
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -11,7 +15,7 @@ jobs:
   linux:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         platform:
           - runner: ubuntu-22.04
@@ -51,7 +55,7 @@ jobs:
   musllinux:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         platform:
           - runner: ubuntu-22.04
@@ -89,7 +93,7 @@ jobs:
   windows:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         platform:
           - runner: windows-latest
@@ -123,7 +127,7 @@ jobs:
   macos:
     runs-on: ${{ matrix.platform.runner }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         platform:
           - runner: macos-15-intel
