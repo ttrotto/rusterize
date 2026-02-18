@@ -11,8 +11,11 @@ use pyo3::{
     intern,
     prelude::*,
     pybacked::PyBackedBytes,
-    types::{PyAny, PyDict},
+    types::{PyAny, PyDict, PyList, PyBytes},
 };
+use polars::prelude::*;
+use pyo3_polars::PySeries;
+use pyo3::Bound;
 use wkb::reader::read_wkb;
 
 fn parse_wkb_to_geometry(wkb: &[u8]) -> Option<Geometry<f64>> {
@@ -57,4 +60,45 @@ pub fn from_shapely(py: Python, input: &Bound<PyAny>) -> PyResult<Vec<Geometry<f
     }
 
     Ok(wkb_output)
+}
+
+pub fn from_polars_wkb(input: &Bound<PyAny>) -> PyResult<Vec<Geometry<f64>>> {
+    let pyseries: PySeries = input.extract()?;
+    let mut wkb_output = Vec::with_capacity(pyseries.0.len());
+    for item in pyseries.0.iter() {
+            match item {
+                AnyValue::Null => continue,  // Skip nulls
+                _ => {
+                    if let Some(buf) = item.extract_bytes() {
+                        let parsed = parse_wkb_to_geometry(buf);  // &[u8]
+                        wkb_output.push(parsed);
+                    }
+                }
+            } 
+    }
+    let wkb_output: Vec<Geometry<f64>> = wkb_output.into_iter().flatten().collect();
+    Ok(wkb_output)
+}
+
+pub fn from_wkb_list(py_list: &Bound<'_, PyList>) -> PyResult<Vec<Geometry<f64>>> {
+    let geometries: Vec<Geometry<f64>> = py_list
+        .iter()
+        .filter_map(|py_item| {
+            let bytes = py_item.downcast::<PyBytes>().ok()?;  
+            // parse → Option → ? early None on fail  
+            let parsed = parse_wkb_to_geometry(bytes.as_bytes())?;
+            Some(parsed)
+        })
+        .collect();
+    Ok(geometries)
+}
+
+pub fn from_input(py: Python, input: &Bound<PyAny>) -> PyResult<Vec<Geometry<f64>>> {
+    if input.hasattr("geom_type")? {
+        from_shapely(py, input)
+    } else if let Ok(py_list) = input.downcast::<PyList>() {
+        from_wkb_list(py_list)
+    } else {
+        from_polars_wkb(input)
+    }
 }
