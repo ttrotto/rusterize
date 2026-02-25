@@ -3,7 +3,6 @@ Build xarray object from a dictionary.
 
 The xarray module is passed as a function argument to avoid importing
 it twice for DenseSparse and SparseArray
-
 */
 
 use crate::geo::raster::RasterInfo;
@@ -16,7 +15,6 @@ use pyo3::{
 
 pub fn build_xarray<'py, T>(
     py: Python<'py>,
-    xarray_module: Bound<'py, PyModule>,
     raster_info: RasterInfo,
     data: Bound<'py, PyArray3<T>>,
     band_names: Vec<String>,
@@ -24,6 +22,9 @@ pub fn build_xarray<'py, T>(
 where
     T: Num + Element,
 {
+    let xarray_module = py.import("xarray")?;
+    py.import("rioxarray")?;
+
     let (y, x) = raster_info.make_coordinates(py);
     let bands = PyList::new(py, band_names)?;
     let dims = PyList::new(py, vec!["bands", "y", "x"])?;
