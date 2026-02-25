@@ -29,6 +29,7 @@ README_files
 .ruff_cache
 benchmarks/data
 .git
+**/*.aux.xml
 
 # Temporary maturin development
 *.pyd
