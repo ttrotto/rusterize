@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="img/logo.png" width="620"/>
+</p>
+
+<br>
+
 High performance rasterization tool for Python built in Rust, inspired by the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package with lots of useful improvements (see [API](#API)).
 
 **rusterize** is designed to work on _all_ shapely geometries, even when they are nested inside complex geometry collections. Functionally, it supports four input types:
@@ -9,7 +15,7 @@ High performance rasterization tool for Python built in Rust, inspired by the [f
 
 It returns a [xarray](https://docs.xarray.dev/en/stable/), a [numpy](https://numpy.org/), or a sparse array in COOrdinate format.
 
-# Installation
+### Installation
 
 `rusterize` comes with numpy as the only required dependency and is distributed in different flavors. A `core` library that performs the rasterization and returns a bare `numpy` array, a `xarray` flavor that returns a georeferenced `xarray` (requires `xarray` and `rioxarray` and is the recommended flavor), or an `all` flavor with dependencies for all supported inputs.
 
@@ -26,7 +32,7 @@ pip install 'rusterize[xarray]'
 pip install 'rusterize[all]'
 ```
 
-# Contributing
+### Contributing
 
 Any contribution is welcome! You can install **rusterize** directly from this repo using [maturin](https://www.maturin.rs/) as an editable package. For this to work, you’ll need to have [Rust](https://www.rust-lang.org/tools/install) and [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed. To run the tests you need to have `gdal` installed as well as the `rusterize[all]` flavor.
 
@@ -48,7 +54,7 @@ maturin develop --profile dist-release
 pytest
 ```
 
-# API
+### API
 
 **rusterize** has a simple API consisting of a single function `rusterize()`:
 
@@ -119,11 +125,11 @@ rusterize(
 
 Note that control over the desired extent is not as strict as for resolution and shape. That is, when resolution, output shape, and extent are specified, priority is given to resolution and shape. So, extent is not guaranteed, but resolution and shape are. If extent is not given, it is taken from the polygons and is not modified, unless you specify a resolution value. If you only specify an output shape, the extent is maintained. This mimics the logics of `gdal_rasterize`.
 
-# Encoding
+### Encoding
 
 `rusterize` offers three encoding options for the rasterization output. You can return a `xarray/numpy` with the rasterized geometries, or a new `SparseArray` structure. This `SparseArray` structure stores the band/row/column triplets of where the geometries should be burned onto the final raster, as well as their corresponding values before applying any pixel function. This can be used as an intermediate output to avoid allocating memory before materializing the final raster, or as a final product. `SparseArray` has three convenience functions: `to_xarray()`, `to_numpy()`, and `to_frame()`. The first two return the final `xarray/numpy` with the appropriate pixel function, the last returns a `polars` dataframe with only the coordinates and values of the rasterized geometries. Note that `SparseArray` avoids allocating memory for the array during rasterization until it's actually needed (e.g. calling `to_xarray()`). See below for an example.
 
-# Usage
+### Usage
 
 ```python
 from rusterize import rusterize
@@ -201,7 +207,7 @@ output.to_frame()
 
 ![](img/plot.png)
 
-# Benchmarks
+### Benchmarks
 
 **rusterize** is fast! Let’s try it on small and large datasets in comparison to GDAL ([benchmark_rusterize.py](benchmarks/benchmark_rusterize.py)). You can run this with [pytest](https://docs.pytest.org/en/stable/) and [pytest-benchmark](https://pytest-benchmark.readthedocs.io/en/stable/):
 
@@ -230,7 +236,7 @@ Unit: seconds
  fasterize_large_f64  36.91321005  37.71877265  41.0140303  40.81343803  43.9201820  46.5596799    10
 ```
 
-# Comparison with other tools
+### Comparison with other tools
 
 While **rusterize** is fast, there are other fast alternatives out there, including `rasterio` and `geocube`. However, **rusterize** allows for a seamless, Rust-native processing with similar or lower memory footprint that doesn't require you to install GDAL and returns the geoinformation you need for downstream processing with ample control over resolution, shape, extent, and data type.
 
@@ -242,8 +248,12 @@ rasterio:  15.2 sec
 geocube:   129.2 sec
 ```
 
-# Integrations
+### Integrations
 
 **rusterize** is integrated into the following libraries:
 
 - [rasterix](https://github.com/xarray-contrib/rasterix)
+
+<br>
+    
+<em>Disclaimer: Logo originally generated with Nano Banana Pro</em>
