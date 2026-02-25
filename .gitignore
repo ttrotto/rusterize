@@ -12,6 +12,7 @@ target/
 # Virtual environment
 .venv
 .env
+uv.lock
 
 # Shared object
 **/*.so
@@ -23,15 +24,11 @@ target/
 # Benchmarks
 .benchmarks
 
-# other stuff
+# Other stuff
 README_files
 .ruff_cache
 benchmarks/data
 .git
-uv.lock
-
-# Rust outputs
-target/
 
 # Temporary maturin development
 *.pyd
