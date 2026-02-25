@@ -18,7 +18,7 @@ where
     match df {
         None => {
             // case 1: create a dummy `field`
-            DataFrame::new(vec![burn_value.into_column("field_casted", burn_length)]).unwrap()
+            DataFrame::new(burn_length, vec![burn_value.into_column("field_casted", burn_length)]).unwrap()
         }
         Some(df) => {
             let mut lf = df.lazy();

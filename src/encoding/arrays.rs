@@ -15,6 +15,7 @@ use numpy::{Element, IntoPyArray};
 use polars::prelude::*;
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 pub struct DenseArray<N> {
     raster: Array3<N>,
@@ -41,9 +42,7 @@ where
         let data = self.raster.into_pyarray(py);
 
         if opt_flags.with_xarray_output() {
-            // check dependencies before building the array
-            let xarray_module = py.import("xarray")?;
-            let xarray = build_xarray(py, xarray_module, self.raster_info, data, self.band_names)?;
+            let xarray = build_xarray(py, self.raster_info, data, self.band_names)?;
             Ok(PyOut::Dense(xarray))
         } else {
             Ok(PyOut::Dense(data.into_any()))
@@ -73,7 +72,10 @@ pub struct SparseArray<N> {
     background: N,
 }
 
-impl<N: Num + Copy> SparseArray<N> {
+impl<N> SparseArray<N>
+where
+    N: Num + Copy,
+{
     pub fn new(
         band_names: Vec<String>,
         rows: Vec<usize>,
@@ -118,9 +120,9 @@ impl<N: Num + Copy> SparseArray<N> {
     }
 }
 
-impl<N> PySparseArrayTraits for SparseArray<N>
+impl<T> PySparseArrayTraits for SparseArray<T>
 where
-    N: Num + Element + Copy + PolarsHandler,
+    T: Num + Element + Copy + PolarsHandler,
 {
     // estimated size of the materialized array
     fn size_str(&self) -> String {
@@ -160,21 +162,11 @@ where
     }
 
     fn to_xarray<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        // check dependencies before building the array
-        let xarray_module = py.import("xarray")?;
-        py.import("rioxarray")?;
-
         let raster = self.build_raster();
 
         let data = raster.into_pyarray(py);
 
-        build_xarray(
-            py,
-            xarray_module,
-            self.raster_info.clone(),
-            data,
-            self.band_names.clone(),
-        )
+        build_xarray(py, self.raster_info.clone(), data, self.band_names.clone())
     }
 
     fn to_numpy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
@@ -198,23 +190,24 @@ where
             columns.push(bands_column);
         }
 
-        let rows = self.triplets.rows.iter().map(|v| *v as u64).collect::<Vec<u64>>();
+        let rows = self.triplets.rows.par_iter().map(|v| *v as u64).collect::<Vec<u64>>();
+        let length = rows.len();
         columns.push(Column::new("row".into(), rows));
 
-        let cols = self.triplets.cols.iter().map(|v| *v as u64).collect::<Vec<u64>>();
+        let cols = self.triplets.cols.par_iter().map(|v| *v as u64).collect::<Vec<u64>>();
         columns.push(Column::new("col".into(), cols));
 
-        columns.push(N::from_named_vec("data", &self.triplets.data));
+        columns.push(T::from_named_vec("data", &self.triplets.data));
 
-        let df = DataFrame::new(columns).unwrap();
+        let df = DataFrame::new(length, columns).unwrap();
         PyDataFrame(df)
     }
 }
 
 // conversion to python
-impl<N> Pythonize for SparseArray<N>
+impl<T> Pythonize for SparseArray<T>
 where
-    N: Num + Element + Copy + PolarsHandler + 'static,
+    T: Num + Element + Copy + PolarsHandler + 'static,
 {
     fn pythonize(self, _py: Python, _opt_flags: OptFlags) -> PyResult<PyOut> {
         Ok(PyOut::Sparse(PySparseArray(Arc::new(self))))

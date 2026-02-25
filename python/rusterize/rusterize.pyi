@@ -1,16 +1,15 @@
-from typing import List, Tuple
-
 import numpy as np
-from geopandas import GeoDataFrame
-from polars import DataFrame
-from xarray import DataArray, Dataset
+
+from ._dependencies import geopandas as gpd
+from ._dependencies import polars as pl
+from ._dependencies import xarray as xr
 
 def rusterize(
-    gdf: GeoDataFrame,
-    like: DataArray | Dataset | None = None,
-    res: Tuple | List | None = None,
-    out_shape: Tuple | List | None = None,
-    extent: Tuple | List | None = None,
+    data: gpd.GeoDataFrame | pl.DataFrame | list | np.ndarray,
+    like: xr.DataArray | xr.Dataset | None = None,
+    res: tuple | list | None = None,
+    out_shape: tuple | list | None = None,
+    extent: tuple | list | None = None,
     field: str | None = None,
     by: str | None = None,
     burn: int | float | None = None,
@@ -20,42 +19,62 @@ def rusterize(
     all_touched: bool = False,
     tap: bool = False,
     dtype: str = "float64",
-) -> DataArray | np.ndarray | SparseArray:
+) -> xr.DataArray | np.ndarray | SparseArray:
     """
-    Fast geopandas rasterization in Rust.
+    Fast geometry rasterization in Rust.
 
-    Args:
-        :param gdf: geopandas dataframe to rasterize.
-        :param like: array to use as blueprint for spatial matching (resolution, shape, extent). Mutually exlusive with res, out_shape, and extent.
-        :param res: (xres, yres) for rasterized data.
-        :param out_shape: (nrows, ncols) for regularized output shape.
-        :param extent: (xmin, ymin, xmax, ymax) for regularized extent.
-        :param field: field to rasterize, mutually exclusive with `burn`. Default is None.
-        :param by: column to rasterize, assigns each unique value to a layer in the stack based on field. Default is None.
-        :param burn: burn a value onto the raster, mutually exclusive with `field`. Default is None.
-        :param fun: pixel function to use. Available options are `sum`, `first`, `last`, `min`, `max`, `count`, or `any`. Default is `last`.
-        :param background: background value in final raster. Default is np.nan.
-        :param encoding: return a dense array (burned geometries onto a raster) or a sparse array in COOrdinate format (coordinates and values of the rasterized geometries). Available options are `xarray`, `numpy`, or `sparse`. The `xarray` encoding requires `xarray` and `rioxarray` to be installed. Default is `xarray`.
-        :param all_touched: if True, every pixel touched by the geometry is burned. Default is `False`.
-        :param tap: target aligned pixel to align the extent to the pixel resolution. Defaul is `False`.
-        :param dtype: specify the output dtype. Default is `float64`.
+    Parameters
+    ----------
+    data : geopandas.GeoDataFrame, polars.DataFrame, list, numpy.ndarray
+      Input data to rasterize.
+      - If polars.DataFrame, it must be have a "geometry" column with geometries stored in WKB or WKT format.
+      - If list or numpy.ndarray, geometries must be in WKT, WKB, or shapely formats (EPSG is not inferred and defaults to None).
+    like : xarray.DataArray or xarray.Dataset (default: None)
+      Template array used as a spatial blueprint (resolution, shape, extent). Mutually exclusive with `res`, `out_shape`, and `extent`. Requires xarray and rioxarray.
+    res : tuple or list (default: None)
+      Pixel resolution defined as (xres, yres).
+    out_shape : tuple or list (default: None)
+      Output raster dimensions defined as (nrows, ncols).
+    extent : `tuple` or `list` (default: None)
+      Spatial bounding box defined as `(xmin, ymin, xmax, ymax)`.
+    field : `str` (default: None)
+      Column name to use for pixel values. Mutually exclusive with `burn`. Not considered when input is list or numpy.ndarray.
+    by : `str` (default: None)
+      Column used for grouping. Each group is rasterized into a distinct band in the output. Not considered when input is list or numpy.ndarray.
+    burn : `int` or `float` (default: None)
+      A static value to apply to all geometries. Mutually exclusive with `field`.
+    fun : `str` (default: "last")
+      Pixel function to use when burning geometries. Available options: `sum`, `first`, `last`, `min`, `max`, `count`, or `any`.
+    background : `int` or `float` (default: numpy.nan)
+      Value assigned to pixels not covered by any geometry.
+    encoding : `str` (default: "xarray")
+      The format of the returned object: `"xarray"`, `"numpy"`, or `"sparse"`.
+    all_touched : `bool` (default: False)
+      If True, every pixel touched by a geometry is burned.
+    tap : `bool` (default: False)
+      Target Aligned Pixels: aligns the extent to the pixel resolution.
+    dtype : `str` (default: "float64")
+      Output data type (e.g., `uint8`, `int32`, `float32`).
 
-    Returns:
+    Returns
+    -------
         xarray.DataArray, numpy.ndarray, or a sparse array in COO format.
 
-    Notes:
-        If `encoding` is `numpy`, the array is returned without any spatial reference.
+    Notes
+    -----
+        If `encoding` is "numpy" or input is list or numpy.ndarray, the return array is without any spatial reference.
 
         When any of `res`, `out_shape`, or `extent` is not provided, it is inferred from the other arguments when applicable.
-        If `like` is specified, `res`, `out_shape`, and `extent` are inferred from the `like` DataArray.
+        If `like` is specified, `res`, `out_shape`, and `extent` are inferred from the `like` DataArray or Dataset.
         Unless `extent` is specified, a half-pixel buffer is applied to avoid missing points on the border.
         The logics dictating the final spatial properties of the rasterized geometries follow those of GDAL.
 
-        If `field` is not in `gdf`, then a default `burn` value of 1 is rasterized.
+        If `field` is not in `data`, then a default `burn` value of 1 is rasterized.
 
         A `None` value for `dtype` corresponds to the default of that dtype. An illegal value for a dtype will be replaced with the default of that dtype. For example, a `background=np.nan` for `dtype="uint8"` will become `background=0`, where `0` is the default for `uint8`.
     """
 
 class SparseArray:
-    def to_xarray(self) -> DataArray: ...
-    def to_frame(self) -> DataFrame: ...
+    def to_xarray(self) -> xr.DataArray: ...
+    def to_numpy(self) -> np.ndarray: ...
+    def to_frame(self) -> pl.DataFrame: ...

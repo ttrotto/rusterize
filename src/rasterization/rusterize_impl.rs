@@ -3,20 +3,17 @@
 use crate::{
     encoding::{
         arrays::{DenseArray, SparseArray},
-        pyarrays::Pythonize,
         writers::{DenseArrayWriter, PixelWriter, SparseArrayWriter, ToSparseArray},
     },
-    geo::{edges::LineEdge, raster::RasterInfo},
+    geo::{edges::LineEdge, parse_geometry::ParsedGeometry, raster::RasterInfo},
     prelude::{Dense, OptFlags, PolarsHandler, Sparse},
     rasterization::{
         burn_geometry::Burn,
-        burners::{AllTouched, LineBurnStrategy, Standard},
+        burners::{AllTouched, AllTouchedCached, LineBurnStrategy, Standard},
         pixel_functions::PixelFn,
-        prepare_dataframe::cast_df,
     },
 };
 use fixedbitset::FixedBitSet;
-use geo_types::Geometry;
 use ndarray::Axis;
 use num_traits::Num;
 use numpy::Element;
@@ -29,39 +26,39 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterato
 pub struct PixelCache {
     bits: FixedBitSet,
     width: usize,
-    min_x: isize,
-    min_y: isize,
+    xmin: isize,
+    ymin: isize,
 }
 
 impl PixelCache {
     pub fn new(linedges: &[LineEdge]) -> Self {
-        let (min_x, max_x, min_y, max_y) = linedges.iter().fold(
-            (f64::MAX, f64::MIN, f64::MAX, f64::MIN),
-            |(min_x, max_x, min_y, max_y), edge| {
+        let (xmin, ymin, xmax, ymax) = linedges.iter().fold(
+            (f64::MAX, f64::MAX, f64::MIN, f64::MIN),
+            |(xmin, ymin, xmax, ymax), edge| {
                 (
-                    min_x.min(edge.x0).min(edge.x1),
-                    max_x.max(edge.x0).max(edge.x1),
-                    min_y.min(edge.y0).min(edge.y1),
-                    max_y.max(edge.y0).max(edge.y1),
+                    xmin.min(edge.x0).min(edge.x1),
+                    ymin.min(edge.y0).min(edge.y1),
+                    xmax.max(edge.x0).max(edge.x1),
+                    ymax.max(edge.y0).max(edge.y1),
                 )
             },
         );
 
-        let width = (max_x.floor() - min_x.floor()) as usize + 1;
-        let length = (max_y.floor() - min_y.floor()) as usize + 1;
+        let width = (xmax.floor() - xmin.floor()) as usize + 1;
+        let length = (ymax.floor() - ymin.floor()) as usize + 1;
 
         Self {
             bits: FixedBitSet::with_capacity(width * length),
             width,
-            min_x: min_x as isize,
-            min_y: min_y as isize,
+            xmin: xmin as isize,
+            ymin: ymin as isize,
         }
     }
 
     #[inline]
     fn unravel_index(&self, x: usize, y: usize) -> usize {
-        let local_x = (x as isize - self.min_x) as usize;
-        let local_y = (y as isize - self.min_y) as usize;
+        let local_x = (x as isize - self.xmin) as usize;
+        let local_y = (y as isize - self.ymin) as usize;
         local_y * self.width + local_x
     }
 
@@ -82,46 +79,21 @@ impl PixelCache {
 
 pub struct RasterizeContext<N> {
     pub raster_info: RasterInfo,
-    geometry: Vec<Geometry>,
-    field: Column,
+    pub geometry: ParsedGeometry,
+    pub field: Column,
     pub pixel_fn: PixelFn<N>,
     pub background: N,
-    opt_flags: OptFlags,
+    pub opt_flags: OptFlags,
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn rusterize_impl<T, R>(
-    geometry: Vec<Geometry>,
-    raster_info: RasterInfo,
-    pixel_fn: PixelFn<T>,
-    background: T,
-    df: Option<DataFrame>,
-    field_name: Option<&str>,
-    by_name: Option<&str>,
-    burn_value: T,
-    opt_flags: OptFlags,
-) -> R::Output
-where
-    T: Num + PolarsHandler,
-    R: Rasterize<T>,
-    R::Output: Pythonize,
-{
-    // extract column from dataframe (cloning is cheap)
-    let casted = cast_df(df, field_name, by_name, burn_value, geometry.len());
-    let field = casted.column("field_casted").unwrap().clone();
-    let by = casted.column("by_str").ok().and_then(|by| by.str().ok());
-
-    // main
-    let ctx = RasterizeContext {
-        raster_info,
-        geometry,
-        field,
-        pixel_fn,
-        background,
-        opt_flags,
+macro_rules! dispatch_burn {
+    ($all_touched:expr, $dedup:expr, $func:ident, $ctx:expr, $writer:expr $(, $ext:expr)*) => {
+        match ($all_touched, $dedup) {
+            (true, true)   => $func::<N, _, AllTouchedCached>($ctx, $writer $(, $ext)*),
+            (true, false)  => $func::<N, _, AllTouched>($ctx, $writer $(, $ext)*),
+            (false, _)  => $func::<N, _, Standard>($ctx, $writer $(, $ext)*),
+        }
     };
-
-    R::rasterize(ctx, by)
 }
 
 // rasterization logics
@@ -138,6 +110,9 @@ where
     type Output = DenseArray<N>;
 
     fn rasterize(ctx: RasterizeContext<N>, by: Option<&ChunkedArray<StringType>>) -> Self::Output {
+        let all_touched = ctx.opt_flags.with_all_touched();
+        let dedup = ctx.opt_flags.requires_deduplication();
+
         match by {
             Some(by) => {
                 let (n_groups, group_idx) = get_groups(by);
@@ -151,11 +126,7 @@ where
                     .map(|(band, (group_idx, idxs))| {
                         let mut writer = DenseArrayWriter::new(band, ctx.pixel_fn);
 
-                        if ctx.opt_flags.with_all_touched() {
-                            process_multi::<N, _, AllTouched>(&ctx, &mut writer, &idxs);
-                        } else {
-                            process_multi::<N, _, Standard>(&ctx, &mut writer, &idxs);
-                        }
+                        dispatch_burn!(all_touched, dedup, process_multi, &ctx, &mut writer, &idxs);
 
                         by.get(group_idx as usize).unwrap().to_string()
                     })
@@ -168,11 +139,7 @@ where
                 let mut raster = ctx.raster_info.build_raster(1, ctx.background);
                 let mut writer = DenseArrayWriter::new(raster.index_axis_mut(Axis(0), 0), ctx.pixel_fn);
 
-                if ctx.opt_flags.with_all_touched() {
-                    process_single::<N, _, AllTouched>(&ctx, &mut writer);
-                } else {
-                    process_single::<N, _, Standard>(&ctx, &mut writer);
-                }
+                dispatch_burn!(all_touched, dedup, process_single, &ctx, &mut writer);
 
                 DenseArray::new(raster, band_names, ctx.raster_info)
             }
@@ -187,6 +154,9 @@ where
     type Output = SparseArray<N>;
 
     fn rasterize(ctx: RasterizeContext<N>, by: Option<&ChunkedArray<StringType>>) -> Self::Output {
+        let all_touched = ctx.opt_flags.with_all_touched();
+        let dedup = ctx.opt_flags.requires_deduplication();
+
         match by {
             Some(by) => {
                 let (n_groups, group_idx) = get_groups(by);
@@ -198,11 +168,7 @@ where
                         let band_name = by.get(group_idx as usize).unwrap().to_string();
                         let mut writer = SparseArrayWriter::new(band_name);
 
-                        if ctx.opt_flags.with_all_touched() {
-                            process_multi::<N, _, AllTouched>(&ctx, &mut writer, &idxs);
-                        } else {
-                            process_multi::<N, _, Standard>(&ctx, &mut writer, &idxs);
-                        }
+                        dispatch_burn!(all_touched, dedup, process_multi, &ctx, &mut writer, &idxs);
 
                         writer
                     })
@@ -213,11 +179,8 @@ where
             None => {
                 let mut writer = SparseArrayWriter::new(String::from("band_1"));
 
-                if ctx.opt_flags.with_all_touched() {
-                    process_single::<N, _, AllTouched>(&ctx, &mut writer);
-                } else {
-                    process_single::<N, _, Standard>(&ctx, &mut writer);
-                }
+                dispatch_burn!(all_touched, dedup, process_single, &ctx, &mut writer);
+
                 writer.finish(ctx)
             }
         }
@@ -241,7 +204,7 @@ where
         .zip(&ctx.geometry)
         .for_each(|(field_value, geom)| {
             if let Some(fv) = N::from_anyvalue(field_value) {
-                geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background, &ctx.opt_flags)
+                geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background)
             }
         });
 }
@@ -257,7 +220,7 @@ where
             let anyvalue = ctx.field.get(i as usize).unwrap();
             (N::from_anyvalue(anyvalue), ctx.geometry.get(i as usize))
         } {
-            geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background, &ctx.opt_flags)
+            geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background)
         }
     }
 }

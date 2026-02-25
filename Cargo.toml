@@ -2,7 +2,7 @@ cargo-features = ["profile-rustflags"]
 
 [package]
 name = "rusterize"
-version = "0.7.1"
+version = "0.8.0"
 edition = "2024"
 resolver = "3"
 
@@ -16,14 +16,15 @@ fixedbitset = "0.5.7"
 geo = "0.30.0"
 geo-traits = "0.3.0"
 geo-types = "0.7.18"
-ndarray = { version = "0.16.1", features = ["rayon"] }
+ndarray = { version = "0.17.2", features = ["rayon"] }
 num-traits = "0.2.19"
-numpy = "0.25.0"
-polars = { version = "0.51.0", features = ["lazy", "simd", "performant", "nightly"] }
-pyo3 = { version = "0.25.1", features = ["extension-module", "abi3-py311", "generate-import-lib"] }
-pyo3-polars = "0.24.0"
+numpy = "0.27.1"
+polars = { version = "0.53.0", features = ["lazy", "simd", "performant", "nightly"] }
+pyo3 = { version = "0.27.2", features = ["extension-module", "abi3-py311", "generate-import-lib"] }
+pyo3-polars = "0.26.0"
 rayon = "1.11.0"
 wkb = "0.9.2"
+wkt = "0.14.0"
 
 # OS-specific allocators
 [target.'cfg(not(target_family = "unix"))'.dependencies]

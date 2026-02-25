@@ -18,15 +18,11 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dynamic = ["version"]
-dependencies = [
-    "geopandas>=1.0.1",
-    "pandas>=2.2.3",
-    "pyarrow>=18.1.0",
-    "polars>=1.19.0",
-]
+dependencies = ["numpy>=2.0.0"]
 
 [project.optional-dependencies]
 xarray = ["xarray>=2025.01.1", "rioxarray>=0.18.2"]
+all = ["geopandas>=1.0.0", "pandas>=2.0.0", "pyarrow>=18.1.0", "polars>=1.19.0", "polars-st>=0.4.3", "rioxarray>=0.18.2", "xarray>=2025.01.1"]
 
 [project.urls]
 repository = "https://github.com/ttrotto/rusterize"
@@ -35,3 +31,6 @@ repository = "https://github.com/ttrotto/rusterize"
 python-source = "python"
 module-name = "rusterize"
 include = [{ path = "rust-toolchain.toml", format = "sdist" }]
+
+[tool.ruff]
+exclude = ["test/test_many.py", "benchmarks/benchmark_rusterize.py"]

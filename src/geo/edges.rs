@@ -43,7 +43,7 @@ impl PolyEdge {
             x0: x_top,
             y0: y_top,
             dxdy,
-            x_at_yline: f64::NAN, // dummy
+            x_at_yline: f64::INFINITY, // dummy
         }
     }
 
@@ -106,8 +106,8 @@ pub fn extract_ring(edges: &mut Vec<PolyEdge>, line: &LineString<f64>, raster_in
     for i in 0..nrows {
         // world-to-pixel conversion
         let x0 = (node_array[[i, 0]] - raster_info.xmin) / raster_info.xres;
-        let x1 = (node_array[[i + 1, 0]] - raster_info.xmin) / raster_info.xres;
         let y0 = (raster_info.ymax - node_array[[i, 1]]) / raster_info.yres;
+        let x1 = (node_array[[i + 1, 0]] - raster_info.xmin) / raster_info.xres;
         let y1 = (raster_info.ymax - node_array[[i + 1, 1]]) / raster_info.yres;
 
         // skip horizontal

@@ -6,7 +6,6 @@ use crate::{
         edges::{LineEdge, PolyEdge, extract_line, extract_point, extract_ring},
         raster::RasterInfo,
     },
-    prelude::OptFlags,
     rasterization::{
         burners::{LineBurnStrategy, burn_point, burn_polygon},
         rusterize_impl::PixelCache,
@@ -20,37 +19,22 @@ where
     T: Num + Copy,
     W: PixelWriter<T>,
 {
-    fn burn<S: LineBurnStrategy>(
-        &self,
-        raster_info: &RasterInfo,
-        field_value: T,
-        writer: &mut W,
-        background: T,
-        opt_flags: &OptFlags,
-    );
+    fn burn<S: LineBurnStrategy>(&self, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T);
 }
 
-#[rustfmt::skip]
 impl<T, W> Burn<T, W> for Geometry
 where
     T: Num + Copy,
     W: PixelWriter<T>,
 {
-    fn burn<S: LineBurnStrategy>(
-        &self,
-        raster_info: &RasterInfo,
-        field_value: T,
-        writer: &mut W,
-        background: T,
-        opt_flags: &OptFlags,
-    ) {
+    fn burn<S: LineBurnStrategy>(&self, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T) {
         match self {
             Geometry::Point(geom) => {
                 let mut pointedge = Vec::new();
                 extract_point(&mut pointedge, geom, raster_info);
 
                 burn_point(pointedge, field_value, writer, background);
-            },
+            }
             Geometry::MultiPoint(geom) => {
                 let mut pointedge = Vec::new();
                 for point in geom {
@@ -58,23 +42,13 @@ where
                 }
 
                 burn_point(pointedge, field_value, writer, background);
-            },
-            Geometry::Polygon(geom) => {
-                geom.burn::<S>(raster_info, field_value, writer, background, opt_flags)
             }
-            Geometry::MultiPolygon(geom) => {
-                geom.burn::<S>(raster_info, field_value, writer, background, opt_flags)
-            }
-            Geometry::LineString(geom) => {
-                geom.burn::<S>(raster_info, field_value, writer, background, opt_flags)
-            }
-            Geometry::MultiLineString(geom) => {
-                geom.burn::<S>(raster_info, field_value, writer, background, opt_flags)
-            }
-            Geometry::GeometryCollection(geom) => {
-                geom.burn::<S>(raster_info, field_value, writer, background, opt_flags)
-            },
-            _ => ()  // not a shapely geometry
+            Geometry::Polygon(geom) => geom.burn::<S>(raster_info, field_value, writer, background),
+            Geometry::MultiPolygon(geom) => geom.burn::<S>(raster_info, field_value, writer, background),
+            Geometry::LineString(geom) => geom.burn::<S>(raster_info, field_value, writer, background),
+            Geometry::MultiLineString(geom) => geom.burn::<S>(raster_info, field_value, writer, background),
+            Geometry::GeometryCollection(geom) => geom.burn::<S>(raster_info, field_value, writer, background),
+            _ => (), // not a shapely geometry
         }
     }
 }
@@ -84,34 +58,19 @@ where
     T: Num + Copy,
     W: PixelWriter<T>,
 {
-    fn burn<S: LineBurnStrategy>(
-        &self,
-        raster_info: &RasterInfo,
-        field_value: T,
-        writer: &mut W,
-        background: T,
-        opt_flags: &OptFlags,
-    ) {
+    fn burn<S: LineBurnStrategy>(&self, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T) {
         for geom in self {
-            geom.burn::<S>(raster_info, field_value, writer, background, opt_flags)
+            geom.burn::<S>(raster_info, field_value, writer, background)
         }
     }
 }
 
-#[rustfmt::skip]
 impl<T, W> Burn<T, W> for Polygon
 where
     T: Num + Copy,
     W: PixelWriter<T>,
 {
-    fn burn<S: LineBurnStrategy>(
-        &self,
-        raster_info: &RasterInfo,
-        field_value: T,
-        writer: &mut W,
-        background: T,
-        opt_flags: &OptFlags,
-    ) {
+    fn burn<S: LineBurnStrategy>(&self, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T) {
         // extract edges
         let mut polyedges = Vec::new();
         extract_ring(&mut polyedges, self.exterior(), raster_info);
@@ -127,7 +86,7 @@ where
                 extract_line(&mut linedges, hole, raster_info);
             }
 
-            let pixel_cache = if opt_flags.requires_deduplication() {
+            let pixel_cache = if S::REQUIRES_DEDUPLICATION {
                 Some(PixelCache::new(&linedges))
             } else {
                 None
@@ -138,24 +97,24 @@ where
             (None, None)
         };
 
-        handle_polygon::<T, W, S>(raster_info, polyedges, linedges, &mut pixel_cache, field_value, writer, background)
+        handle_polygon::<T, W, S>(
+            raster_info,
+            polyedges,
+            linedges,
+            &mut pixel_cache,
+            field_value,
+            writer,
+            background,
+        )
     }
 }
 
-#[rustfmt::skip]
 impl<T, W> Burn<T, W> for MultiPolygon
 where
     T: Num + Copy,
     W: PixelWriter<T>,
 {
-    fn burn<S: LineBurnStrategy>(
-        &self,
-        raster_info: &RasterInfo,
-        field_value: T,
-        writer: &mut W,
-        background: T,
-        opt_flags: &OptFlags,
-    ) {
+    fn burn<S: LineBurnStrategy>(&self, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T) {
         // extract edges for all polygon
         let mut polyedges = Vec::new();
         for polygon in self {
@@ -175,7 +134,7 @@ where
                 }
             }
 
-            let pixel_cache = if opt_flags.requires_deduplication() {
+            let pixel_cache = if S::REQUIRES_DEDUPLICATION {
                 Some(PixelCache::new(&linedges))
             } else {
                 None
@@ -186,7 +145,15 @@ where
             (None, None)
         };
 
-        handle_polygon::<T, W, S>(raster_info, polyedges, linedges, &mut pixel_cache, field_value, writer, background)
+        handle_polygon::<T, W, S>(
+            raster_info,
+            polyedges,
+            linedges,
+            &mut pixel_cache,
+            field_value,
+            writer,
+            background,
+        )
     }
 }
 
@@ -195,20 +162,13 @@ where
     T: Num + Copy,
     W: PixelWriter<T>,
 {
-    fn burn<S: LineBurnStrategy>(
-        &self,
-        raster_info: &RasterInfo,
-        field_value: T,
-        writer: &mut W,
-        background: T,
-        opt_flags: &OptFlags,
-    ) {
+    fn burn<S: LineBurnStrategy>(&self, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T) {
         // extract exterior and interior lines
         let mut linedges = Vec::new();
         extract_line(&mut linedges, self, raster_info);
 
         // handle cases when pixels are not squares
-        if raster_info.xres != raster_info.yres || opt_flags.requires_deduplication() {
+        if raster_info.xres != raster_info.yres || S::REQUIRES_DEDUPLICATION {
             let mut cache = PixelCache::new(&linedges);
             let mut line_writer = LineWriter::new(writer, &mut cache);
             S::burn_line(linedges, raster_info, field_value, &mut line_writer, background)
@@ -223,14 +183,7 @@ where
     T: Num + Copy,
     W: PixelWriter<T>,
 {
-    fn burn<S: LineBurnStrategy>(
-        &self,
-        raster_info: &RasterInfo,
-        field_value: T,
-        writer: &mut W,
-        background: T,
-        opt_flags: &OptFlags,
-    ) {
+    fn burn<S: LineBurnStrategy>(&self, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T) {
         // extract all edges first to avoid overlaps when a line ends at the beginning of another
         let mut linedges = Vec::new();
         for line in self {
@@ -238,7 +191,7 @@ where
         }
 
         // handle cases when pixels are not squares
-        if raster_info.xres != raster_info.yres || opt_flags.requires_deduplication() {
+        if raster_info.xres != raster_info.yres || S::REQUIRES_DEDUPLICATION {
             let mut cache = PixelCache::new(&linedges);
             let mut line_writer = LineWriter::new(writer, &mut cache);
             S::burn_line(linedges, raster_info, field_value, &mut line_writer, background)

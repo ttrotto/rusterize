@@ -12,6 +12,7 @@ target/
 # Virtual environment
 .venv
 .env
+uv.lock
 
 # Shared object
 **/*.so
@@ -23,10 +24,17 @@ target/
 # Benchmarks
 .benchmarks
 
-# other stuff
+# Other stuff
 README_files
 .ruff_cache
 benchmarks/data
 .git
-uv.lock
-**/*.xml
+**/*.aux.xml
+
+# Temporary maturin development
+*.pyd
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+dev_notebooks/
