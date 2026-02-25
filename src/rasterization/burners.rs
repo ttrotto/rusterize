@@ -13,14 +13,17 @@ use crate::{
 use num_traits::Num;
 use rayon::prelude::*;
 
-pub struct Standard;
-pub struct AllTouched;
-
 const EPSILON_INTERSECT: f64 = 1e-4;
 const TOLERANCE: f64 = 1e-9;
 
+pub struct Standard<const DEDUP: bool = false>;
+pub struct AllTouchedBase<const DEDUP: bool>;
+pub type AllTouched = AllTouchedBase<false>;
+pub type AllTouchedCached = AllTouchedBase<true>;
+
 pub trait LineBurnStrategy {
     const IS_ALL_TOUCHED: bool;
+    const REQUIRES_DEDUPLICATION: bool;
 
     fn burn_line<T, W>(
         linedges: Vec<LineEdge>,
@@ -33,8 +36,9 @@ pub trait LineBurnStrategy {
         W: PixelWriter<T>;
 }
 
-impl LineBurnStrategy for Standard {
+impl<const DEDUP: bool> LineBurnStrategy for Standard<DEDUP> {
     const IS_ALL_TOUCHED: bool = false;
+    const REQUIRES_DEDUPLICATION: bool = DEDUP;
 
     fn burn_line<T, W>(linedges: Vec<LineEdge>, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T)
     where
@@ -91,8 +95,9 @@ impl LineBurnStrategy for Standard {
     }
 }
 
-impl LineBurnStrategy for AllTouched {
+impl<const DEDUP: bool> LineBurnStrategy for AllTouchedBase<DEDUP> {
     const IS_ALL_TOUCHED: bool = true;
+    const REQUIRES_DEDUPLICATION: bool = DEDUP;
 
     fn burn_line<T, W>(linedges: Vec<LineEdge>, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T)
     where
@@ -276,9 +281,8 @@ pub fn burn_polygon<T, W>(
     // start with first y line
     let mut yline = polyedges.first().unwrap().ystart;
 
-    let mut active_edges: Vec<PolyEdge> = Vec::new();
+    let mut active_edges = Vec::new();
 
-    // rasterize loop
     let ncols = raster_info.ncols as f64;
     while yline < raster_info.nrows && (!active_edges.is_empty() || !polyedges.is_empty()) {
         // transfer current edges to active edges
@@ -305,7 +309,7 @@ pub fn burn_polygon<T, W>(
             let x1 = &chunk[0].x_at_yline;
             let x2 = &chunk[1].x_at_yline;
 
-            // round down like GDAL
+            // round down
             let xstart = (x1 + 0.5).floor().clamp(0.0, ncols) as usize;
             let xend = (x2 + 0.5).floor().clamp(0.0, ncols) as usize;
 
