@@ -11,7 +11,6 @@ use crate::{
     },
 };
 use num_traits::Num;
-use rayon::prelude::*;
 
 const EPSILON_INTERSECT: f64 = 1e-4;
 const TOLERANCE: f64 = 1e-9;
@@ -271,7 +270,7 @@ pub fn burn_polygon<T, W>(
     }
 
     // sort edges by y coordinate
-    polyedges.par_sort_by(|a, b| a.ystart.cmp(&b.ystart));
+    polyedges.sort_by(|a, b| a.ystart.cmp(&b.ystart));
 
     // start with first y line
     let mut yline = polyedges.first().unwrap().ystart;
@@ -297,7 +296,7 @@ pub fn burn_polygon<T, W>(
         }
 
         // sort by y line
-        active_edges.par_sort_by(|a, b| a.x_at_yline.partial_cmp(&b.x_at_yline).unwrap());
+        active_edges.sort_by(|a, b| a.x_at_yline.partial_cmp(&b.x_at_yline).unwrap());
 
         // fill pixels
         for chunk in active_edges.chunks_exact(2) {
