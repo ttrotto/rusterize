@@ -33,7 +33,7 @@ where
                 let mut pointedge = Vec::new();
                 extract_point(&mut pointedge, geom, raster_info);
 
-                burn_point(pointedge, field_value, writer, background);
+                burn_point(&pointedge, field_value, writer, background);
             }
             Geometry::MultiPoint(geom) => {
                 let mut pointedge = Vec::new();
@@ -41,7 +41,7 @@ where
                     extract_point(&mut pointedge, point, raster_info);
                 }
 
-                burn_point(pointedge, field_value, writer, background);
+                burn_point(&pointedge, field_value, writer, background);
             }
             Geometry::Polygon(geom) => geom.burn::<S>(raster_info, field_value, writer, background),
             Geometry::MultiPolygon(geom) => geom.burn::<S>(raster_info, field_value, writer, background),
@@ -99,7 +99,7 @@ where
 
         handle_polygon::<T, W, S>(
             raster_info,
-            polyedges,
+            &mut polyedges,
             linedges,
             &mut pixel_cache,
             field_value,
@@ -147,7 +147,7 @@ where
 
         handle_polygon::<T, W, S>(
             raster_info,
-            polyedges,
+            &mut polyedges,
             linedges,
             &mut pixel_cache,
             field_value,
@@ -171,9 +171,9 @@ where
         if raster_info.xres != raster_info.yres || S::REQUIRES_DEDUPLICATION {
             let mut cache = PixelCache::new(&linedges);
             let mut line_writer = LineWriter::new(writer, &mut cache);
-            S::burn_line(linedges, raster_info, field_value, &mut line_writer, background)
+            S::burn_line(&linedges, raster_info, field_value, &mut line_writer, background)
         } else {
-            S::burn_line(linedges, raster_info, field_value, writer, background)
+            S::burn_line(&linedges, raster_info, field_value, writer, background)
         }
     }
 }
@@ -194,16 +194,16 @@ where
         if raster_info.xres != raster_info.yres || S::REQUIRES_DEDUPLICATION {
             let mut cache = PixelCache::new(&linedges);
             let mut line_writer = LineWriter::new(writer, &mut cache);
-            S::burn_line(linedges, raster_info, field_value, &mut line_writer, background)
+            S::burn_line(&linedges, raster_info, field_value, &mut line_writer, background)
         } else {
-            S::burn_line(linedges, raster_info, field_value, writer, background)
+            S::burn_line(&linedges, raster_info, field_value, writer, background)
         }
     }
 }
 
 fn handle_polygon<T, W, S>(
     raster_info: &RasterInfo,
-    polyedges: Vec<PolyEdge>,
+    polyedges: &mut Vec<PolyEdge>,
     linedges: Option<Vec<LineEdge>>,
     pixel_cache: &mut Option<PixelCache>,
     field_value: T,
@@ -218,14 +218,14 @@ fn handle_polygon<T, W, S>(
         (Some(lines), Some(cache)) => {
             // pass 1: burn lines
             let mut line_writer = LineWriter::new(writer, cache);
-            S::burn_line(lines, raster_info, field_value, &mut line_writer, background);
+            S::burn_line(&lines, raster_info, field_value, &mut line_writer, background);
 
             // pass 2: fill inner
             let mut fill_writer = FillWriter::new(writer, cache);
             burn_polygon(polyedges, raster_info, field_value, &mut fill_writer, background);
         }
         (Some(lines), None) => {
-            S::burn_line(lines, raster_info, field_value, writer, background);
+            S::burn_line(&lines, raster_info, field_value, writer, background);
             burn_polygon(polyedges, raster_info, field_value, writer, background);
         }
         (None, _) => {

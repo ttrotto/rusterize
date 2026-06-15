@@ -25,13 +25,8 @@ pub trait LineBurnStrategy {
     const IS_ALL_TOUCHED: bool;
     const REQUIRES_DEDUPLICATION: bool;
 
-    fn burn_line<T, W>(
-        linedges: Vec<LineEdge>,
-        raster_info: &RasterInfo,
-        field_value: T,
-        writer: &mut W,
-        background: T,
-    ) where
+    fn burn_line<T, W>(linedges: &[LineEdge], raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T)
+    where
         T: Num + Copy,
         W: PixelWriter<T>;
 }
@@ -40,7 +35,7 @@ impl<const DEDUP: bool> LineBurnStrategy for Standard<DEDUP> {
     const IS_ALL_TOUCHED: bool = false;
     const REQUIRES_DEDUPLICATION: bool = DEDUP;
 
-    fn burn_line<T, W>(linedges: Vec<LineEdge>, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T)
+    fn burn_line<T, W>(linedges: &[LineEdge], raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T)
     where
         T: Num + Copy,
         W: PixelWriter<T>,
@@ -99,7 +94,7 @@ impl<const DEDUP: bool> LineBurnStrategy for AllTouchedBase<DEDUP> {
     const IS_ALL_TOUCHED: bool = true;
     const REQUIRES_DEDUPLICATION: bool = DEDUP;
 
-    fn burn_line<T, W>(linedges: Vec<LineEdge>, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T)
+    fn burn_line<T, W>(linedges: &[LineEdge], raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T)
     where
         T: Num + Copy,
         W: PixelWriter<T>,
@@ -250,7 +245,7 @@ impl<const DEDUP: bool> LineBurnStrategy for AllTouchedBase<DEDUP> {
     }
 }
 
-pub fn burn_point<T, W>(pointedges: Vec<PointEdge>, field_value: T, writer: &mut W, background: T)
+pub fn burn_point<T, W>(pointedges: &[PointEdge], field_value: T, writer: &mut W, background: T)
 where
     T: Num + Copy,
     W: PixelWriter<T>,
@@ -261,7 +256,7 @@ where
 }
 
 pub fn burn_polygon<T, W>(
-    mut polyedges: Vec<PolyEdge>,
+    polyedges: &mut Vec<PolyEdge>,
     raster_info: &RasterInfo,
     field_value: T,
     writer: &mut W,
