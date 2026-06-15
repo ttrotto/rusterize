@@ -199,14 +199,23 @@ where
     W: PixelWriter<N>,
     S: LineBurnStrategy,
 {
-    ctx.field
-        .phys_iter()
-        .zip(&ctx.geometry)
-        .for_each(|(field_value, geom)| {
-            if let Some(fv) = N::from_anyvalue(field_value) {
+    let ca = ctx
+        .field
+        .as_materialized_series()
+        .unpack::<N::ChunkedArrayType>()
+        .unwrap();
+    if let Ok(slice) = ca.cont_slice() {
+        slice
+            .iter()
+            .zip(&ctx.geometry)
+            .for_each(|(fv, geom)| geom.burn::<S>(&ctx.raster_info, *fv, writer, ctx.background));
+    } else {
+        ca.iter().zip(&ctx.geometry).for_each(|(fv, geom)| {
+            if let Some(fv) = fv {
                 geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background)
             }
         });
+    }
 }
 
 fn process_multi<N, W, S>(ctx: &RasterizeContext<N>, writer: &mut W, idxs: &[u32])
@@ -215,12 +224,24 @@ where
     W: PixelWriter<N>,
     S: LineBurnStrategy,
 {
-    for &i in idxs.iter() {
-        if let (Some(fv), Some(geom)) = {
-            let anyvalue = ctx.field.get(i as usize).unwrap();
-            (N::from_anyvalue(anyvalue), ctx.geometry.get(i as usize))
-        } {
-            geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background)
+    let ca = ctx
+        .field
+        .as_materialized_series()
+        .unpack::<N::ChunkedArrayType>()
+        .unwrap();
+    if let Ok(slice) = ca.cont_slice() {
+        for &i in idxs.iter() {
+            let idx = i as usize;
+            if let Some(geom) = ctx.geometry.get(idx) {
+                geom.burn::<S>(&ctx.raster_info, slice[idx], writer, ctx.background)
+            }
+        }
+    } else {
+        for &i in idxs.iter() {
+            let idx = i as usize;
+            if let (Some(fv), Some(geom)) = (ca.get(idx), ctx.geometry.get(idx)) {
+                geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background)
+            }
         }
     }
 }
