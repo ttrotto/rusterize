@@ -20,7 +20,7 @@ use std::ops::Deref;
 use wkb::reader::read_wkb;
 use wkt::TryFromWkt;
 
-pub struct ParsedGeometry(pub Vec<Geometry<f64>>);
+pub struct ParsedGeometry(Vec<Geometry<f64>>);
 
 impl ParsedGeometry {
     pub fn len(&self) -> usize {
