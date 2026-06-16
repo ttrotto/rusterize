@@ -6,7 +6,6 @@ use std::ops::AddAssign;
 pub trait PolarsHandler: Literal + Send + Sync {
     type ChunkedArrayType: PolarsNumericType<Native = Self> + 'static;
     fn polars_dtype() -> DataType;
-    fn into_column(self, name: &str, len: usize) -> Column;
     fn from_named_vec(name: &str, vec: &[Self]) -> Column
     where
         Self: Sized;
@@ -23,10 +22,6 @@ macro_rules! impl_polars_handler {
 
                 fn polars_dtype() -> DataType {
                     $dtype
-                }
-
-                fn into_column(self, name: &str, len: usize) -> Column {
-                    Column::new(name.into(), vec![self; len])
                 }
 
                 fn from_named_vec(name: &str, vec: &[Self]) -> Column {
@@ -86,7 +81,7 @@ impl<T: AddAssign + PartialOrd + NaNAware> PixelOps for T {}
 // optional flags at runtime
 bitflags! {
     #[derive(Copy, Clone)]
-    pub struct OptFlags: u32 {
+    pub struct OptionalFlags: u32 {
         // burn all pixels that are touched by the geometry
         const ALL_TOUCHED = 1;
         // same as ALL_TOUCHED but requires cache
@@ -96,35 +91,35 @@ bitflags! {
     }
 }
 
-impl OptFlags {
+impl OptionalFlags {
     pub fn new(all_touched: bool, encoding: &str, pixel_fn: &str) -> Self {
-        let mut opt_flags = OptFlags::empty();
+        let mut opt_flags = OptionalFlags::empty();
 
         if all_touched {
-            opt_flags.insert(OptFlags::ALL_TOUCHED);
+            opt_flags.insert(OptionalFlags::ALL_TOUCHED);
 
             if pixel_fn == "sum" || pixel_fn == "count" {
-                opt_flags.insert(OptFlags::ALL_TOUCHED_CACHED);
+                opt_flags.insert(OptionalFlags::ALL_TOUCHED_CACHED);
             }
         }
 
         if encoding == "xarray" {
-            opt_flags.insert(OptFlags::OUT_AS_XARRAY);
+            opt_flags.insert(OptionalFlags::OUT_AS_XARRAY);
         }
 
         opt_flags
     }
 
     pub fn with_all_touched(&self) -> bool {
-        self.contains(OptFlags::ALL_TOUCHED)
+        self.contains(OptionalFlags::ALL_TOUCHED)
     }
 
     pub fn requires_deduplication(&self) -> bool {
-        self.contains(OptFlags::ALL_TOUCHED_CACHED)
+        self.contains(OptionalFlags::ALL_TOUCHED_CACHED)
     }
 
     pub fn with_xarray_output(&self) -> bool {
-        self.contains(OptFlags::OUT_AS_XARRAY)
+        self.contains(OptionalFlags::OUT_AS_XARRAY)
     }
 }
 
