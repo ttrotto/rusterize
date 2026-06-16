@@ -8,7 +8,24 @@ permissions:
   contents: read
 
 jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify release tag matches Cargo.toml version
+        shell: bash
+        run: |
+          cargo_version=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/^version = "(.*)"/\1/')
+          tag="${GITHUB_REF_NAME#v}"
+          echo "Cargo.toml version: $cargo_version"
+          echo "Release tag:        $tag"
+          if [ "$cargo_version" != "$tag" ]; then
+            echo "::error::Release tag ($tag) does not match Cargo.toml version ($cargo_version). Bump Cargo.toml or fix the tag."
+            exit 1
+          fi
+
   linux:
+    needs: check-version
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: true
@@ -49,6 +66,7 @@ jobs:
           path: dist
 
   musllinux:
+    needs: check-version
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: true
@@ -87,6 +105,7 @@ jobs:
           path: dist
 
   windows:
+    needs: check-version
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: true
@@ -121,6 +140,7 @@ jobs:
           path: dist
 
   macos:
+    needs: check-version
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: true
@@ -156,6 +176,7 @@ jobs:
           path: dist
 
   sdist:
+    needs: check-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
