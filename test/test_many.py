@@ -168,6 +168,9 @@ class TestFormats:
         # geopandas
         r_gpd = rusterize(GDF, res=(1, 1), dtype="uint8", fun="sum", encoding="numpy")
 
+        # geoseries
+        r_gs = rusterize(GDF.geometry, res=(1, 1), dtype="uint8", fun="sum", encoding="numpy", burn=1)
+
         # list or numpy WKT
         r_list = rusterize(GEOMS, res=(1, 1), dtype="uint8", fun="sum", encoding="numpy")
         r_numpy = rusterize(np.asarray(GEOMS), res=(1, 1), dtype="uint8", fun="sum", encoding="numpy")
@@ -187,16 +190,18 @@ class TestFormats:
         r_plst_wkb = rusterize(plst_wkb, res=(1, 1), dtype="uint8", fun="sum", encoding="numpy")
 
         assert np.allclose(r_gpd, r_list)
+        assert np.allclose(r_gpd, r_gs)
         assert np.allclose(r_gpd, r_numpy)
         assert np.allclose(r_gpd, r_plst)
         assert np.allclose(r_gpd, r_list_wkb)
         assert np.allclose(r_gpd, r_numpy_wkb)
         assert np.allclose(r_gpd, r_plst_wkb)
 
-    def test_geoseries_input(self):
-        r_gpd = rusterize(GDF, res=(1, 1), dtype="uint8", burn=1, fun="sum", encoding="numpy")
-        r_gseries = rusterize(GDF.geometry, res=(1, 1), dtype="uint8", burn=1, fun="sum", encoding="numpy")
-        assert np.allclose(r_gpd, r_gseries)
+    def test_geoseries_burn_input(self):
+        burn = np.arange(1, len(GEOMS) + 1)
+        r_burn = rusterize(GEOMS, res=(1, 1), dtype="uint8", burn=burn, fun="sum", encoding="numpy")
+        r_field = rusterize(GDF, res=(1, 1), dtype="uint8", field="value", fun="sum", encoding="numpy")
+        assert np.allclose(r_burn, r_field)
 
     def test_burn_array(self):
         burn = np.arange(1, len(GEOMS) + 1)
