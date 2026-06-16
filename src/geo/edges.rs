@@ -1,9 +1,7 @@
 /* Structure to contain information on geometry edges */
 
 use crate::geo::raster::RasterInfo;
-use geo::CoordsIter;
 use geo_types::{LineString, Point};
-use ndarray::Array2;
 
 pub struct PointEdge {
     pub x: usize,
