@@ -17,7 +17,7 @@ It returns a [xarray](https://docs.xarray.dev/en/stable/), a [numpy](https://num
 
 ### Installation
 
-`rusterize` comes with numpy as the only required dependency and is distributed in different flavors. A `core` library that performs the rasterization and returns a bare `numpy` array, a `xarray` flavor that returns a georeferenced `xarray` (requires `xarray` and `rioxarray` and is the recommended flavor), or an `all` flavor with dependencies for all supported inputs.
+**rusterize** comes with numpy as the only required dependency and is distributed in different flavors. A `core` library that performs the rasterization and returns a bare `numpy` array, a `xarray` flavor that returns a georeferenced `xarray` (requires `xarray` and `rioxarray` and is the recommended flavor), or an `all` flavor with dependencies for all supported inputs.
 
 Install the current version with pip:
 
@@ -128,7 +128,7 @@ Note that control over the desired extent is not as strict as for resolution and
 
 ### Encoding
 
-`rusterize` offers three encoding options for the rasterization output. You can return a `xarray/numpy` with the rasterized geometries, or a new `SparseArray` structure. This `SparseArray` structure stores the band/row/column triplets of where the geometries should be burned onto the final raster, as well as their corresponding values before applying any pixel function. This can be used as an intermediate output to avoid allocating memory before materializing the final raster, or as a final product. `SparseArray` has three convenience functions: `to_xarray()`, `to_numpy()`, and `to_frame()`. The first two return the final `xarray/numpy` with the appropriate pixel function, the last returns a `polars` dataframe with only the coordinates and values of the rasterized geometries. Note that `SparseArray` avoids allocating memory for the array during rasterization until it's actually needed (e.g. calling `to_xarray()`). See below for an example.
+**rusterize** offers three encoding options for the rasterization output. You can return a `xarray/numpy` with the rasterized geometries, or a new `SparseArray` structure. This `SparseArray` structure stores the band/row/column triplets of where the geometries should be burned onto the final raster, as well as their corresponding values before applying any pixel function. This can be used as an intermediate output to avoid allocating memory before materializing the final raster, or as a final product. `SparseArray` has three convenience functions: `to_xarray()`, `to_numpy()`, and `to_frame()`. The first two return the final `xarray/numpy` with the appropriate pixel function, the last returns a `polars` dataframe with only the coordinates and values of the rasterized geometries. Note that `SparseArray` avoids allocating memory for the array during rasterization until it's actually needed (e.g. calling `to_xarray()`). See below for an example.
 
 ### Usage
 
@@ -150,7 +150,9 @@ geoms = [
 # create a GeoDataFrame with shapely geometries from WKT
 gdf = gpd.GeoDataFrame({'value': range(1, len(geoms) + 1)}, geometry=wkt.loads(geoms), crs='EPSG:32619')
 
-# or pass values directly to rusterize (CRS is not maintaied in this specific case)
+# or pass values directly to rusterize
+# rusterize to "xarray" -> returns a xarray with the burned geometries and spatial reference when available (default)
+# will raise a ModuleNotFoundError if xarray and rioxarray are not found
 output = rusterize(
     geoms,
     res=(1, 1),
@@ -158,8 +160,6 @@ output = rusterize(
     burn=np.arange(1, len(geoms) + 1)
 ).squeeze()
 
-# rusterize to "xarray" -> return a xarray with the burned geometries and spatial reference (default)
-# will raise a ModuleNotFoundError if xarray and rioxarray are not found
 output = rusterize(
     gdf,
     res=(1, 1),
@@ -223,17 +223,18 @@ output.to_frame()
 ```
 pytest <python file> --benchmark-min-rounds=10 --benchmark-time-unit='s'
 
--------------------------------------------------------------- benchmark: 7 tests -------------------------------------------------
-Name (time in s)                  Min       Max      Mean    StdDev    Median       IQR    Outliers       OPS    Rounds  Iterations
------------------------------------------------------------------------------------------------------------------------------------
-test_water_small_f64_numpy     0.0045    0.0074    0.0051    0.0006    0.0050    0.0006       29;13  194.3373       155           1
-test_water_small_f64           0.0058    0.0239    0.0110    0.0040    0.0101    0.0059        38;2   91.2137       133           1
-test_water_large_f64           1.6331    2.2212    1.8923    0.2013    1.9070    0.3507         5;0    0.5285        10           1
-test_water_large_f64_numpy     1.6530    2.3126    1.8641    0.2078    1.8139    0.3054         2;0    0.5365        10           1
-test_water_large_gdal_f64      2.3926    2.6120    2.4650    0.0849    2.4217    0.1024         2;0    0.4057        10           1
-test_roads_uint8               3.7092   17.6956    6.6547    5.5787    3.8136    1.8291         2;2    0.1503        10           1
-test_roads_gdal_uint8          9.2405    9.4942    9.3018    0.0727    9.2785    0.0445         1;1    0.1075        10           1
------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------- benchmark: 8 tests -------------------------------------------------
+Name (time in s)               Min     Max    Mean  StdDev  Median     IQR  Outliers       OPS  Rounds  Iterations
+------------------------------------------------------------------------------------------------------------------
+test_water_small_f64_numpy  0.0038  0.0045  0.0040  0.0001  0.0040  0.0002      56;3  248.7981     181           1
+test_water_small_f64        0.0048  0.0057  0.0050  0.0001  0.0050  0.0001      21;9  198.8759     158           1
+test_water_small_gdal_f64   0.0053  0.0057  0.0054  0.0001  0.0054  0.0001     28;14  184.3595     160           1
+test_water_large_f64_numpy  1.2628  1.3610  1.3133  0.0314  1.3193  0.0498       5;0    0.7614      10           1
+test_water_large_f64        1.2762  1.4723  1.3342  0.0628  1.3149  0.0165       2;4    0.7495      10           1
+test_water_large_gdal_f64   1.4128  1.4229  1.4178  0.0029  1.4180  0.0040       3;0    0.7053      10           1
+test_roads_uint8            3.3184  3.5184  3.4021  0.0578  3.3849  0.0527       3;1    0.2939      10           1
+test_roads_gdal_uint8       9.0672  9.1040  9.0901  0.0109  9.0920  0.0125       2;0    0.1100      10           1
+------------------------------------------------------------------------------------------------------------------
 ```
 
 And fasterize ([benchmark_fasterize.r](benchmarks/benchmark_fasterize.r)). Note that it doesn't support custom `dtype` so the returning raster is `float64`.
@@ -247,14 +248,14 @@ Unit: seconds
 
 ### Comparison with other tools
 
-While **rusterize** is fast, there are other fast alternatives out there, including `rasterio` and `geocube`. However, **rusterize** allows for a seamless, Rust-native processing with similar or lower memory footprint that doesn't require you to install GDAL and returns the geoinformation you need for downstream processing with ample control over resolution, shape, extent, and data type.
+While **rusterize** is fast, there are other fast alternatives out there, including `rasterio` and `geocube`. However, **rusterize** allows for a seamless, Rust-native processing with similar or lower memory footprint that **does not** require you to install GDAL and returns the geoinformation you need for downstream processing with ample control over resolution, shape, extent, and data type.
 
 The following is a time comparison of 10 runs (median) on the same large water bodies dataset used earlier (dtype is `float64`) ([run_others.py](benchmarks/run_others.py)).
 
 ```
-rusterize: 1.9 sec
-rasterio:  15.2 sec
-geocube:   129.2 sec
+rusterize: 1.3 sec
+rasterio:  14.5 sec
+geocube:   124.9 sec
 ```
 
 ### Integrations
