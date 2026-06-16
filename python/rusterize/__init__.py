@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib.metadata
 from types import NoneType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, overload
 
 import numpy as np
 
@@ -23,8 +23,65 @@ if TYPE_CHECKING:
 __version__ = importlib.metadata.version("rusterize")
 
 
+@overload
 def rusterize(
-    data: gpd.GeoDataFrame | pl.DataFrame | list | np.ndarray,
+    data: gpd.GeoDataFrame | gpd.GeoSeries | pl.DataFrame | list | np.ndarray,
+    like: xr.DataArray | xr.Dataset | None = ...,
+    res: tuple | list | None = ...,
+    out_shape: tuple | list | None = ...,
+    extent: tuple | list | None = ...,
+    field: str | None = ...,
+    by: str | None = ...,
+    burn: int | float | np.ndarray | None = ...,
+    fun: str = ...,
+    background: int | float | None = ...,
+    encoding: Literal["xarray"] = ...,
+    all_touched: bool = ...,
+    tap: bool = ...,
+    dtype: str = ...,
+) -> xr.DataArray: ...
+
+
+@overload
+def rusterize(
+    data: gpd.GeoDataFrame | gpd.GeoSeries | pl.DataFrame | list | np.ndarray,
+    like: xr.DataArray | xr.Dataset | None = ...,
+    res: tuple | list | None = ...,
+    out_shape: tuple | list | None = ...,
+    extent: tuple | list | None = ...,
+    field: str | None = ...,
+    by: str | None = ...,
+    burn: int | float | np.ndarray | None = ...,
+    fun: str = ...,
+    background: int | float | None = ...,
+    encoding: Literal["numpy"] = ...,
+    all_touched: bool = ...,
+    tap: bool = ...,
+    dtype: str = ...,
+) -> np.ndarray: ...
+
+
+@overload
+def rusterize(
+    data: gpd.GeoDataFrame | gpd.GeoSeries | pl.DataFrame | list | np.ndarray,
+    like: xr.DataArray | xr.Dataset | None = ...,
+    res: tuple | list | None = ...,
+    out_shape: tuple | list | None = ...,
+    extent: tuple | list | None = ...,
+    field: str | None = ...,
+    by: str | None = ...,
+    burn: int | float | np.ndarray | None = ...,
+    fun: str = ...,
+    background: int | float | None = ...,
+    encoding: Literal["sparse"] = ...,
+    all_touched: bool = ...,
+    tap: bool = ...,
+    dtype: str = ...,
+) -> SparseArray: ...
+
+
+def rusterize(
+    data: gpd.GeoDataFrame | gpd.GeoSeries | pl.DataFrame | list | np.ndarray,
     like: xr.DataArray | xr.Dataset | None = None,
     res: tuple | list | None = None,
     out_shape: tuple | list | None = None,
