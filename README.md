@@ -10,8 +10,8 @@ High performance rasterization tool for Python built in Rust, inspired by the [f
 
 - [geopandas](https://geopandas.org/en/stable/) GeoDataFrame and GeoSeries
 - [polars-st](https://oreilles.github.io/polars-st/) GeoDataFrame
-- Python list of geometries in WKB or WKT format
-- Numpy array of geometries in WKB or WKT format
+- Python list of geometries in shapely.Geometry, WKB, or WKT format
+- Numpy array of geometries in shapely.Geometry, WKB, or WKT format
 
 It returns a [xarray](https://docs.xarray.dev/en/stable/), a [numpy](https://numpy.org/), or a sparse array in COOrdinate format.
 
