@@ -1,8 +1,11 @@
-name: CI
+name: test-CI
 
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: "Version to test (e.g. 1.2.3), must match Cargo.toml"
+        required: true
       logLevel:
         description: "Log level"
         required: true
@@ -14,10 +17,28 @@ permissions:
   contents: read
 
 jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify input version matches Cargo.toml version
+        shell: bash
+        run: |
+          cargo_version=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/^version = "(.*)"/\1/')
+          tag="${{ inputs.version }}"
+          tag="${tag#v}"
+          echo "Cargo.toml version: $cargo_version"
+          echo "Input version:      $tag"
+          if [ "$cargo_version" != "$tag" ]; then
+            echo "::error::Input version ($tag) does not match Cargo.toml version ($cargo_version). Bump Cargo.toml or fix the input."
+            exit 1
+          fi
+
   linux:
+    needs: check-version
     runs-on: ${{ matrix.platform.runner }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         platform:
           - runner: ubuntu-22.04
@@ -55,9 +76,10 @@ jobs:
           path: dist
 
   musllinux:
+    needs: check-version
     runs-on: ${{ matrix.platform.runner }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         platform:
           - runner: ubuntu-22.04
@@ -93,9 +115,10 @@ jobs:
           path: dist
 
   windows:
+    needs: check-version
     runs-on: ${{ matrix.platform.runner }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         platform:
           - runner: windows-latest
@@ -127,9 +150,10 @@ jobs:
           path: dist
 
   macos:
+    needs: check-version
     runs-on: ${{ matrix.platform.runner }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         platform:
           - runner: macos-15-intel
@@ -162,6 +186,7 @@ jobs:
           path: dist
 
   sdist:
+    needs: check-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
