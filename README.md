@@ -8,7 +8,7 @@ High performance rasterization tool for Python built in Rust, inspired by the [f
 
 **rusterize** is designed to work on _all_ shapely geometries, even when they are nested inside complex geometry collections. Functionally, it supports four input types:
 
-- [geopandas](https://geopandas.org/en/stable/) GeoDataFrame
+- [geopandas](https://geopandas.org/en/stable/) GeoDataFrame and GeoSeries
 - [polars-st](https://oreilles.github.io/polars-st/) GeoDataFrame
 - Python list of geometries in WKB or WKT format
 - Numpy array of geometries in WKB or WKT format
@@ -79,7 +79,7 @@ rusterize(
 )
 ```
 
-- **data** : `geopandas.GeoDataFrame`, `polars.DataFrame`, `list`, `numpy.ndarray` <br>
+- **data** : `geopandas.GeoDataFrame`, `geopandas.GeoSeries`, `polars.DataFrame`, `list`, `numpy.ndarray` <br>
   Input data to rasterize.
   - If `polars.DataFrame`, it must be have a "geometry" column with geometries stored in WKB or WKT format.
   - If `list` or `numpy.ndarray`, geometries must be in WKT, WKB, or shapely formats (EPSG is not inferred and defaults to None).
@@ -102,8 +102,9 @@ rusterize(
 - **by** : `str` (default: None) <br>
   Column used for grouping. Each group is rasterized into a distinct band in the output. Not considered when input is list or numpy.ndarray.
 
-- **burn** : `int` or `float` (default: None) <br>
-  A static value to apply to all geometries. Mutually exclusive with `field`.
+- **burn** : `int`, `float`, or `numpy.ndarray` (default: None) <br>
+  A static value or a list of values to apply to each geometries. If a `numpy.ndarray`, it must match the length of the geometry data. Mutually exclusive with `field`.
+  If `burn` is a `numpy.ndarray`, its dtype should match the output `dtype`, otherwise it is internally casted. If `data` is a `geopandas.GeoSeries`, its index is used as `burn` value, unless otherwise specified.
 
 - **fun** : `str` (default: "last") <br>
   Pixel function to use when burning geometries. Available options: `sum`, `first`, `last`, `min`, `max`, `count`, or `any`.
@@ -148,6 +149,16 @@ geoms = [
 
 # create a GeoDataFrame with shapely geometries from WKT
 gdf = gpd.GeoDataFrame({'value': range(1, len(geoms) + 1)}, geometry=wkt.loads(geoms), crs='EPSG:32619')
+
+# or pass values directly to rusterize (CRS is not maintaied)
+output = rusterize(
+    geoms,
+    res=(1, 1),
+    field="value",
+    fun="sum",
+    burn=range(1, len(geoms) + 1)
+    dtype="int64"
+).squeeze()
 
 # rusterize to "xarray" -> return a xarray with the burned geometries and spatial reference (default)
 # will raise a ModuleNotFoundError if xarray and rioxarray are not found

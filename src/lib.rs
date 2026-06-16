@@ -14,7 +14,6 @@ mod rasterization {
     pub mod burn_geometry;
     pub mod burners;
     pub mod pixel_functions;
-    pub mod prepare_dataframe;
     pub mod rusterize_impl;
 }
 mod prelude;
@@ -25,13 +24,14 @@ use crate::{
     prelude::*,
     rasterization::{
         pixel_functions::set_pixel_function,
-        prepare_dataframe::cast_df,
         rusterize_impl::{Rasterize, RasterizeContext},
     },
 };
 use geo::raster::{RasterInfo, RawRasterInfo};
+use ndarray::ArrayView1;
 use num_traits::Num;
-use polars::prelude::DataFrame;
+use numpy::{Element, PyReadonlyArray1};
+use polars::prelude::*;
 use pyo3::{conversion::FromPyObject, prelude::*, types::PyAny};
 use pyo3_polars::PyDataFrame;
 
@@ -45,9 +45,15 @@ macro_rules! dispatch_rusterize {
                 ($str_val, "xarray" | "numpy") => rusterize_impl::<$rust_type, Dense>($py, $ctx),
                 ($str_val, "sparse") => rusterize_impl::<$rust_type, Sparse>($py, $ctx),
             )*
-            _ => unimplemented!("Invalid dtype or encoding combination provided."),
+            _ => unimplemented!("Invalid dtype or encoding provided."),
         }
     };
+}
+
+pub enum FieldSource<'a, N> {
+    Scalar(N),
+    Array(ArrayView1<'a, N>),
+    Column(Column),
 }
 
 struct Context<'py> {
@@ -59,12 +65,12 @@ struct Context<'py> {
     pyfield: Option<&'py str>,
     pyby: Option<&'py str>,
     pyburn: Option<&'py Bound<'py, PyAny>>,
-    opt_flags: OptFlags,
+    opt_flags: OptionalFlags,
 }
 
 fn rusterize_impl<'py, T, R>(py: Python<'py>, ctx: Context<'py>) -> PyResult<PyOut<'py>>
 where
-    T: Num + Copy + PolarsHandler + Default + PixelOps + for<'a> FromPyObject<'a, 'py>,
+    T: Num + Copy + PolarsHandler + Default + PixelOps + Element + for<'a> FromPyObject<'a, 'py>,
     R: Rasterize<T>,
     R::Output: Pythonize,
 {
@@ -72,15 +78,45 @@ where
         .pybackground
         .and_then(|inner| inner.extract().ok())
         .unwrap_or_default();
-    let burn = ctx.pyburn.and_then(|inner| inner.extract().ok()).unwrap_or(T::one());
     let pixel_fn = set_pixel_function(ctx.pypixel_fn);
 
-    // extract column from dataframe (cloning is cheap)
-    let casted = cast_df(ctx.df, ctx.pyfield, ctx.pyby, burn, ctx.geometry.len());
-    let field = casted.column("field_casted").unwrap().clone();
-    let by = casted.column("by_str").ok().and_then(|by| by.str().ok());
+    let arr: PyReadonlyArray1<T>;
+    let field: FieldSource<T> = match (&ctx.df, ctx.pyfield) {
+        (Some(df), Some(f)) => {
+            let casted = df
+                .clone()
+                .lazy()
+                .select([col(f).cast(T::polars_dtype()).alias("field")])
+                .collect()
+                .unwrap();
+            FieldSource::Column(casted.column("field").unwrap().clone())
+        }
+        _ => match ctx.pyburn {
+            None => FieldSource::Scalar(T::one()),
+            Some(b) => match b.extract::<T>() {
+                Ok(scalar) => FieldSource::Scalar(scalar),
+                Err(_) => {
+                    arr = b.extract::<PyReadonlyArray1<T>>()?;
+                    FieldSource::Array(arr.as_array())
+                }
+            },
+        },
+    };
+    let by_col: Option<Column> = match (&ctx.df, ctx.pyby) {
+        (Some(df), Some(b)) => Some(
+            df.clone()
+                .lazy()
+                .select([col(b).cast(DataType::String).alias("by")])
+                .collect()
+                .unwrap()
+                .column(b)
+                .unwrap()
+                .clone(),
+        ),
+        _ => None,
+    };
+    let by = by_col.as_ref().and_then(|c| c.str().ok());
 
-    // rasterize
     let rctx = RasterizeContext {
         raster_info: ctx.raster_info,
         geometry: ctx.geometry,
@@ -119,7 +155,7 @@ fn rusterize_py<'py>(
     let raster_info = RasterInfo::from(raw_raster_info, &geometry);
 
     // optional runtime flags
-    let opt_flags = OptFlags::new(pytouched, pyencoding, pypixel_fn);
+    let opt_flags = OptionalFlags::new(pytouched, pyencoding, pypixel_fn);
 
     let ctx = Context {
         geometry,

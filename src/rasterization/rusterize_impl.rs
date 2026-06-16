@@ -1,12 +1,13 @@
 /* Implementation of rusterize and rasterization logics */
 
 use crate::{
+    FieldSource,
     encoding::{
         arrays::{DenseArray, SparseArray},
         writers::{DenseArrayWriter, PixelWriter, SparseArrayWriter, ToSparseArray},
     },
     geo::{edges::LineEdge, parse_geometry::ParsedGeometry, raster::RasterInfo},
-    prelude::{Dense, OptFlags, PolarsHandler, Sparse},
+    prelude::{Dense, OptionalFlags, PolarsHandler, Sparse},
     rasterization::{
         burn_geometry::Burn,
         burners::{AllTouched, AllTouchedCached, LineBurnStrategy, Standard},
@@ -77,13 +78,13 @@ impl PixelCache {
     }
 }
 
-pub struct RasterizeContext<N> {
+pub struct RasterizeContext<'a, N> {
     pub raster_info: RasterInfo,
     pub geometry: ParsedGeometry,
-    pub field: Column,
+    pub field: FieldSource<'a, N>,
     pub pixel_fn: PixelFn<N>,
     pub background: N,
-    pub opt_flags: OptFlags,
+    pub opt_flags: OptionalFlags,
 }
 
 macro_rules! dispatch_burn {
@@ -96,7 +97,6 @@ macro_rules! dispatch_burn {
     };
 }
 
-// rasterization logics
 pub trait Rasterize<N> {
     type Output;
 
@@ -187,7 +187,6 @@ where
     }
 }
 
-// wrapper functions for rasterization
 fn get_groups(by: &ChunkedArray<StringType>) -> (usize, GroupsIdx) {
     let groups = by.group_tuples(true, true).expect("No groups found!");
     (groups.len(), groups.into_idx())
@@ -199,22 +198,32 @@ where
     W: PixelWriter<N>,
     S: LineBurnStrategy,
 {
-    let ca = ctx
-        .field
-        .as_materialized_series()
-        .unpack::<N::ChunkedArrayType>()
-        .unwrap();
-    if let Ok(slice) = ca.cont_slice() {
-        slice
-            .iter()
-            .zip(&ctx.geometry)
-            .for_each(|(fv, geom)| geom.burn::<S>(&ctx.raster_info, *fv, writer, ctx.background));
-    } else {
-        ca.iter().zip(&ctx.geometry).for_each(|(fv, geom)| {
-            if let Some(fv) = fv {
-                geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background)
+    match &ctx.field {
+        FieldSource::Scalar(s) => {
+            for geom in &ctx.geometry {
+                geom.burn::<S>(&ctx.raster_info, *s, writer, ctx.background);
             }
-        });
+        }
+        FieldSource::Array(arr) => {
+            arr.iter()
+                .zip(ctx.geometry.iter())
+                .for_each(|(fv, geom)| geom.burn::<S>(&ctx.raster_info, *fv, writer, ctx.background));
+        }
+        FieldSource::Column(col) => {
+            let ca = col.as_materialized_series().unpack::<N::ChunkedArrayType>().unwrap();
+            if let Ok(slice) = ca.cont_slice() {
+                slice
+                    .iter()
+                    .zip(&ctx.geometry)
+                    .for_each(|(fv, geom)| geom.burn::<S>(&ctx.raster_info, *fv, writer, ctx.background));
+            } else {
+                ca.iter().zip(&ctx.geometry).for_each(|(fv, geom)| {
+                    if let Some(fv) = fv {
+                        geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background)
+                    }
+                });
+            }
+        }
     }
 }
 
@@ -224,23 +233,33 @@ where
     W: PixelWriter<N>,
     S: LineBurnStrategy,
 {
-    let ca = ctx
-        .field
-        .as_materialized_series()
-        .unpack::<N::ChunkedArrayType>()
-        .unwrap();
-    if let Ok(slice) = ca.cont_slice() {
-        for &i in idxs.iter() {
-            let idx = i as usize;
-            if let Some(geom) = ctx.geometry.get(idx) {
-                geom.burn::<S>(&ctx.raster_info, slice[idx], writer, ctx.background)
+    match &ctx.field {
+        FieldSource::Scalar(s) => {
+            for geom in &ctx.geometry {
+                geom.burn::<S>(&ctx.raster_info, *s, writer, ctx.background);
             }
         }
-    } else {
-        for &i in idxs.iter() {
-            let idx = i as usize;
-            if let (Some(fv), Some(geom)) = (ca.get(idx), ctx.geometry.get(idx)) {
-                geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background)
+        FieldSource::Array(arr) => {
+            arr.iter()
+                .zip(ctx.geometry.iter())
+                .for_each(|(fv, geom)| geom.burn::<S>(&ctx.raster_info, *fv, writer, ctx.background));
+        }
+        FieldSource::Column(col) => {
+            let ca = col.as_materialized_series().unpack::<N::ChunkedArrayType>().unwrap();
+            if let Ok(slice) = ca.cont_slice() {
+                for &i in idxs.iter() {
+                    let idx = i as usize;
+                    if let Some(geom) = ctx.geometry.get(idx) {
+                        geom.burn::<S>(&ctx.raster_info, slice[idx], writer, ctx.background)
+                    }
+                }
+            } else {
+                for &i in idxs.iter() {
+                    let idx = i as usize;
+                    if let (Some(fv), Some(geom)) = (ca.get(idx), ctx.geometry.get(idx)) {
+                        geom.burn::<S>(&ctx.raster_info, fv, writer, ctx.background)
+                    }
+                }
             }
         }
     }

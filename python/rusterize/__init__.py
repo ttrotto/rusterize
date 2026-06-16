@@ -88,7 +88,7 @@ def rusterize(
     extent: tuple | list | None = None,
     field: str | None = None,
     by: str | None = None,
-    burn: int | float | None = None,
+    burn: int | float | np.ndarray | None = None,
     fun: str = "last",
     background: int | float | None = np.nan,
     encoding: str = "xarray",
@@ -101,7 +101,7 @@ def rusterize(
 
     Parameters
     ----------
-    data : geopandas.GeoDataFrame, polars.DataFrame, list, numpy.ndarray
+    data : geopandas.GeoDataFrame, geopandas.GeoSeries, polars.DataFrame, list, numpy.ndarray
       Input data to rasterize.
       - If polars.DataFrame, it must be have a "geometry" column with geometries stored in WKB or WKT format.
       - If list or numpy.ndarray, geometries must be in WKT, WKB, or shapely formats (EPSG is not inferred and defaults to None).
@@ -117,8 +117,10 @@ def rusterize(
       Column name to use for pixel values. Mutually exclusive with `burn`. Not considered when input is list or numpy.ndarray.
     by : `str` (default: None)
       Column used for grouping. Each group is rasterized into a distinct band in the output. Not considered when input is list or numpy.ndarray.
-    burn : `int` or `float` (default: None)
-      A static value to apply to all geometries. Mutually exclusive with `field`.
+    burn : `int`, `float`, or `numpy.ndarray` (default: None)
+      A static value or a list of values to apply to each geometries. If a `numpy.ndarray`, it must match the length of the geometry data. Mutually exclusive with `field`.
+      If `burn` is a `numpy.ndarray`, its dtype should match the output `dtype`, otherwise it is internally casted. If `data` is a `geopandas.GeoSeries`, its index is used as `burn` value,
+      unless otherwise specified.
     fun : `str` (default: "last")
       Pixel function to use when burning geometries. Available options: `sum`, `first`, `last`, `min`, `max`, `count`, or `any`.
     background : `int` or `float` (default: numpy.nan)
@@ -147,21 +149,28 @@ def rusterize(
 
         If `field` is not in `data`, then a default `burn` value of 1 is rasterized.
 
-        A `None` value for `dtype` corresponds to the default of that dtype. An illegal value for a dtype will be replaced with the default of that dtype. For example, a `background=np.nan` for `dtype="uint8"` will become `background=0`, where `0` is the default for `uint8`.
+        A `None` value for `dtype` corresponds to the default of that dtype. An illegal value for a dtype will be replaced with the default of that dtype.
+        For example, a `background=np.nan` for `dtype="uint8"` will become `background=0`, where `0` is the default for `uint8`.
     """
-    data_type = None
+
     if isinstance(data, (list, np.ndarray)):
         data_type = "raw"
+    elif _check_for_geopandas(data) and isinstance(data, gpd.GeoSeries):
+        if data.empty:
+            raise ValueError("Input data is empty.")
+        data_type = "geoseries"
     elif _check_for_geopandas(data) and isinstance(data, gpd.GeoDataFrame):
         if data.empty:
-            raise ValueError("GeoDataFrame is empty.")
+            raise ValueError("Input data is empty.")
         data_type = "geopandas"
     elif _check_for_polars_st(data) and isinstance(data, pl.DataFrame):
         if data.is_empty():
-            raise ValueError("GeoDataFrame is empty.")
+            raise ValueError("Input data is empty.")
         data_type = "polars"
     else:
-        raise TypeError("`data` must be either geopandas.GeoDataFrame, polars.DataFrame, list, or numpy.ndarray")
+        raise TypeError(
+            "`data` must be either geopandas.GeoDataFrame, geopandas.GeoSeries, polars.DataFrame, list, or numpy.ndarray"
+        )
 
     if not isinstance(res, (tuple, list, NoneType)):
         raise TypeError("`resolution` must be a tuple or list of (xres, yres).")
@@ -178,8 +187,8 @@ def rusterize(
     if not isinstance(by, (str, NoneType)):
         raise TypeError("`by` must be a string column name.")
 
-    if not isinstance(burn, (int, float, NoneType)):
-        raise TypeError("`burn` must be an integer or float.")
+    if not isinstance(burn, (int, float, np.ndarray, NoneType)):
+        raise TypeError("`burn` must be an integer, float, or a numpy.ndarray.")
 
     if not isinstance(fun, str):
         raise TypeError("`pixel_fn` must be one of sum, first, last, min, max, count, or any.")
@@ -201,10 +210,6 @@ def rusterize(
             "`dtype` must be a one of 'uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int16', 'int32', 'int64', 'float32', 'float64'"
         )
 
-    # value checks
-    if field and burn:
-        raise ValueError("Only one of `field` or `burn` can be specified.")
-
     if encoding not in ["xarray", "numpy", "sparse"]:
         raise ValueError("`encoding` must be one of `xarray`, 'numpy', or `sparse`.")
 
@@ -212,6 +217,12 @@ def rusterize(
         raise ModuleNotFoundError(
             "`xarray` and `rioxarray` must be installed if encoding is `xarray`. Install with `pip install xarray rioxarray`."
         )
+
+    if field and burn is not None:
+        raise ValueError("Only one of `field` or `burn` can be specified.")
+
+    if isinstance(burn, np.ndarray) and burn.size != len(data):
+        raise ValueError("If `burn` is a `numpy.ndarray`, it must have the same length as `data`.")
 
     _with_user_extent = False
     _bounds = (np.inf, np.inf, np.inf, np.inf)
@@ -245,46 +256,52 @@ def rusterize(
 
             if len(extent) != 4 or all(e == 0 for e in extent):
                 raise ValueError("`extent` must be a tuple or list of (xmin, ymin, xmax, ymax).")
-
             _bounds = extent
             _with_user_extent = True
 
         if res:
             if len(res) != 2 or any(r <= 0 for r in res) or any(not isinstance(r, (int, float)) for r in res):
                 raise ValueError("`res` must be 2 positive numbers.")
-
             _res = res
 
         if out_shape:
             if len(out_shape) != 2 or any(s <= 0 for s in out_shape) or any(not isinstance(s, int) for s in out_shape):
                 raise ValueError("`out_shape` must be 2 positive integers.")
-
             _shape = out_shape
 
-        # extract columns of interest if dataframe
-        cols = list(set([col for col in (field, by) if col and col != "geometry"]))
-        df = None
-        epsg = None
+    # extract columns of interest, if any
+    cols = list(set([col for col in (field, by) if col and col != "geometry"]))
+    df = None
+    epsg = None
 
-        # get bounds
-        if data_type == "geopandas":
-            if not _polars_available():
-                raise ModuleNotFoundError("polars must be installed when data is geopandas.GeoDataFrame.")
-
+    # data-specific feature extraction
+    match data_type:
+        case "geopandas":
             if not _with_user_extent:
                 _bounds = data.total_bounds
 
             epsg = data.crs.to_epsg() if data.crs else None
 
             if cols:
-                try:
-                    df = pl.from_pandas(data[cols])
-                except KeyError as e:
-                    raise KeyError("Column not found in GeoDataFrame.") from e
+                if field and not by:
+                    # optimization for a single column
+                    try:
+                        burn = data[field].to_numpy()
+                        field = None
+                    except KeyError as e:
+                        raise KeyError("Column not found in GeoDataFrame.") from e
+                else:
+                    if not _polars_available():
+                        raise ModuleNotFoundError("polars must be installed when data is geopandas.GeoDataFrame.")
+
+                    try:
+                        df = pl.from_pandas(data[cols])
+                    except KeyError as e:
+                        raise KeyError("Column not found in GeoDataFrame.") from e
 
             geometries = data.geometry
 
-        elif data_type == "polars":
+        case "polars":
             if not _with_user_extent:
                 try:
                     _bounds = data.select(pl.col("geometry").st.total_bounds()).item().to_numpy()
@@ -304,9 +321,25 @@ def rusterize(
             # geometries are extracted directly on the Rust side
             geometries = data.select(pl.col("geometry")).to_series()
 
-        else:
+        case "geoseries":
+            if not _with_user_extent:
+                _bounds = data.total_bounds
+
+            geometries = data.geometry
+            burn = burn if burn is not None else data.index.to_numpy()
+
+            try:
+                epsg = data.crs.to_epsg()
+            except AttributeError:
+                pass
+
+        case _:
             # list or numpy.ndarray
             geometries = data
+
+    # check that burn matches the output dtype
+    if isinstance(burn, np.ndarray) and burn.dtype != dtype:
+        burn = np.ascontiguousarray(burn, dtype=dtype)
 
     # RawRasterInfo
     raw_raster_info = {
