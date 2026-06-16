@@ -8,7 +8,7 @@ description = "High performance rasterization tool for Python built in Rust"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {file = "LICENSE"}
-keywords = ["rust", "fast", "raster", "geometry", "geopandas", "xarray"]
+keywords = ["rust", "fast", "raster", "geometry", "geopandas", "xarray", "polars"]
 author = {name = "Tommaso Trotto", email = "ttrotto@mail.ubc.ca"}
 classifiers = [
     "License :: OSI Approved :: MIT License",
@@ -34,3 +34,6 @@ include = [{ path = "rust-toolchain.toml", format = "sdist" }]
 
 [tool.ruff]
 exclude = ["test/test_many.py", "benchmarks/benchmark_rusterize.py"]
+
+[tool.ty.src]
+exclude = ["test"]
