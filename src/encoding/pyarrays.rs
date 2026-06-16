@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
 use std::sync::Arc;
 
-use crate::prelude::OptFlags;
+use crate::prelude::OptionalFlags;
 
 #[derive(IntoPyObject)]
 pub enum PyOut<'py> {
@@ -14,7 +14,7 @@ pub enum PyOut<'py> {
 
 pub trait Pythonize {
     // convert rusterization output into python object
-    fn pythonize(self, py: Python, opt_flags: OptFlags) -> PyResult<PyOut>;
+    fn pythonize(self, py: Python, opt_flags: OptionalFlags) -> PyResult<PyOut>;
 }
 
 pub trait PySparseArrayTraits: Send + Sync {

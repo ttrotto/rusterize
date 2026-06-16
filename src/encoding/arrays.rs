@@ -6,7 +6,7 @@ use crate::{
         pyarrays::{PyOut, PySparseArray, PySparseArrayTraits, Pythonize},
     },
     geo::raster::RasterInfo,
-    prelude::{OptFlags, PolarsHandler},
+    prelude::{OptionalFlags, PolarsHandler},
     rasterization::{pixel_functions::PixelFn, rusterize_impl::RasterizeContext},
 };
 use ndarray::Array3;
@@ -38,7 +38,7 @@ impl<N> Pythonize for DenseArray<N>
 where
     N: Num + Element,
 {
-    fn pythonize(self, py: Python, opt_flags: OptFlags) -> PyResult<PyOut> {
+    fn pythonize(self, py: Python, opt_flags: OptionalFlags) -> PyResult<PyOut> {
         let data = self.raster.into_pyarray(py);
 
         if opt_flags.with_xarray_output() {
@@ -209,7 +209,7 @@ impl<T> Pythonize for SparseArray<T>
 where
     T: Num + Element + Copy + PolarsHandler + 'static,
 {
-    fn pythonize(self, _py: Python, _opt_flags: OptFlags) -> PyResult<PyOut> {
+    fn pythonize(self, _py: Python, _opt_flags: OptionalFlags) -> PyResult<PyOut> {
         Ok(PyOut::Sparse(PySparseArray(Arc::new(self))))
     }
 }

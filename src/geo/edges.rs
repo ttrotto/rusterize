@@ -1,9 +1,7 @@
 /* Structure to contain information on geometry edges */
 
 use crate::geo::raster::RasterInfo;
-use geo::CoordsIter;
 use geo_types::{LineString, Point};
-use ndarray::Array2;
 
 pub struct PointEdge {
     pub x: usize,
@@ -77,16 +75,6 @@ impl LineEdge {
     }
 }
 
-fn build_node_array(line: &LineString) -> Array2<f64> {
-    // build Nx2 array of nodes (x, y)
-    let mut node_array = Array2::<f64>::zeros((line.coords_count(), 2));
-    line.coords_iter().enumerate().for_each(|(i, coord)| {
-        node_array[[i, 0]] = coord.x;
-        node_array[[i, 1]] = coord.y;
-    });
-    node_array
-}
-
 pub fn extract_point(edges: &mut Vec<PointEdge>, point: &Point<f64>, raster_info: &RasterInfo) {
     // world-to-pixel conversion
     let x = (point.x() - raster_info.xmin) / raster_info.xres;
@@ -99,16 +87,13 @@ pub fn extract_point(edges: &mut Vec<PointEdge>, point: &Point<f64>, raster_info
 }
 
 pub fn extract_ring(edges: &mut Vec<PolyEdge>, line: &LineString<f64>, raster_info: &RasterInfo) {
-    let node_array = build_node_array(line);
-
-    let nrows = node_array.nrows() - 1;
     let rows = raster_info.nrows as f64;
-    for i in 0..nrows {
+    for w in line.0.windows(2) {
         // world-to-pixel conversion
-        let x0 = (node_array[[i, 0]] - raster_info.xmin) / raster_info.xres;
-        let y0 = (raster_info.ymax - node_array[[i, 1]]) / raster_info.yres;
-        let x1 = (node_array[[i + 1, 0]] - raster_info.xmin) / raster_info.xres;
-        let y1 = (raster_info.ymax - node_array[[i + 1, 1]]) / raster_info.yres;
+        let x0 = (w[0].x - raster_info.xmin) / raster_info.xres;
+        let y0 = (raster_info.ymax - w[0].y) / raster_info.yres;
+        let x1 = (w[1].x - raster_info.xmin) / raster_info.xres;
+        let y1 = (raster_info.ymax - w[1].y) / raster_info.yres;
 
         // skip horizontal
         if (y0 - y1).abs() >= f64::EPSILON {
@@ -124,17 +109,16 @@ pub fn extract_ring(edges: &mut Vec<PolyEdge>, line: &LineString<f64>, raster_in
 }
 
 pub fn extract_line(edges: &mut Vec<LineEdge>, line: &LineString<f64>, raster_info: &RasterInfo) {
-    let node_array = build_node_array(line);
-
-    let nrows = node_array.nrows() - 1;
     let rows = raster_info.nrows as f64;
     let cols = raster_info.ncols as f64;
-    for i in 0..nrows {
+    let is_closed = line.is_closed();
+
+    for w in line.0.windows(2) {
         // world-to-pixel conversion
-        let x0 = (node_array[[i, 0]] - raster_info.xmin) / raster_info.xres;
-        let y0 = (raster_info.ymax - node_array[[i, 1]]) / raster_info.yres;
-        let x1 = (node_array[[i + 1, 0]] - raster_info.xmin) / raster_info.xres;
-        let y1 = (raster_info.ymax - node_array[[i + 1, 1]]) / raster_info.yres;
+        let x0 = (w[0].x - raster_info.xmin) / raster_info.xres;
+        let y0 = (raster_info.ymax - w[0].y) / raster_info.yres;
+        let x1 = (w[1].x - raster_info.xmin) / raster_info.xres;
+        let y1 = (raster_info.ymax - w[1].y) / raster_info.yres;
 
         let min_x = x0.min(x1);
         let max_x = x0.max(x1);
@@ -143,7 +127,7 @@ pub fn extract_line(edges: &mut Vec<LineEdge>, line: &LineString<f64>, raster_in
 
         // only keep if inside the raster
         if min_x < cols && max_x >= 0.0 && min_y < rows && max_y >= 0.0 {
-            edges.push(LineEdge::new(x0, y0, x1, y1, line.is_closed()));
+            edges.push(LineEdge::new(x0, y0, x1, y1, is_closed));
         }
     }
 }

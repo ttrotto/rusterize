@@ -4,11 +4,8 @@ use std::ops::AddAssign;
 
 // handle polars dtypes and conversions
 pub trait PolarsHandler: Literal + Send + Sync {
+    type ChunkedArrayType: PolarsNumericType<Native = Self> + 'static;
     fn polars_dtype() -> DataType;
-    fn from_anyvalue(val: AnyValue) -> Option<Self>
-    where
-        Self: Sized;
-    fn into_column(self, name: &str, len: usize) -> Column;
     fn from_named_vec(name: &str, vec: &[Self]) -> Column
     where
         Self: Sized;
@@ -17,23 +14,14 @@ pub trait PolarsHandler: Literal + Send + Sync {
 macro_rules! impl_polars_handler {
     ($($t:ty => {
         dtype: $dtype:expr,
-        anyvalue: $anyvalue:pat => $extract:expr,
+        catype: $catype:ty
     }),* $(,)?) => {
         $(
             impl PolarsHandler for $t {
+                type ChunkedArrayType = $catype;
+
                 fn polars_dtype() -> DataType {
                     $dtype
-                }
-
-                fn from_anyvalue(val: AnyValue) -> Option<Self> {
-                    match val {
-                        $anyvalue => Some($extract),
-                        _ => None,
-                    }
-                }
-
-                fn into_column(self, name: &str, len: usize) -> Column {
-                    Column::new(name.into(), vec![self; len])
                 }
 
                 fn from_named_vec(name: &str, vec: &[Self]) -> Column {
@@ -45,46 +33,16 @@ macro_rules! impl_polars_handler {
 }
 
 impl_polars_handler! {
-    f64 => {
-        dtype: DataType::Float64,
-        anyvalue: AnyValue::Float64(v) => v,
-    },
-    f32 => {
-        dtype: DataType::Float32,
-        anyvalue: AnyValue::Float32(v) => v,
-    },
-    u8 => {
-        dtype: DataType::UInt8,
-        anyvalue: AnyValue::UInt8(v) => v,
-    },
-    i8 => {
-        dtype: DataType::Int8,
-        anyvalue: AnyValue::Int8(v) => v,
-    },
-    u16 => {
-        dtype: DataType::UInt16,
-        anyvalue: AnyValue::UInt16(v) => v,
-    },
-    i16 => {
-        dtype: DataType::Int16,
-        anyvalue: AnyValue::Int16(v) => v,
-    },
-    u32 => {
-        dtype: DataType::UInt32,
-        anyvalue: AnyValue::UInt32(v) => v,
-    },
-    i32 => {
-        dtype: DataType::Int32,
-        anyvalue: AnyValue::Int32(v) => v,
-    },
-    u64 => {
-        dtype: DataType::UInt64,
-        anyvalue: AnyValue::UInt64(v) => v,
-    },
-    i64 => {
-        dtype: DataType::Int64,
-        anyvalue: AnyValue::Int64(v) => v,
-    },
+    f64 => { dtype: DataType::Float64, catype: Float64Type},
+    f32 => { dtype: DataType::Float32, catype: Float32Type},
+    u8  => { dtype: DataType::UInt8,   catype: UInt8Type},
+    i8  => { dtype: DataType::Int8,    catype: Int8Type},
+    u16 => { dtype: DataType::UInt16,  catype: UInt16Type},
+    i16 => { dtype: DataType::Int16,   catype: Int16Type},
+    u32 => { dtype: DataType::UInt32,  catype: UInt32Type},
+    i32 => { dtype: DataType::Int32,   catype: Int32Type},
+    u64 => { dtype: DataType::UInt64,  catype: UInt64Type},
+    i64 => { dtype: DataType::Int64,   catype: Int64Type},
 }
 
 // handle NaN check for dtype that don't have it
@@ -123,7 +81,7 @@ impl<T: AddAssign + PartialOrd + NaNAware> PixelOps for T {}
 // optional flags at runtime
 bitflags! {
     #[derive(Copy, Clone)]
-    pub struct OptFlags: u32 {
+    pub struct OptionalFlags: u32 {
         // burn all pixels that are touched by the geometry
         const ALL_TOUCHED = 1;
         // same as ALL_TOUCHED but requires cache
@@ -133,35 +91,35 @@ bitflags! {
     }
 }
 
-impl OptFlags {
+impl OptionalFlags {
     pub fn new(all_touched: bool, encoding: &str, pixel_fn: &str) -> Self {
-        let mut opt_flags = OptFlags::empty();
+        let mut opt_flags = OptionalFlags::empty();
 
         if all_touched {
-            opt_flags.insert(OptFlags::ALL_TOUCHED);
+            opt_flags.insert(OptionalFlags::ALL_TOUCHED);
 
             if pixel_fn == "sum" || pixel_fn == "count" {
-                opt_flags.insert(OptFlags::ALL_TOUCHED_CACHED);
+                opt_flags.insert(OptionalFlags::ALL_TOUCHED_CACHED);
             }
         }
 
         if encoding == "xarray" {
-            opt_flags.insert(OptFlags::OUT_AS_XARRAY);
+            opt_flags.insert(OptionalFlags::OUT_AS_XARRAY);
         }
 
         opt_flags
     }
 
     pub fn with_all_touched(&self) -> bool {
-        self.contains(OptFlags::ALL_TOUCHED)
+        self.contains(OptionalFlags::ALL_TOUCHED)
     }
 
     pub fn requires_deduplication(&self) -> bool {
-        self.contains(OptFlags::ALL_TOUCHED_CACHED)
+        self.contains(OptionalFlags::ALL_TOUCHED_CACHED)
     }
 
     pub fn with_xarray_output(&self) -> bool {
-        self.contains(OptFlags::OUT_AS_XARRAY)
+        self.contains(OptionalFlags::OUT_AS_XARRAY)
     }
 }
 

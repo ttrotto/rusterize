@@ -11,7 +11,6 @@ use crate::{
     },
 };
 use num_traits::Num;
-use rayon::prelude::*;
 
 const EPSILON_INTERSECT: f64 = 1e-4;
 const TOLERANCE: f64 = 1e-9;
@@ -25,13 +24,8 @@ pub trait LineBurnStrategy {
     const IS_ALL_TOUCHED: bool;
     const REQUIRES_DEDUPLICATION: bool;
 
-    fn burn_line<T, W>(
-        linedges: Vec<LineEdge>,
-        raster_info: &RasterInfo,
-        field_value: T,
-        writer: &mut W,
-        background: T,
-    ) where
+    fn burn_line<T, W>(linedges: &[LineEdge], raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T)
+    where
         T: Num + Copy,
         W: PixelWriter<T>;
 }
@@ -40,7 +34,7 @@ impl<const DEDUP: bool> LineBurnStrategy for Standard<DEDUP> {
     const IS_ALL_TOUCHED: bool = false;
     const REQUIRES_DEDUPLICATION: bool = DEDUP;
 
-    fn burn_line<T, W>(linedges: Vec<LineEdge>, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T)
+    fn burn_line<T, W>(linedges: &[LineEdge], raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T)
     where
         T: Num + Copy,
         W: PixelWriter<T>,
@@ -99,7 +93,7 @@ impl<const DEDUP: bool> LineBurnStrategy for AllTouchedBase<DEDUP> {
     const IS_ALL_TOUCHED: bool = true;
     const REQUIRES_DEDUPLICATION: bool = DEDUP;
 
-    fn burn_line<T, W>(linedges: Vec<LineEdge>, raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T)
+    fn burn_line<T, W>(linedges: &[LineEdge], raster_info: &RasterInfo, field_value: T, writer: &mut W, background: T)
     where
         T: Num + Copy,
         W: PixelWriter<T>,
@@ -250,7 +244,7 @@ impl<const DEDUP: bool> LineBurnStrategy for AllTouchedBase<DEDUP> {
     }
 }
 
-pub fn burn_point<T, W>(pointedges: Vec<PointEdge>, field_value: T, writer: &mut W, background: T)
+pub fn burn_point<T, W>(pointedges: &[PointEdge], field_value: T, writer: &mut W, background: T)
 where
     T: Num + Copy,
     W: PixelWriter<T>,
@@ -261,7 +255,7 @@ where
 }
 
 pub fn burn_polygon<T, W>(
-    mut polyedges: Vec<PolyEdge>,
+    polyedges: &mut Vec<PolyEdge>,
     raster_info: &RasterInfo,
     field_value: T,
     writer: &mut W,
@@ -276,7 +270,7 @@ pub fn burn_polygon<T, W>(
     }
 
     // sort edges by y coordinate
-    polyedges.par_sort_by(|a, b| a.ystart.cmp(&b.ystart));
+    polyedges.sort_by(|a, b| a.ystart.cmp(&b.ystart));
 
     // start with first y line
     let mut yline = polyedges.first().unwrap().ystart;
@@ -302,7 +296,7 @@ pub fn burn_polygon<T, W>(
         }
 
         // sort by y line
-        active_edges.par_sort_by(|a, b| a.x_at_yline.partial_cmp(&b.x_at_yline).unwrap());
+        active_edges.sort_by(|a, b| a.x_at_yline.partial_cmp(&b.x_at_yline).unwrap());
 
         // fill pixels
         for chunk in active_edges.chunks_exact(2) {

@@ -31,10 +31,23 @@ with zipfile.ZipFile(BytesIO(response.content), "r") as zip_ref:
 roads = read_dataframe("lrnf000r25p_e/lrnf000r25p_e.gpkg")
 
 
-# GDAL
+# Copy GDAL sources into in-memory datasets so feature decoding happens up front
 gdal.UseExceptions()
-src_water = gdal.OpenEx("canvec_50K_BC_Hydro/waterbody_2.shp")
-src_roads = gdal.OpenEx("lrnf000r25p_e/lrnf000r25p_e.gpkg")
+_mem = gdal.GetDriverByName("Memory")
+src_water = _mem.CreateCopy("", gdal.OpenEx("canvec_50K_BC_Hydro/waterbody_2.shp"))
+src_roads = _mem.CreateCopy("", gdal.OpenEx("lrnf000r25p_e/lrnf000r25p_e.gpkg"))
+
+
+src_water_small = _mem.Create("", 0, 0, 0, gdal.GDT_Unknown)
+_src_layer = src_water.GetLayer(0)
+_dst_layer = src_water_small.CreateLayer(
+    _src_layer.GetName(), _src_layer.GetSpatialRef(), _src_layer.GetGeomType()
+)
+for _i, _feat in enumerate(_src_layer):
+    if _i >= 1000:
+        break
+    _dst_layer.CreateFeature(_feat)
+_src_layer.ResetReading()
 
 
 # BENCHES
@@ -63,6 +76,19 @@ def test_water_large_gdal_f64(benchmark):
         gdal.Rasterize,
         "",
         src_water,
+        xRes=1 / 6,
+        yRes=1 / 6,
+        format="MEM",
+        outputType=gdal.GDT_Float64,
+        burnValues=1,
+    )
+
+
+def test_water_small_gdal_f64(benchmark):
+    benchmark(
+        gdal.Rasterize,
+        "",
+        src_water_small,
         xRes=1 / 6,
         yRes=1 / 6,
         format="MEM",

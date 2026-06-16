@@ -54,7 +54,7 @@ class TestTypeChecks:
             ({"extent": "0,0,10,10"}, "`extent` must be a tuple or list"),
             ({"field": 123}, "`field` must be a string"),
             ({"by": 123}, "`by` must be a string"),
-            ({"burn": "hot"}, "`burn` must be an integer or float"),
+            ({"burn": "hot"}, "`burn` must be an integer, float"),
             ({"fun": 1}, "`pixel_fn` must be one of"),
             ({"background": "black"}, "`background` must be integer, float, or None"),
             ({"encoding": 1}, "`encoding` must be one of 'xarray'"),
@@ -83,15 +83,11 @@ class TestMissingDependencies:
                 rusterize(gdf, res=(1, 1), encoding="numpy")
 
     def test_polars_missing(self):
-        import geopandas as gpd
-        from shapely import wkt
-
-        gdf = gpd.GeoDataFrame(geometry=wkt.loads(GEOMS))
-
+        # polars is only required for grouping (`by`) on a geopandas input
         with patch("rusterize._check_for_geopandas", return_value=True):
             with patch("rusterize._polars_available", return_value=False):
                 with pytest.raises(ModuleNotFoundError, match="polars must be installed when data is geopandas.GeoDataFrame."):
-                    rusterize(gdf, res=(1, 1), encoding="numpy")
+                    rusterize(GDF, res=(1, 1), by="value", encoding="numpy")
 
     def test_polars_st_missing(self):
         import polars_st as st
@@ -99,7 +95,7 @@ class TestMissingDependencies:
         plst = st.GeoDataFrame({"geometry": GEOMS})
 
         with patch("rusterize._check_for_polars_st", return_value=False):
-            with pytest.raises(TypeError, match="`data` must be either geopandas.GeoDataFrame, polars.DataFrame"):
+            with pytest.raises(TypeError, match="`data` must be either geopandas.GeoDataFrame, geopandas.GeoSeries, polars.DataFrame"):
                 rusterize(plst, res=(1, 1), encoding="numpy")
 
     def test_xarray_encoding_missing(self):
@@ -130,6 +126,15 @@ class TestArguments:
     def test_mutually_exclusive_field_burn(self):
         with pytest.raises(ValueError, match="Only one of `field` or `burn` can be specified"):
             rusterize(GDF, res=(1, 1), field="value", burn=5)
+
+    def test_burn_array_length_mismatch(self):
+        expected_msg = "If `burn` is a `numpy.ndarray`, it must have the same length as `data`."
+        with pytest.raises(ValueError, match=re.escape(expected_msg)):
+            rusterize(GDF, res=(1, 1), burn=np.array([1, 2]))
+
+    def test_empty_data_error(self):
+        with pytest.raises(ValueError, match="Input data is empty."):
+            rusterize(gpd.GeoDataFrame(geometry=[]), res=(1, 1))
 
     def test_missing_spatial_metadata_error(self):
         with pytest.raises(ValueError, match="One of `res`, `out_shape`, or `extent` must be provided"):
@@ -163,6 +168,12 @@ class TestFormats:
         # geopandas
         r_gpd = rusterize(GDF, res=(1, 1), dtype="uint8", fun="sum", encoding="numpy")
 
+        # geoseries
+        r_gs = rusterize(GDF.geometry, res=(1, 1), dtype="uint8", fun="sum", encoding="numpy", burn=1)
+
+        # list of shapely geometries
+        r_list_geom = rusterize(list(GDF.geometry), res=(1, 1), dtype="uint8", fun="sum", encoding="numpy", burn=1)
+
         # list or numpy WKT
         r_list = rusterize(GEOMS, res=(1, 1), dtype="uint8", fun="sum", encoding="numpy")
         r_numpy = rusterize(np.asarray(GEOMS), res=(1, 1), dtype="uint8", fun="sum", encoding="numpy")
@@ -182,11 +193,25 @@ class TestFormats:
         r_plst_wkb = rusterize(plst_wkb, res=(1, 1), dtype="uint8", fun="sum", encoding="numpy")
 
         assert np.allclose(r_gpd, r_list)
+        assert np.allclose(r_gpd, r_list_geom)
+        assert np.allclose(r_gpd, r_gs)
         assert np.allclose(r_gpd, r_numpy)
         assert np.allclose(r_gpd, r_plst)
         assert np.allclose(r_gpd, r_list_wkb)
         assert np.allclose(r_gpd, r_numpy_wkb)
         assert np.allclose(r_gpd, r_plst_wkb)
+
+    def test_geoseries_burn_input(self):
+        burn = np.arange(1, len(GEOMS) + 1)
+        r_burn = rusterize(GEOMS, res=(1, 1), dtype="uint8", burn=burn, fun="sum", encoding="numpy")
+        r_field = rusterize(GDF, res=(1, 1), dtype="uint8", field="value", fun="sum", encoding="numpy")
+        assert np.allclose(r_burn, r_field)
+
+    def test_burn_array(self):
+        burn = np.arange(1, len(GEOMS) + 1)
+        r_burn = rusterize(GDF, res=(1, 1), dtype="uint8", burn=burn, fun="sum", encoding="numpy")
+        r_field = rusterize(GDF, res=(1, 1), dtype="uint8", field="value", fun="sum", encoding="numpy")
+        assert np.allclose(r_burn, r_field)
 
     def test_outputs(self):
         r_numpy = rusterize(GDF, res=(1, 1), dtype="uint8", field="value", encoding="numpy")
@@ -238,6 +263,11 @@ class TestCoherence:
 
 
 class TestCustomRaster:
+    def test_like(self):
+        like = rusterize(GDF, res=(1, 1), dtype="uint8", field="value", encoding="xarray")
+        r = rusterize(GDF, like=like, dtype="uint8", field="value", encoding="numpy").squeeze()
+        assert r.shape == like.squeeze().shape
+
     def test_extent_standard(self, exploded_gpkg):
         extent = [-349, -507, 1, 0]
         src_gdal = gdal.OpenEx(exploded_gpkg)
