@@ -53,20 +53,10 @@ impl FromPyObject<'_, '_> for ParsedGeometry {
     type Error = PyErr;
 
     fn extract(obj: Borrowed<'_, '_, PyAny>) -> PyResult<Self> {
-        // geopandas.GeoDataFrame
+        // geopandas.GeoDataFrame or GeoSeries
         if obj.hasattr("geom_type")? {
-            let py = obj.py();
-
-            // shapely >= 2.0.0
-            let shapely_mod = py.import(intern!(py, "shapely"))?;
-            let shapely_version_string = shapely_mod.getattr(intern!(py, "__version__"))?.extract::<String>()?;
-            if !shapely_version_string.starts_with('2') {
-                return Err(PyValueError::new_err("Shapely version 2 required"));
-            }
-
-            let wkb_result = to_wkb(py, &shapely_mod, &obj)?;
-
-            return parse_iterable_wkb(&wkb_result);
+            let wkb_result = to_wkb(&obj)?;
+            return parse_sequence_wkb(&wkb_result);
         }
 
         if obj.is_instance_of::<PyList>() || obj.get_type().name()? == "ndarray" {
@@ -77,12 +67,16 @@ impl FromPyObject<'_, '_> for ParsedGeometry {
             // check first item to determine parsing strategy
             let first = obj.get_item(0)?;
             if first.is_instance_of::<PyBytes>() {
-                return parse_iterable_wkb(&obj);
+                return parse_sequence_wkb(&obj);
             } else if first.is_instance_of::<PyString>() {
-                return parse_iterable_wkt(&obj);
+                return parse_sequence_wkt(&obj);
+            } else if first.hasattr("geom_type")? {
+                // list of shapely geometries
+                let wkb_result = to_wkb(&obj)?;
+                return parse_sequence_wkb(&wkb_result);
             } else {
                 return Err(PyValueError::new_err(
-                    "Iterable must contain geometries as bytes (WKB) or string (WKT).",
+                    "Sequence must contain geometries as shapely Geometry, bytes (WKB), or string (WKT).",
                 ));
             }
         }
@@ -108,13 +102,17 @@ fn try_parse_wkt_to_geometry(wkt: &str) -> Option<Geometry<f64>> {
     Some(Geometry::try_from_wkt_str(wkt).unwrap())
 }
 
-fn to_wkb<'a>(
-    py: Python<'a>,
-    shapely_mod: &'a Bound<PyModule>,
-    input: &Bound<'a, PyAny>,
-) -> PyResult<Bound<'a, PyAny>> {
-    let args = (input,);
+fn to_wkb<'a>(input: &Bound<'a, PyAny>) -> PyResult<Bound<'a, PyAny>> {
+    let py = input.py();
 
+    // shapely >= 2.0.0
+    let shapely_mod = py.import(intern!(py, "shapely"))?;
+    let shapely_version_string = shapely_mod.getattr(intern!(py, "__version__"))?.extract::<String>()?;
+    if !shapely_version_string.starts_with('2') {
+        return Err(PyValueError::new_err("Shapely version 2 required"));
+    }
+
+    let args = (input,);
     let kwargs = PyDict::new(py);
     kwargs.set_item("output_dimension", 2)?;
     kwargs.set_item("include_srid", false)?;
@@ -123,7 +121,7 @@ fn to_wkb<'a>(
     shapely_mod.call_method(intern!(py, "to_wkb"), args, Some(&kwargs))
 }
 
-fn parse_iterable_wkb(input: &Bound<PyAny>) -> PyResult<ParsedGeometry> {
+fn parse_sequence_wkb(input: &Bound<PyAny>) -> PyResult<ParsedGeometry> {
     let mut geoms = Vec::with_capacity(input.len()?);
     for item in input.try_iter()? {
         let buf = item?.extract::<PyBackedBytes>()?;
@@ -141,7 +139,7 @@ fn parse_iterable_wkb(input: &Bound<PyAny>) -> PyResult<ParsedGeometry> {
     Ok(ParsedGeometry(geoms))
 }
 
-fn parse_iterable_wkt(input: &Bound<'_, PyAny>) -> PyResult<ParsedGeometry> {
+fn parse_sequence_wkt(input: &Bound<'_, PyAny>) -> PyResult<ParsedGeometry> {
     let mut geoms = Vec::with_capacity(input.len().unwrap_or(0));
     for item in input.try_iter()? {
         let s = item?.extract::<String>()?;

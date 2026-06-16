@@ -171,6 +171,9 @@ class TestFormats:
         # geoseries
         r_gs = rusterize(GDF.geometry, res=(1, 1), dtype="uint8", fun="sum", encoding="numpy", burn=1)
 
+        # list of shapely geometries
+        r_list_geom = rusterize(list(GDF.geometry), res=(1, 1), dtype="uint8", fun="sum", encoding="numpy", burn=1)
+
         # list or numpy WKT
         r_list = rusterize(GEOMS, res=(1, 1), dtype="uint8", fun="sum", encoding="numpy")
         r_numpy = rusterize(np.asarray(GEOMS), res=(1, 1), dtype="uint8", fun="sum", encoding="numpy")
@@ -190,6 +193,7 @@ class TestFormats:
         r_plst_wkb = rusterize(plst_wkb, res=(1, 1), dtype="uint8", fun="sum", encoding="numpy")
 
         assert np.allclose(r_gpd, r_list)
+        assert np.allclose(r_gpd, r_list_geom)
         assert np.allclose(r_gpd, r_gs)
         assert np.allclose(r_gpd, r_numpy)
         assert np.allclose(r_gpd, r_plst)
