@@ -11,11 +11,12 @@ dist_base/
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
 
-# Virtual environment
+# environment
 .venv
 .env
 uv.lock
 .claude
+.cargo
 
 # Shared object
 **/*.so
