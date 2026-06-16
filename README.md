@@ -150,14 +150,12 @@ geoms = [
 # create a GeoDataFrame with shapely geometries from WKT
 gdf = gpd.GeoDataFrame({'value': range(1, len(geoms) + 1)}, geometry=wkt.loads(geoms), crs='EPSG:32619')
 
-# or pass values directly to rusterize (CRS is not maintaied)
+# or pass values directly to rusterize (CRS is not maintaied in this specific case)
 output = rusterize(
     geoms,
     res=(1, 1),
-    field="value",
     fun="sum",
-    burn=range(1, len(geoms) + 1)
-    dtype="int64"
+    burn=np.arange(1, len(geoms) + 1)
 ).squeeze()
 
 # rusterize to "xarray" -> return a xarray with the burned geometries and spatial reference (default)
