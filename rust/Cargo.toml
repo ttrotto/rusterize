@@ -23,9 +23,13 @@ num-traits = { workspace = true }
 rayon = { workspace = true }
 
 polars = { version = "0.54.4", default-features = false, features = ["lazy", "simd", "performant", "nightly", "dtype-i8", "dtype-i16", "dtype-u8", "dtype-u16"], optional = true }
+hotpath = { version = "0.19", optional = true }
 
 [features]
 polars = ["dep:polars"]
+# Profiling. Off by default = zero compile/runtime cost.
+hotpath = ["hotpath/hotpath"]
+hotpath-alloc = ["hotpath/hotpath-alloc"]
 
 [package.metadata.docs.rs]
 features = ["polars"]

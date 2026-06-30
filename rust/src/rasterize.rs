@@ -49,7 +49,7 @@ macro_rules! dispatch {
     };
 }
 
-/// Rasterization trait. Attaches to anything that can be viewed as a [`geo::Geometry`] slice.
+/// Rasterization trait. Attaches to anything that can be viewed as a [`geo::Geometry`] slice
 /// and produces a [`DenseArray`] or a [`SparseArray`].
 pub trait Rasterize {
     fn rasterize<A: ArrayBuilder>(&self, ctx: RasterizeContext<A::Dtype>) -> RusterizeResult<A>;
@@ -158,6 +158,7 @@ where
 
 /// Burn the geometries at `indices` onto `writer`.
 /// `indices` is `0..len` for a single band, or the group's geometry indexes for multiband.
+#[cfg_attr(feature = "hotpath", hotpath::measure)]
 fn process<N, W, S, I>(geoms: &[Geometry<f64>], ctx: &RasterizeContext<N>, writer: &mut W, indices: I)
 where
     N: RasterDtype,

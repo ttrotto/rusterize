@@ -36,6 +36,7 @@ impl<const DEDUP: bool> LineBurnStrategy for Standard<DEDUP> {
     const IS_ALL_TOUCHED: bool = false;
     const REQUIRES_DEDUP: bool = DEDUP;
 
+    #[cfg_attr(feature = "hotpath", hotpath::measure)]
     fn burn_line<N, W>(linedges: &[LineEdge], raster_info: &RasterInfo, field_value: N, writer: &mut W, background: N)
     where
         N: Num + Copy,
@@ -94,6 +95,7 @@ impl<const DEDUP: bool> LineBurnStrategy for AllTouchedBase<DEDUP> {
     const IS_ALL_TOUCHED: bool = true;
     const REQUIRES_DEDUP: bool = DEDUP;
 
+    #[cfg_attr(feature = "hotpath", hotpath::measure)]
     fn burn_line<N, W>(linedges: &[LineEdge], raster_info: &RasterInfo, field_value: N, writer: &mut W, background: N)
     where
         N: Num + Copy,
@@ -244,6 +246,7 @@ impl<const DEDUP: bool> LineBurnStrategy for AllTouchedBase<DEDUP> {
     }
 }
 
+#[cfg_attr(feature = "hotpath", hotpath::measure)]
 pub(super) fn burn_point<N, W>(pointedges: &[PointEdge], field_value: N, writer: &mut W, background: N)
 where
     N: Num + Copy,
@@ -254,6 +257,7 @@ where
     }
 }
 
+#[cfg_attr(feature = "hotpath", hotpath::measure)]
 pub(super) fn burn_polygon<N, W>(
     polyedges: &mut Vec<PolyEdge>,
     raster_info: &RasterInfo,
