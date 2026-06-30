@@ -1,0 +1,218 @@
+name: CI
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  check-version:
+    if: startsWith(github.ref_name, 'py-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify release tag matches Cargo.toml version
+        shell: bash
+        run: |
+          cargo_version=$(grep -m1 '^version = ' python/Cargo.toml | sed -E 's/^version = "(.*)"/\1/')
+          tag="${GITHUB_REF_NAME#py-v}"
+          echo "Cargo.toml version: $cargo_version"
+          echo "Release tag:        $tag"
+          if [ "$cargo_version" != "$tag" ]; then
+            echo "::error::Release tag ($tag) does not match Cargo.toml version ($cargo_version). Bump Cargo.toml or fix the tag."
+            exit 1
+          fi
+
+  linux:
+    needs: check-version
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        platform:
+          - runner: ubuntu-22.04
+            target: x86_64
+          - runner: ubuntu-22.04
+            target: aarch64
+          - runner: ubuntu-22.04
+            target: armv7
+          - runner: ubuntu-22.04
+            target: ppc64le
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.x
+
+      - name: Set RUSTFLAGS for x86_64
+        if: matrix.platform.target == 'x86_64'
+        shell: bash
+        run: |
+          echo "RUSTFLAGS=-C target-feature=+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe" >> $GITHUB_ENV
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          target: ${{ matrix.platform.target }}
+          args: --profile dist-release --out dist --find-interpreter
+          sccache: "true"
+          manylinux: manylinux_2_28
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v5
+        with:
+          name: wheels-linux-${{ matrix.platform.target }}
+          path: python/dist
+
+  musllinux:
+    needs: check-version
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        platform:
+          - runner: ubuntu-22.04
+            target: x86_64
+          - runner: ubuntu-22.04
+            target: aarch64
+          - runner: ubuntu-22.04
+            target: armv7
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.x
+
+      - name: Set RUSTFLAGS for x86_64
+        if: matrix.platform.target == 'x86_64'
+        shell: bash
+        run: |
+          echo "RUSTFLAGS=-C target-feature=+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe" >> $GITHUB_ENV
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          target: ${{ matrix.platform.target }}
+          args: --profile dist-release --out dist --find-interpreter
+          sccache: "true"
+          manylinux: musllinux_1_2
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v5
+        with:
+          name: wheels-musllinux-${{ matrix.platform.target }}
+          path: python/dist
+
+  windows:
+    needs: check-version
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        platform:
+          - runner: windows-latest
+            target: x64
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.x
+          architecture: ${{ matrix.platform.target }}
+
+      - name: Set RUSTFLAGS for x64
+        if: matrix.platform.target == 'x64'
+        shell: bash
+        run: |
+          echo "RUSTFLAGS=-C target-feature=+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe" >> $GITHUB_ENV
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          target: ${{ matrix.platform.target }}
+          args: --profile dist-release --out dist --find-interpreter
+          sccache: "true"
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v5
+        with:
+          name: wheels-windows-${{ matrix.platform.target }}
+          path: python/dist
+
+  macos:
+    needs: check-version
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        platform:
+          - runner: macos-15-intel
+            target: x86_64
+          - runner: macos-14
+            target: aarch64
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.x
+
+      - name: Set RUSTFLAGS for x86_64
+        if: matrix.platform.target == 'x86_64'
+        shell: bash
+        run: |
+          echo "RUSTFLAGS=-C target-feature=+sse3,+ssse3,+sse4.1,+sse4.2,+popcnt,+cmpxchg16b,+avx,+avx2,+fma,+bmi1,+bmi2,+lzcnt,+pclmulqdq,+movbe" >> $GITHUB_ENV
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          target: ${{ matrix.platform.target }}
+          args: --profile dist-release --out dist --find-interpreter
+          sccache: "true"
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v5
+        with:
+          name: wheels-macos-${{ matrix.platform.target }}
+          path: python/dist
+
+  sdist:
+    needs: check-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          command: sdist
+          args: --out dist
+      - name: Upload sdist
+        uses: actions/upload-artifact@v5
+        with:
+          name: wheels-sdist
+          path: python/dist
+
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs: [linux, musllinux, windows, macos, sdist]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/rusterize
+    permissions:
+      id-token: write
+    steps:
+      - name: Download sdists and wheels
+        uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true

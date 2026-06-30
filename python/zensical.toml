@@ -1,0 +1,68 @@
+[project]
+site_name = "rusterize"
+site_description = "Extremely fast geometry rasterization engine for Python, built in Rust"
+site_url = "https://ttrotto.github.io/rusterize/"
+repo_url = "https://github.com/ttrotto/rusterize"
+docs_dir = "docs"
+site_dir = "site"
+copyright = """
+By the rusterize team
+"""
+nav = [
+  { "Home" = "index.md" },
+  { "Python" = "python.md" },
+  { "API reference" = "api.md" },
+]
+
+[project.theme]
+variant = "modern"
+features = [
+    "content.action.edit",
+    "content.action.view",
+    "content.code.annotate",
+    "content.code.copy",
+    "content.code.select",
+    "content.footnote.tooltips",
+    "content.tabs.link",
+    "content.tooltips",
+    "navigation.footer",
+    "navigation.indexes",
+    "navigation.instant",
+    "navigation.instant.prefetch",
+    "navigation.instant.progress",
+    "navigation.path",
+    "navigation.prune",
+    "navigation.top",
+    "navigation.tracking",
+    "search.highlight",
+]
+
+[[project.theme.palette]]
+accent = "blue"
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+accent = "purple"
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions]
+"pymdownx.highlight" = {}
+"pymdownx.superfences" = {}
+
+[project.plugins.mkdocstrings.handlers.python]
+inventories = ["https://docs.python.org/3/objects.inv"]
+paths = ["python"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "numpy"
+show_source = false
+show_root_heading = true
+heading_level = 2
+show_overloads = false
+parameter_headings = true
+show_category_heading = true
+show_symbol_type_heading = true

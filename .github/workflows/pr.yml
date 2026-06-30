@@ -1,0 +1,42 @@
+name: PR
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: cargo test
+        run: cargo test -p rusterize-rs
+
+  python-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install GDAL system libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gdal-bin libgdal-dev
+
+      - name: Build extension + install test deps
+        run: |
+          pip install maturin
+          maturin build --out dist
+          pip install numpy setuptools wheel
+          pip install --no-build-isolation gdal==$(gdal-config --version)
+          pip install "$(ls dist/*.whl)[all]" pytest
+
+      - name: pytest
+        run: pytest test/
