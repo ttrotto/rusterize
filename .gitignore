@@ -27,7 +27,7 @@ uv.lock
 # Other stuff
 README_files
 .ruff_cache
-**/data
+python/benchmarks/data
 .git
 **/*.aux.xml
 **/*.cache
