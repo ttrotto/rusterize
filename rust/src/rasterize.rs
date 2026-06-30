@@ -196,13 +196,11 @@ where
 
 /// Group `by` keys into (band name, geometry indexes) pairs, sorted by key.
 fn group_keys(by: &[String]) -> (Vec<String>, Vec<Vec<usize>>) {
-    let mut groups: HashMap<&String, Vec<usize>> = HashMap::new();
+    let mut groups: BTreeMap<&String, Vec<usize>> = BTreeMap::new();
     for (i, key) in by.iter().enumerate() {
         groups.entry(key).or_default().push(i);
     }
-    let mut pairs: Vec<(String, Vec<usize>)> = groups.into_iter().map(|(k, idxs)| (k.clone(), idxs)).collect();
-    pairs.sort_by(|a, b| a.0.cmp(&b.0));
-    pairs.into_iter().unzip()
+    groups.into_iter().map(|(k, idxs)| (k.clone(), idxs)).unzip()
 }
 
 /// Validate length of geometry, field, and by. Must match.
