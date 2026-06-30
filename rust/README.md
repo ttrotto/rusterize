@@ -6,6 +6,20 @@ Geometries can be rasterized as a `DenseArray` (a materialized raster) or a `Spa
 of all lazily burned pixels. A `SparseArray` can later be materialized into a raster, therefore avoiding large memory allocations
 until it's actually needed.
 
+### Installation
+
+```toml
+[dependencies]
+rusterize-rs = "0.1"
+```
+
+To include [`polars`](https://docs.rs/polars/latest/polars/) support:
+
+```toml
+[dependencies]
+rusterize-rs = { version = "0.1", features = ["polars"] }
+```
+
 ### Example
 
 Build a `RasterInfo` describing the output grid, wrap it in a `RasterizeContext`, then call `rasterize` on any slice of geometries.
