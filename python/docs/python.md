@@ -163,7 +163,7 @@ pytest
 
 ## Benchmarks
 
-**rusterize** is fast! Let’s try it on small and large datasets in comparison to GDAL ([benchmark_rusterize.py](benchmarks/benchmark_rusterize.py)).
+**rusterize** is fast! Let’s try it on small and large datasets in comparison to GDAL ([benchmark_rusterize.py](https://github.com/ttrotto/rusterize/blob/fa10e990214a12873b3b947a897dcb86a17bf7a6/python/benchmarks/benchmark_rusterize.py)).
 You can run this with [pytest](https://docs.pytest.org/en/stable/) and [pytest-benchmark](https://pytest-benchmark.readthedocs.io/en/stable/):
 
 ```
@@ -183,7 +183,7 @@ test_roads_gdal_uint8       9.0672  9.1040  9.0901  0.0109  9.0920  0.0125      
 ------------------------------------------------------------------------------------------------------------------
 ```
 
-And fasterize ([benchmark_fasterize.r](benchmarks/benchmark_fasterize.r)). Note that it doesn't support custom `dtype` so the returning raster is `float64`.
+And fasterize ([benchmark_fasterize.r](https://github.com/ttrotto/rusterize/blob/fa10e990214a12873b3b947a897dcb86a17bf7a6/python/benchmarks/benchmark_fasterize.r)). Note that it doesn't support custom `dtype` so the returning raster is `float64`.
 
 ```
 Unit: seconds
@@ -198,7 +198,7 @@ While **rusterize** is fast, there are other fast alternatives out there, includ
 Rust-native processing with similar or lower memory footprint that **does not** require you to install GDAL and returns the geoinformation you need for downstream
 processing with ample control over resolution, shape, extent, and data type.
 
-The following is a time comparison of 10 runs (median) on the same large water bodies dataset used earlier (dtype is `float64`) ([run_others.py](benchmarks/run_others.py)).
+The following is a time comparison of 10 runs (median) on the same large water bodies dataset used earlier (dtype is `float64`) ([run_others.py](https://github.com/ttrotto/rusterize/blob/fa10e990214a12873b3b947a897dcb86a17bf7a6/python/benchmarks/run_others.py)).
 
 ```
 rusterize: 1.3 sec
