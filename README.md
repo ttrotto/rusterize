@@ -4,8 +4,8 @@
 
 <br>
 
-**rusterize** is an extremely fast rasterization tool built in 🦀 Rust, with ports to 🐍 Python and (coming soon!) R that
-works on all geometry types (polygon, lines, points, nested geometry collections, and more!).
+**rusterize** is an extremely fast rasterization tool built in 🦀 Rust, with ports to 🐍 Python and (coming soon) R. It
+works on all geometry types (polygon, lines, points, geometry collections, and more!) and it does not depend on GDAL.
 Inspired by the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package.
 
 Check out the latest documentations:
