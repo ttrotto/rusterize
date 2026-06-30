@@ -1,0 +1,31 @@
+[package]
+name = "rusterize-rs"
+description = { workspace = true }
+version = "0.1.0"
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+categories = { workspace = true }
+keywords = { workspace = true }
+readme = "README.md"
+
+[lib]
+name = "rusterize"
+
+[dependencies]
+thiserror = "2.0.18"
+fixedbitset = "0.5.7"
+geo = { workspace = true }
+geo-types = { workspace = true }
+ndarray = { version = "0.17.2", features = ["rayon"] }
+num-traits = { workspace = true }
+rayon = { workspace = true }
+
+polars = { version = "0.54.4", default-features = false, features = ["lazy", "simd", "performant", "nightly", "dtype-i8", "dtype-i16", "dtype-u8", "dtype-u16"], optional = true }
+
+[features]
+polars = ["dep:polars"]
+
+[package.metadata.docs.rs]
+features = ["polars"]
