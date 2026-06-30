@@ -4,6 +4,7 @@ use num_traits::Num;
 use std::{ops::AddAssign, str::FromStr};
 
 /// Supported functions to apply to overlapping pixels.
+#[derive(Clone)]
 pub enum PixelFunction {
     Sum,
     First,

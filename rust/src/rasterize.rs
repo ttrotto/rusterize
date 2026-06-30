@@ -20,6 +20,7 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterato
 use polars::prelude::*;
 
 /// Source of values to burn onto a [`DenseArray`] or [`SparseArray`].
+#[derive(Clone)]
 pub enum FieldSource<'a, N> {
     /// A single constant value to burn.
     Scalar(N),
@@ -76,7 +77,6 @@ where
     fn build(geoms: &[Geometry<f64>], ctx: RasterizeContext<Self::Dtype>) -> RusterizeResult<Self> {
         assert_matching_len(geoms.len(), &ctx.field, ctx.by)?;
 
-        let all_touched = ctx.all_touched;
         let dedup = ctx.requires_dedup();
 
         match ctx.by {
@@ -94,7 +94,7 @@ where
                     .map(|((band, name), idxs)| {
                         let mut writer = DenseArrayWriter::new(band, ctx.pixel_fn());
 
-                        dispatch!(all_touched, dedup, geoms, &ctx, &mut writer, idxs.iter().copied());
+                        dispatch!(ctx.all_touched, dedup, geoms, &ctx, &mut writer, idxs.iter().copied());
 
                         name
                     })
@@ -107,7 +107,7 @@ where
                 let mut raster = ctx.raster_info.build_raster(1, ctx.background);
                 let mut writer = DenseArrayWriter::new(raster.index_axis_mut(Axis(0), 0), ctx.pixel_fn());
 
-                dispatch!(all_touched, dedup, geoms, &ctx, &mut writer, 0..geoms.len());
+                dispatch!(ctx.all_touched, dedup, geoms, &ctx, &mut writer, 0..geoms.len());
 
                 Ok(DenseArray::new(raster, band_names, ctx.raster_info))
             }
@@ -124,7 +124,6 @@ where
     fn build(geoms: &[Geometry<f64>], ctx: RasterizeContext<Self::Dtype>) -> RusterizeResult<Self> {
         assert_matching_len(geoms.len(), &ctx.field, ctx.by)?;
 
-        let all_touched = ctx.all_touched;
         let dedup = ctx.requires_dedup();
 
         match ctx.by {
@@ -138,7 +137,7 @@ where
                     .map(|(name, idxs)| {
                         let mut writer = SparseArrayWriter::new(name);
 
-                        dispatch!(all_touched, dedup, geoms, &ctx, &mut writer, idxs.iter().copied());
+                        dispatch!(ctx.all_touched, dedup, geoms, &ctx, &mut writer, idxs.iter().copied());
 
                         writer
                     })
@@ -149,7 +148,7 @@ where
             None => {
                 let mut writer = SparseArrayWriter::new(String::from("band_1"));
 
-                dispatch!(all_touched, dedup, geoms, &ctx, &mut writer, 0..geoms.len());
+                dispatch!(ctx.all_touched, dedup, geoms, &ctx, &mut writer, 0..geoms.len());
 
                 Ok(writer.finish(ctx))
             }

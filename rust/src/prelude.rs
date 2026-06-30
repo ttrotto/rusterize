@@ -89,6 +89,7 @@ pub trait RasterDtype: Num + Copy + AddAssign + PartialOrd + NaNAware + Send + S
 impl<N: Num + Copy + AddAssign + PartialOrd + NaNAware + Send + Sync> RasterDtype for N {}
 
 /// Spatial + value context handed to the rasterization engine.
+#[derive(Clone)]
 pub struct RasterizeContext<'a, N> {
     /// The spatial information of the final raster.
     pub raster_info: RasterInfo,
