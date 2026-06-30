@@ -34,7 +34,9 @@ jobs:
         run: |
           pip install maturin
           maturin build --out dist
-          pip install "$(ls dist/*.whl)[all]" pytest gdal==$(gdal-config --version)
+          pip install numpy setuptools wheel
+          pip install --no-build-isolation gdal==$(gdal-config --version)
+          pip install "$(ls dist/*.whl)[all]" pytest
 
       - name: pytest
         run: pytest test/
