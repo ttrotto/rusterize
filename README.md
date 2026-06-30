@@ -18,3 +18,4 @@ Check out the latest documentations:
 [![docs.rs](https://img.shields.io/docsrs/rusterize-rs?label=docs.rs%20latest)](https://docs.rs/rusterize-rs)
 [![crates.io](https://img.shields.io/crates/v/rusterize-rs)](https://crates.io/crates/rusterize-rs)
 [![Latest version on PyPI](https://img.shields.io/pypi/v/rusterize)](https://pypi.org/project/rusterize)
+[![Zenodo](https://zenodo.org/badge/DOI/10.5281/21042796.svg)](https://doi.org/10.5281/zenodo.21042796)
