@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   check-version:
+    if: startsWith(github.ref_name, 'py-v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -16,7 +17,7 @@ jobs:
         shell: bash
         run: |
           cargo_version=$(grep -m1 '^version = ' python/Cargo.toml | sed -E 's/^version = "(.*)"/\1/')
-          tag="${GITHUB_REF_NAME#v}"
+          tag="${GITHUB_REF_NAME#py-v}"
           echo "Cargo.toml version: $cargo_version"
           echo "Release tag:        $tag"
           if [ "$cargo_version" != "$tag" ]; then
