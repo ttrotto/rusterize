@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{
     encoding::{
@@ -285,7 +285,7 @@ mod tests {
         let ctx = RasterizeContext {
             raster_info: raster_4x4(),
             field: FieldSource::Array(vals.view()),
-            by: Some(&by[..]),
+            by: Some(by.as_ref()),
             pixel_fn: PixelFunction::Last,
             background: 0.0,
             all_touched: false,

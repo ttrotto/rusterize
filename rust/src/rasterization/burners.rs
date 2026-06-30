@@ -269,7 +269,7 @@ pub(super) fn burn_polygon<N, W>(
     }
 
     // sort edges by y coordinate
-    polyedges.sort_by(|a, b| a.ystart.cmp(&b.ystart));
+    polyedges.sort_unstable_by(|a, b| a.ystart.cmp(&b.ystart));
 
     // start with first y line (polyedges is non-empty, checked above)
     let mut yline = polyedges[0].ystart;
@@ -295,7 +295,7 @@ pub(super) fn burn_polygon<N, W>(
         }
 
         // sort by y line
-        active_edges.sort_by(|a, b| a.x_at_yline.total_cmp(&b.x_at_yline));
+        active_edges.sort_unstable_by(|a, b| a.x_at_yline.total_cmp(&b.x_at_yline));
 
         // fill pixels
         for chunk in active_edges.chunks_exact(2) {
