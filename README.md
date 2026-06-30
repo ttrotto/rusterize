@@ -10,7 +10,7 @@ Inspired by the [fasterize](https://github.com/ecohealthalliance/fasterize.git) 
 
 Check out the latest documentations:
 
-- [Rust API]()
+- [Rust API](https://docs.rs/rusterize-rs)
 - [Python API](ttrotto.github.io/rusterize)
 
 <br>
