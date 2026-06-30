@@ -9,7 +9,7 @@ repository = { workspace = true }
 categories = { workspace = true }
 keywords = { workspace = true }
 readme = "README.md"
-exclude = ["/examples"]
+autoexamples = false
 
 [lib]
 name = "rusterize"
