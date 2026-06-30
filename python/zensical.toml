@@ -10,6 +10,7 @@ By the rusterize team
 """
 nav = [
   { "Home" = "index.md" },
+  { "Python" = "python.md" },
   { "API reference" = "api.md" },
 ]
 
