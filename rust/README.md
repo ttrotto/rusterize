@@ -1,6 +1,6 @@
 ## rusterize
 
-**rusterize** is an extremely fast rasterization engine for [`geo::Geometry`](https://docs.rs/geo/latest/geo/geometry/enum.Geometry.html).
+**rusterize** is an extremely fast, trait-based, rasterization engine for [`geo::Geometry`](https://docs.rs/geo/latest/geo/geometry/enum.Geometry.html).
 
 Geometries can be rasterized as a `DenseArray` (a materialized raster) or a `SparseArray`, containing the band/row/col value triplets
 of all lazily burned pixels. A `SparseArray` can later be materialized into a raster, therefore avoiding large memory allocations

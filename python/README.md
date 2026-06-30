@@ -1,6 +1,6 @@
 ## rusterize
 
-**rusterize** is an extremely fast rasterization tool for Python built in Rust, inspired by the [fasterize](https://github.com/ecohealthalliance/fasterize.git) package with lots of useful improvements (see [API](#API)).
+**rusterize** is an extremely fast rasterization tool for Python built in Rust.
 
 It is designed to work on _all_ shapely geometries, even when they are nested inside complex geometry collections. Functionally, it supports four input types:
 
