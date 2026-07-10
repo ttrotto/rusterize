@@ -10,14 +10,14 @@ until it's actually needed.
 
 ```toml
 [dependencies]
-rusterize-rs = "0.1"
+rusterize-rs = "0.1.1"
 ```
 
 To include [`polars`](https://docs.rs/polars/latest/polars/) support:
 
 ```toml
 [dependencies]
-rusterize-rs = { version = "0.1", features = ["polars"] }
+rusterize-rs = { version = "0.1.1", features = ["polars"] }
 ```
 
 ### Example
