@@ -1,0 +1,33 @@
+[package]
+name = "rusterize-r"
+description = { workspace = true }
+version = "0.1.0"
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+categories = { workspace = true }
+keywords = { workspace = true }
+
+[lib]
+name = "rusterize"
+crate-type = ["staticlib", "lib"]
+
+[dependencies]
+savvy = "0.10.2"
+rusterize = { path = "../../../../rust", package = "rusterize-rs" }
+geo = { workspace = true }
+geo-traits = "0.3.0"
+wkb = "0.9.2"
+ndarray = { version = "0.17.2", features = ["rayon"] }
+num-traits = { workspace = true }
+
+# OS-specific allocators
+[target.'cfg(not(target_family = "unix"))'.dependencies]
+mimalloc = { version = "*", default-features = false }
+
+[target.'cfg(all(target_family = "unix", not(target_os = "macos")))'.dependencies]
+tikv-jemallocator = { version = "*", features = ["disable_initial_exec_tls", "background_threads"] }
+
+[target.'cfg(all(target_family = "unix", target_os = "macos"))'.dependencies]
+tikv-jemallocator = { version = "*", features = ["disable_initial_exec_tls"] }

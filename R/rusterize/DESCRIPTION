@@ -1,0 +1,18 @@
+Package: rusterize
+Title: Extremely fast rasterization engine built in Rust for R
+Version: 0.1.0
+Authors@R:
+    person("Tommaso", "Trotto", , "armityle@outlook.it", role = c("aut", "cre"))
+Description: Rasterization engine that handles all sf-supported geometries and returns a terra object.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 8.0.0
+SystemRequirements: Cargo (Rust's package manager), rustc
+Imports:
+    terra (>= 1.9.34),
+    sf (>= 1.1.1)
+Suggests:
+    testthat (>= 3.0.0),
+    devtools (>= 2.5.2)
+Config/testthat/edition: 3

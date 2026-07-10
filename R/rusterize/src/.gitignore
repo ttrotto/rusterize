@@ -1,0 +1,10 @@
+*.o
+*.so
+*.dll
+target
+Makevars
+Makevars.win
+
+/rusterize-rs/
+/Cargo.toml
+/Cargo.lock
