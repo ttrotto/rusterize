@@ -47,7 +47,7 @@ where
 
 /// Trait to convert a [`rusterize::SparseArray`] into a python object that mask the output data type.
 pub trait PySparseArrayTraits: Send + Sync {
-    fn shape(&self) -> (usize, usize);
+    fn shape(&self) -> (usize, usize, usize);
     fn extent(&self) -> (f64, f64, f64, f64);
     fn resolution(&self) -> (f64, f64);
     fn epsg(&self) -> Option<u16>;
@@ -105,7 +105,7 @@ where
     }
 }
 
-#[pyclass(name = "SparseArray")]
+#[pyclass(name = "SparseArray", frozen)]
 pub struct PySparseArray(pub Arc<dyn PySparseArrayTraits>);
 
 #[pymethods]
