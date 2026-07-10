@@ -1,4 +1,10 @@
-# rusterize
+#
+
+<p align="center">
+  <img src="img/logo.png" width="620"/>
+</p>
+
+<br>
 
 **rusterize** is an extremely fast rasterization engine built in 🦀 Rust, with ports to 🐍 Python and (coming soon) R. It
 works on all geometry types (polygon, lines, points, geometry collections, and more!) and it does not depend on GDAL.

@@ -1,11 +1,8 @@
-name: test-CI
+name: TestPyPi Publish
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version to test (e.g. 1.2.3), must match Cargo.toml"
-        required: true
       logLevel:
         description: "Log level"
         required: true
@@ -17,25 +14,7 @@ permissions:
   contents: read
 
 jobs:
-  check-version:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Verify input version matches Cargo.toml version
-        shell: bash
-        run: |
-          cargo_version=$(grep -m1 '^version = ' python/Cargo.toml | sed -E 's/^version = "(.*)"/\1/')
-          tag="${{ inputs.version }}"
-          tag="${tag#v}"
-          echo "Cargo.toml version: $cargo_version"
-          echo "Input version:      $tag"
-          if [ "$cargo_version" != "$tag" ]; then
-            echo "::error::Input version ($tag) does not match Cargo.toml version ($cargo_version). Bump Cargo.toml or fix the input."
-            exit 1
-          fi
-
   linux:
-    needs: check-version
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: true
@@ -77,7 +56,6 @@ jobs:
           path: python/dist
 
   musllinux:
-    needs: check-version
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: true
@@ -117,7 +95,6 @@ jobs:
           path: python/dist
 
   windows:
-    needs: check-version
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: true
@@ -153,7 +130,6 @@ jobs:
           path: python/dist
 
   macos:
-    needs: check-version
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: true
@@ -190,7 +166,6 @@ jobs:
           path: python/dist
 
   sdist:
-    needs: check-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -208,7 +183,6 @@ jobs:
 
   publish-to-testpypi:
     name: Publish to TestPyPI
-    if: github.event_name == 'workflow_dispatch'
     needs: [linux, musllinux, windows, macos, sdist]
     runs-on: ubuntu-latest
     environment:
