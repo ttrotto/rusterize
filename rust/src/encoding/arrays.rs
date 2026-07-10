@@ -58,7 +58,7 @@ impl<N: Num> Triplets<N> {
 pub struct SparseArray<N> {
     band_names: Vec<String>,
     triplets: Triplets<N>,
-    lengths: Vec<usize>,
+    offsets: Vec<usize>,
     raster_info: RasterInfo,
     pxfn: PixelFn<N>,
     background: N,
@@ -73,7 +73,7 @@ where
         rows: Vec<u64>,
         cols: Vec<u64>,
         data: Vec<N>,
-        lengths: Vec<usize>,
+        offsets: Vec<usize>,
         ctx: RasterizeContext<N>,
     ) -> Self {
         let pxfn = ctx.pixel_fn();
@@ -82,7 +82,7 @@ where
         Self {
             band_names,
             triplets: Triplets::new(rows, cols, data),
-            lengths,
+            offsets,
             raster_info: ctx.raster_info,
             pxfn,
             background,
@@ -104,7 +104,7 @@ where
 
         // per-band start offset into the contiguous triplet arrays
         let offsets = self
-            .lengths
+            .offsets
             .iter()
             .scan(0, |state, &n| {
                 let start = *state;
@@ -116,7 +116,7 @@ where
         raster
             .outer_iter_mut()
             .into_par_iter()
-            .zip(self.lengths.par_iter())
+            .zip(self.offsets.par_iter())
             .zip(offsets.par_iter())
             .for_each(|((mut band, n), &off)| {
                 let end = off + *n;
@@ -146,8 +146,8 @@ where
         )
     }
 
-    pub fn shape(&self) -> (usize, usize) {
-        (self.raster_info.nrows, self.raster_info.ncols)
+    pub fn shape(&self) -> (usize, usize, usize) {
+        (self.band_names.len(), self.raster_info.nrows, self.raster_info.ncols)
     }
 
     pub fn resolution(&self) -> (f64, f64) {
@@ -180,9 +180,9 @@ mod feature_gated {
             let mut columns: Vec<Column> = Vec::new();
 
             // add bands for multiband raster
-            if self.lengths.len() > 1 {
+            if self.offsets.len() > 1 {
                 let bands = self
-                    .lengths
+                    .offsets
                     .iter()
                     .enumerate()
                     .flat_map(|(i, v)| std::iter::repeat_n(i + 1, *v))
