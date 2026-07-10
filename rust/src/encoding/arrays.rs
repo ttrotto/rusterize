@@ -9,15 +9,15 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRef
 
 /// A materialized 3-dimensional array containing the burned geometries and spatial information.
 pub struct DenseArray<N> {
-    raster: Array3<N>,
+    array: Array3<N>,
     band_names: Vec<String>,
     raster_info: RasterInfo,
 }
 
 impl<N: Num> DenseArray<N> {
-    pub(crate) fn new(raster: Array3<N>, band_names: Vec<String>, raster_info: RasterInfo) -> Self {
+    pub(crate) fn new(array: Array3<N>, band_names: Vec<String>, raster_info: RasterInfo) -> Self {
         Self {
-            raster,
+            array,
             band_names,
             raster_info,
         }
@@ -25,11 +25,12 @@ impl<N: Num> DenseArray<N> {
 
     /// Consume self and extract all fields of the DenseArray.
     pub fn into_parts(self) -> (Array3<N>, Vec<String>, RasterInfo) {
-        (self.raster, self.band_names, self.raster_info)
+        (self.array, self.band_names, self.raster_info)
     }
 
-    pub fn raster(&self) -> &Array3<N> {
-        &self.raster
+    /// Inner array containing the burned geometries
+    pub fn array(&self) -> &Array3<N> {
+        &self.array
     }
 
     /// Sorted band names for the array. Defaults to "band_1" for a single band.

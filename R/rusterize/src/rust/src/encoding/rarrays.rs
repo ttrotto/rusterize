@@ -46,7 +46,7 @@ pub trait RArrayTraits {
 
 impl<N: ArrayAsSexp + RasterDtype> RArrayTraits for DenseArray<N> {
     fn to_raster(&self) -> savvy::Result<Sexp> {
-        array_as_sexp(self.raster())
+        array_as_sexp(self.array())
     }
 
     fn names(&self) -> &[String] {
