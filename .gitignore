@@ -40,3 +40,9 @@ python/site
 
 # Profiling
 rust/examples
+
+# R environment
+**/rv
+rv.lock
+
+**/.Rprofile
