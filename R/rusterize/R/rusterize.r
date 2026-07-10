@@ -54,8 +54,8 @@ rusterize <- function(
   }
 
   n_geom <- if ("sf" %in% class(data)) nrow(data) else length(data)
-  if (is.vector(burn) && length(burn) != n_geom) {
-    stop("If `burn` is a vector, it must have the same length as `data`.")
+  if (length(burn) > 1 && length(burn) != n_geom) {
+    stop("If `burn` is a vector of numeric values, it must have the same length as `data`.")
   }
 
   epsg <- sf::st_crs(data)$epsg

@@ -22,11 +22,17 @@ where
         FromR::<A::Dtype>::try_from(ctx.rbackground)?.0
     };
 
-    let ns = ctx
+    let numeric_sexp = ctx
         .rfield
         .or(ctx.rburn)
         .ok_or_else(|| savvy_err!("At least one of `field` or `burn` must be specified."))?;
-    let field = FromR::<Vec<A::Dtype>>::try_from(ns)?.0;
+
+    let source = FromR::<Vec<A::Dtype>>::try_from(numeric_sexp)?.0;
+    let field = if source.len() == 1 {
+        FieldSource::Scalar(source[0])
+    } else {
+        FieldSource::from(&source)
+    };
 
     let by = if let Some(ls) = ctx.rby {
         Some(FromR::<Vec<String>>::try_from(ls)?.0)
@@ -36,7 +42,7 @@ where
 
     let rctx = RasterizeContext {
         raster_info: ctx.raster_info,
-        field: FieldSource::from(&field),
+        field,
         by: by.as_deref(),
         pixel_fn: ctx.pixel_fn,
         background,
