@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::error::{RusterizeError, RusterizeResult};
 use geo::{BoundingRect, Geometry, Rect, coord};
 use ndarray::Array3;
@@ -47,7 +49,13 @@ impl RasterInfoBuilder {
     /// Build into a [`RasterInfo`] with user-defined extent.
     pub fn build(self) -> RusterizeResult<RasterInfo> {
         match self.extent {
-            Some(extent) => self.finalize(extent, false),
+            Some(extent) => {
+                let is_unspecified_extent = extent.iter().all(|x| matches!(x.total_cmp(&0.0), Ordering::Equal));
+                if is_unspecified_extent {
+                    return Err(RusterizeError::ValueError("Unspecified extent (all zeros)."));
+                }
+                self.finalize(extent, false)
+            }
             None => Err(RusterizeError::RuntimeError(
                 "Extent must be provided for construction. \
                 Use `build_with()` to infer extent from geometries.",
@@ -80,7 +88,7 @@ impl RasterInfoBuilder {
         if let Some(b) = bounds {
             self.finalize([b.min().x, b.min().y, b.max().x, b.max().y], true)
         } else {
-            return Err(RusterizeError::RuntimeError("Cannot infer bounding box from geometry."));
+            Err(RusterizeError::RuntimeError("Cannot infer bounding box from geometry."))
         }
     }
 
@@ -94,10 +102,23 @@ impl RasterInfoBuilder {
                 "Must set at least one of `shape` or `resolution`",
             ));
         }
+        if self.shape.is_some() && self.resolution.is_some() {
+            return Err(RusterizeError::ValueError(
+                "Shape and resolution are mutually exclusive; provide only one",
+            ));
+        }
         let has_shape = self.shape.is_some();
         let has_res = self.resolution.is_some();
         let [mut nrows, mut ncols] = self.shape.unwrap_or_default();
         let [mut xres, mut yres] = self.resolution.unwrap_or_default();
+
+        if has_shape && (nrows == 0 || ncols == 0) {
+            return Err(RusterizeError::ValueError("Shape values must be > 0."));
+        }
+
+        if has_res && (xres <= 0.0 || yres <= 0.0) {
+            return Err(RusterizeError::ValueError("Resolution values must be > 0."));
+        }
 
         if inferred && !self.tap && has_res {
             xmin -= xres / 2.0;
@@ -105,6 +126,7 @@ impl RasterInfoBuilder {
             ymin -= yres / 2.0;
             ymax += yres / 2.0;
         }
+
         if !has_res {
             xres = (xmax - xmin) / ncols as f64;
             yres = (ymax - ymin) / nrows as f64;
@@ -114,6 +136,7 @@ impl RasterInfoBuilder {
             ymin = (ymin / yres).floor() * yres;
             ymax = (ymax / yres).ceil() * yres;
         }
+
         if !has_shape {
             nrows = (0.5 + (ymax - ymin) / yres) as usize;
             ncols = (0.5 + (xmax - xmin) / xres) as usize;
