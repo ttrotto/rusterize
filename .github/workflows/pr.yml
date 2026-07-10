@@ -49,7 +49,7 @@ jobs:
       - uses: r-lib/actions/setup-r@v2
 
       - name: Install savvy
-        run: Rscript -e 'install.packages("savvy", repos = "https://yutannihilation.r-universe.dev")'
+        run: Rscript -e 'install.packages("savvy", repos = c("https://yutannihilation.r-universe.dev", "https://cloud.r-project.org"))'
 
       - name: Regenerate bindings
         run: Rscript -e 'savvy::savvy_update("R/rusterize")'
