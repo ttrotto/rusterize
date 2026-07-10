@@ -1,4 +1,4 @@
-# rusterize on Python
+# rusterize in Python
 
 **rusterize** is designed to work on _all_ shapely geometries, even when they are nested inside complex geometry collections. Functionally, it supports four input types:
 
@@ -136,31 +136,6 @@ output.to_frame()
 # └─────┴─────┴────────┘
 ```
 
-## Contributing
-
-Any contribution is welcome! You can install **rusterize** directly from this repo using [maturin](https://www.maturin.rs/) as an editable package.
-For this to work, you’ll need to have [Rust](https://www.rust-lang.org/tools/install) and [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed.
-To run the tests you need to have `gdal` installed as well as the `rusterize[all]` flavor.
-
-```bash
-# clone repo
-git clone https://github.com/<username>/rusterize.git
-cd rusterize
-
-# install Rust nightly toolchain
-rustup toolchain install nightly-2026-04-01
-
-# create a virtual environment (e.g. using `uv`)
-# install maturin
-uv pip install maturin
-
-# install editable version with optmized code
-maturin develop --profile dist-release --uv
-
-# test the new contribution
-pytest
-```
-
 ## Benchmarks
 
 **rusterize** is fast! Let’s try it on small and large datasets in comparison to GDAL ([benchmark_rusterize.py](benchmarks/benchmark_rusterize.py)).
@@ -181,15 +156,6 @@ test_water_large_gdal_f64   1.4128  1.4229  1.4178  0.0029  1.4180  0.0040      
 test_roads_uint8            3.3184  3.5184  3.4021  0.0578  3.3849  0.0527       3;1    0.2939      10           1
 test_roads_gdal_uint8       9.0672  9.1040  9.0901  0.0109  9.0920  0.0125       2;0    0.1100      10           1
 ------------------------------------------------------------------------------------------------------------------
-```
-
-And fasterize ([benchmark_fasterize.r](benchmarks/benchmark_fasterize.r)). Note that it doesn't support custom `dtype` so the returning raster is `float64`.
-
-```
-Unit: seconds
-            expr              min           lq        mean       median          uq         max neval
- fasterize_small_f64   0.05764281   0.06274373   0.1286875   0.06520358   0.1128432   0.6000182    10
- fasterize_large_f64  36.91321005  37.71877265  41.0140303  40.81343803  43.9201820  46.5596799    10
 ```
 
 ### Comparison with other tools
