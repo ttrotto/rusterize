@@ -47,10 +47,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: r-lib/actions/setup-r@v2
+
       - name: Install savvy
         run: Rscript -e 'install.packages("savvy", repos = "https://yutannihilation.r-universe.dev")'
+
       - name: Regenerate bindings
         run: Rscript -e 'savvy::savvy_update("R/rusterize")'
+
       - name: Fail if savvy bindings are stale
         run: |
           if ! git diff --exit-code -- \
@@ -60,3 +63,24 @@ jobs:
             echo "::error::savvy bindings out of date. Run R/rusterize/tools/savvy-update.sh and commit the result."
             exit 1
           fi
+
+  r-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: R/rusterize
+
+      - name: Install savvy
+        run: Rscript -e 'install.packages("savvy", repos = "https://yutannihilation.r-universe.dev")'
+
+      - name: Regenerate bindings
+        run: Rscript -e 'savvy::savvy_update("R/rusterize"); devtools::document("R/rusterize")'
+
+      - name: testthat
+        run: Rscript -e 'testthat::test_local("R/rusterize")'
