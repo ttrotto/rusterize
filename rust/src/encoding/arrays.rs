@@ -28,6 +28,10 @@ impl<N: Num> DenseArray<N> {
         (self.raster, self.band_names, self.raster_info)
     }
 
+    pub fn raster(&self) -> &Array3<N> {
+        &self.raster
+    }
+
     /// Sorted band names for the array. Defaults to "band_1" for a single band.
     pub fn band_names(&self) -> &[String] {
         &self.band_names
