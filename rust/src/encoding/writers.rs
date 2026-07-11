@@ -103,9 +103,9 @@ where
     N: RasterDtype,
 {
     fn finish(self, ctx: RasterizeContext<N>) -> SparseArray<N> {
-        let lengths = vec![self.values.len()];
+        let offsets = vec![self.values.len()];
         let band_names = vec![self.band_name];
-        SparseArray::new(band_names, self.rows, self.cols, self.values, lengths, ctx)
+        SparseArray::new(band_names, self.rows, self.cols, self.values, offsets, ctx)
     }
 }
 
@@ -114,19 +114,19 @@ where
     N: RasterDtype,
 {
     fn finish(self, ctx: RasterizeContext<N>) -> SparseArray<N> {
-        let (band_names, rows, cols, data, lengths) = self.into_iter().fold(
+        let (band_names, rows, cols, data, offsets) = self.into_iter().fold(
             (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()),
-            |(mut band_names, mut rows, mut cols, mut data, mut lengths), writer| {
-                lengths.push(writer.values.len());
+            |(mut band_names, mut rows, mut cols, mut data, mut offsets), writer| {
+                offsets.push(writer.values.len());
                 band_names.push(writer.band_name);
                 rows.extend(writer.rows);
                 cols.extend(writer.cols);
                 data.extend(writer.values);
-                (band_names, rows, cols, data, lengths)
+                (band_names, rows, cols, data, offsets)
             },
         );
 
-        SparseArray::new(band_names, rows, cols, data, lengths, ctx)
+        SparseArray::new(band_names, rows, cols, data, offsets, ctx)
     }
 }
 

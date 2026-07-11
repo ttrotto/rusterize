@@ -111,7 +111,7 @@ def rusterize(
     out_shape : tuple or list (default: None)
         Output raster dimensions defined as (nrows, ncols).
     extent : `tuple` or `list` (default: None)
-        Spatial bounding box defined as `(xmin, ymin, xmax, ymax)`.
+        Spatial bounding box defined as (xmin, ymin, xmax, ymax).
     field : `str` (default: None)
         Column name to use for pixel values. Mutually exclusive with `burn`. Not considered when input is list or numpy.ndarray.
     by : `str` (default: None)
@@ -223,7 +223,6 @@ def rusterize(
     if isinstance(burn, np.ndarray) and burn.size != len(data):
         raise ValueError("If `burn` is a `numpy.ndarray`, it must have the same length as `data`.")
 
-    _with_custom_bounds = False
     _bounds = None
     _res = None
     _shape = None
@@ -239,16 +238,17 @@ def rusterize(
             raise AttributeError("The `like` object must have a 'rio' accessor.")
 
         try:
-            affine = like.rio.transform()
-            _res = (affine.a, abs(affine.e))
+            # extent + shape fully determines resolution; passing res too trips the shape/res mutex
             _shape = like.squeeze().shape
             _bounds = like.rio.bounds()
-            _with_custom_bounds = True
         except Exception as e:
             raise AttributeError("No spatial dimension found for like object") from e
     else:
         if not res and not out_shape and not extent:
             raise ValueError("One of `res`, `out_shape`, or `extent` must be provided.")
+
+        if res and out_shape:
+            raise ValueError("`res` and `out_shape` are mutually exclusive; provide only one.")
 
         if extent:
             if not res and not out_shape:
@@ -257,7 +257,6 @@ def rusterize(
             if len(extent) != 4 or all(e == 0 for e in extent):
                 raise ValueError("`extent` must be a tuple or list of (xmin, ymin, xmax, ymax).")
             _bounds = extent
-            _with_custom_bounds = True
 
         if res:
             if len(res) != 2 or any(r <= 0 for r in res) or any(not isinstance(r, (int, float)) for r in res):
@@ -340,7 +339,6 @@ def rusterize(
         "resolution": _res,
         "tap": tap,
         "epsg": epsg,
-        "with_custom_bounds": _with_custom_bounds,
     }
 
     return _rusterize(

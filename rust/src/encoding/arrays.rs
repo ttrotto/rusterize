@@ -9,15 +9,15 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRef
 
 /// A materialized 3-dimensional array containing the burned geometries and spatial information.
 pub struct DenseArray<N> {
-    raster: Array3<N>,
+    array: Array3<N>,
     band_names: Vec<String>,
     raster_info: RasterInfo,
 }
 
 impl<N: Num> DenseArray<N> {
-    pub(crate) fn new(raster: Array3<N>, band_names: Vec<String>, raster_info: RasterInfo) -> Self {
+    pub(crate) fn new(array: Array3<N>, band_names: Vec<String>, raster_info: RasterInfo) -> Self {
         Self {
-            raster,
+            array,
             band_names,
             raster_info,
         }
@@ -25,7 +25,12 @@ impl<N: Num> DenseArray<N> {
 
     /// Consume self and extract all fields of the DenseArray.
     pub fn into_parts(self) -> (Array3<N>, Vec<String>, RasterInfo) {
-        (self.raster, self.band_names, self.raster_info)
+        (self.array, self.band_names, self.raster_info)
+    }
+
+    /// Inner array containing the burned geometries
+    pub fn array(&self) -> &Array3<N> {
+        &self.array
     }
 
     /// Sorted band names for the array. Defaults to "band_1" for a single band.
@@ -58,7 +63,7 @@ impl<N: Num> Triplets<N> {
 pub struct SparseArray<N> {
     band_names: Vec<String>,
     triplets: Triplets<N>,
-    lengths: Vec<usize>,
+    offsets: Vec<usize>,
     raster_info: RasterInfo,
     pxfn: PixelFn<N>,
     background: N,
@@ -73,7 +78,7 @@ where
         rows: Vec<u64>,
         cols: Vec<u64>,
         data: Vec<N>,
-        lengths: Vec<usize>,
+        offsets: Vec<usize>,
         ctx: RasterizeContext<N>,
     ) -> Self {
         let pxfn = ctx.pixel_fn();
@@ -82,7 +87,7 @@ where
         Self {
             band_names,
             triplets: Triplets::new(rows, cols, data),
-            lengths,
+            offsets,
             raster_info: ctx.raster_info,
             pxfn,
             background,
@@ -104,7 +109,7 @@ where
 
         // per-band start offset into the contiguous triplet arrays
         let offsets = self
-            .lengths
+            .offsets
             .iter()
             .scan(0, |state, &n| {
                 let start = *state;
@@ -116,7 +121,7 @@ where
         raster
             .outer_iter_mut()
             .into_par_iter()
-            .zip(self.lengths.par_iter())
+            .zip(self.offsets.par_iter())
             .zip(offsets.par_iter())
             .for_each(|((mut band, n), &off)| {
                 let end = off + *n;
@@ -146,8 +151,8 @@ where
         )
     }
 
-    pub fn shape(&self) -> (usize, usize) {
-        (self.raster_info.nrows, self.raster_info.ncols)
+    pub fn shape(&self) -> (usize, usize, usize) {
+        (self.band_names.len(), self.raster_info.nrows, self.raster_info.ncols)
     }
 
     pub fn resolution(&self) -> (f64, f64) {
@@ -180,9 +185,9 @@ mod feature_gated {
             let mut columns: Vec<Column> = Vec::new();
 
             // add bands for multiband raster
-            if self.lengths.len() > 1 {
+            if self.offsets.len() > 1 {
                 let bands = self
-                    .lengths
+                    .offsets
                     .iter()
                     .enumerate()
                     .flat_map(|(i, v)| std::iter::repeat_n(i + 1, *v))

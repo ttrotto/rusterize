@@ -11,7 +11,6 @@ pub struct RawRasterInfo {
     resolution: Option<[f64; 2]>,
     tap: bool,
     epsg: Option<u16>,
-    with_custom_bounds: bool,
 }
 
 impl RawRasterInfo {
@@ -34,9 +33,7 @@ impl RawRasterInfo {
             builder = builder.with_target_align_pixel();
         }
 
-        if let Some(extent) = self.extent
-            && self.with_custom_bounds
-        {
+        if let Some(extent) = self.extent {
             builder.extent(extent[0], extent[1], extent[2], extent[3]).build()
         } else {
             builder.build_with(geoms)

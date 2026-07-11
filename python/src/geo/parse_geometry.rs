@@ -1,8 +1,3 @@
-/*
-Serialize geopandas geoemetries into WKB for Rust and deserialize into geo_types::Geometry
-This is faster than parsing geometries directly via __geo_interface__
- */
-
 use geo_traits::to_geo::ToGeoGeometry;
 use geo_types::Geometry;
 use polars::{datatypes::DataType, prelude::*};
@@ -30,7 +25,7 @@ macro_rules! bail_if_empty_geoms {
     };
 }
 
-pub struct ParsedGeometry(Vec<Geometry<f64>>);
+pub(crate) struct ParsedGeometry(Vec<Geometry<f64>>);
 
 impl AsRef<[Geometry<f64>]> for ParsedGeometry {
     fn as_ref(&self) -> &[Geometry<f64>] {
@@ -80,11 +75,12 @@ impl FromPyObject<'_, '_> for ParsedGeometry {
 }
 
 fn try_parse_wkb_to_geometry(wkb: &[u8]) -> Option<Geometry<f64>> {
-    let wkb_result = read_wkb(wkb).expect(
-        "Cannot parse geometry. Check that the WKB bytes are valid. \
+    read_wkb(wkb)
+        .expect(
+            "Cannot parse geometry. Check that the WKB bytes are valid. \
        This may happen when you convert a list of WKB stored as python 'object' into a numpy array.",
-    );
-    ToGeoGeometry::try_to_geometry(&wkb_result)
+        )
+        .try_to_geometry()
 }
 
 fn try_parse_wkt_to_geometry(wkt: &str) -> Option<Geometry<f64>> {

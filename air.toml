@@ -1,0 +1,6 @@
+[format]
+line-width = 120
+indent-width = 2
+indent-style = "space"
+persistent-line-breaks = false
+exclude = ["R/rusterize/R/000-wrappers.R"]

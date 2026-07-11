@@ -11,7 +11,10 @@ By the rusterize team
 nav = [
   { "Home" = "index.md" },
   { "Python" = "python.md" },
-  { "API reference" = "api.md" },
+  { "R" = "r.md" },
+  { "Contributing" = "contributing.md" },
+  { "Python API reference" = "api.md" },
+  { "R API reference" = "r_api.md" },
 ]
 
 [project.theme]

@@ -14,7 +14,7 @@ pub enum PyOutput<'py> {
     Sparse(PySparseArray),
 }
 
-/// Convert a [`rusterize::prelude::DenseArray`] or a [`rusterize::prelude::SparseArray`] into python object
+/// Convert a [`rusterize::DenseArray`] or a [`rusterize::SparseArray`] into python object
 pub trait Pythonize {
     fn pythonize(self, py: Python, opt_flags: OptionalFlags) -> PyResult<PyOutput>;
 }
@@ -45,9 +45,9 @@ where
     }
 }
 
-/// Trait to convert a [`rusterize::prelude::SparseArray`] into a python object that mask the output data type.
+/// Trait to convert a [`rusterize::SparseArray`] into a python object that mask the output data type.
 pub trait PySparseArrayTraits: Send + Sync {
-    fn shape(&self) -> (usize, usize);
+    fn shape(&self) -> (usize, usize, usize);
     fn extent(&self) -> (f64, f64, f64, f64);
     fn resolution(&self) -> (f64, f64);
     fn epsg(&self) -> Option<u16>;
@@ -61,23 +61,23 @@ impl<T> PySparseArrayTraits for SparseArray<T>
 where
     T: RasterDtype + Element,
 {
-    fn shape(&self) -> (usize, usize) {
-        SparseArray::shape(self)
+    fn shape(&self) -> (usize, usize, usize) {
+        self.shape()
     }
     fn extent(&self) -> (f64, f64, f64, f64) {
-        SparseArray::extent(self)
+        self.extent()
     }
     fn resolution(&self) -> (f64, f64) {
-        SparseArray::resolution(self)
+        self.resolution()
     }
     fn epsg(&self) -> Option<u16> {
-        SparseArray::epsg(self)
+        self.epsg()
     }
 
-    /// Estimated size of the materialized [`rusterize::prelude::DenseArray`]
+    /// Estimated size of the materialized [`rusterize::DenseArray`]
     fn size_hint(&self) -> String {
-        let (nrows, ncols) = SparseArray::shape(self);
-        let bytes = std::mem::size_of::<T>() * nrows * ncols;
+        let (nbands, nrows, ncols) = self.shape();
+        let bytes = std::mem::size_of::<T>() * nbands * nrows * ncols;
         if bytes < 1000 {
             format!("{} bytes", bytes)
         } else if bytes < 1_000_000 {
@@ -101,11 +101,11 @@ where
     }
 
     fn to_frame(&self) -> PyDataFrame {
-        PyDataFrame(SparseArray::to_frame(self))
+        PyDataFrame(self.to_frame())
     }
 }
 
-#[pyclass(name = "SparseArray")]
+#[pyclass(name = "SparseArray", frozen)]
 pub struct PySparseArray(pub Arc<dyn PySparseArrayTraits>);
 
 #[pymethods]
