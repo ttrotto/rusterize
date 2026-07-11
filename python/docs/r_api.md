@@ -1,7 +1,5 @@
 # R API reference
 
-## rusterize
-
 ```r
 rusterize(
   data,
@@ -73,7 +71,7 @@ output dtype, else it will be internally casted.
 : If `TRUE`, every pixel touched by a geometry is burned. Defaults to `FALSE`.
 
 **`tap`**
-: Target Align Pixel: aligns the extent to the pixel resolution. Defaults to `FALSE`.
+: Target Aligned Pixels: aligns the extent to the pixel resolution. Defaults to `FALSE`.
 
 **`dtype`**
 : Output data type: `"integer"` or `"double"`. Defaults to `"double"`.

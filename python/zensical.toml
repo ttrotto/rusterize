@@ -13,7 +13,7 @@ nav = [
   { "Python" = "python.md" },
   { "R" = "r.md" },
   { "Contributing" = "contributing.md" },
-  { "Python API reference" = "api.md" },
+  { "Python API reference" = "python_api.md" },
   { "R API reference" = "r_api.md" },
 ]
 

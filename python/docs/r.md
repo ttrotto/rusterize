@@ -114,7 +114,7 @@ sparse$to_raster()
 
 Check out the Python [benchmarks](python.md#benchmarks) for a proper comparison with `GDAL`.
 
-Benchmark against `fasterize` ([benchmark_fasterize.r](benchmarks/benchmark_fasterize.r)) with dtype "double".
+Benchmark against `fasterize` [benchmark_fasterize.r](https://github.com/ttrotto/rusterize/blob/c3f60249e213753e45e721fb25ebe6519050a884/R/rusterize/benchmarks/benchmark.r) with dtype "double".
 
 ```
 Unit: seconds

@@ -1,4 +1,4 @@
-# API reference
+# Python API reference
 
 ::: rusterize.rusterize
 
@@ -10,12 +10,6 @@ large empty portions or want to save memory until you actually need it.
 
 A `SparseArray` has the following converters:
 
-_Python_
-
 - `to_xarray()` &rarr; `xarray.DataArray`
 - `to_numpy()` &rarr; `numpy.ndarray`
 - `to_frame()` &rarr; `polars.DataFrame`
-
-_R_
-
-- `to_raster()` &rarr; `terra::SpatRaster`

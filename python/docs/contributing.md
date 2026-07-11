@@ -4,8 +4,8 @@ Any contribution is welcome! You can install **rusterize** directly from this re
 [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed.
 
 ```bash
-# clone repo
-git clone https://github.com/<username>/rusterize.git
+# clone repo (or fork)
+git clone https://github.com/ttrotto/rusterize.git
 cd rusterize
 
 # install Rust nightly toolchain
@@ -29,9 +29,8 @@ environment for testing (e.g. using `[uv](https://docs.astral.sh/uv/)`):
 # install maturin
 uv pip install maturin
 
-# install editable version with optmized code
-
-maturin develop --profile dist-release --uv
+# install editable version with unoptimized code
+maturin develop --uv
 
 # test the new contribution
 pytest
@@ -51,4 +50,5 @@ devtools::document()
 testthat::test_local()
 ```
 
-Alternatively, run `savvy-update.sh` in a bash shell to update and rebuild the docs.
+Alternatively, run [savvy-update.sh](https://github.com/ttrotto/rusterize/blob/c3f60249e213753e45e721fb25ebe6519050a884/R/rusterize/tools/savvy-update.sh)
+in a bash shell to update and rebuild the docs.
