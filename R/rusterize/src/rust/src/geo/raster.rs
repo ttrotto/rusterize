@@ -19,7 +19,7 @@ pub(crate) fn build_raster_info(raw: ListSexp, geoms: &[Geometry<f64>]) -> Savvy
                 builder = builder.resolution(resolution[0], resolution[1]);
             }
             ("tap", TypedSexp::Logical(l)) if l.iter().next() == Some(true) => {
-                builder = builder.with_target_align_pixel();
+                builder = builder.with_target_aligned_pixel();
             }
             ("epsg", TypedSexp::Integer(i)) => {
                 let maybe_epsg = i.iter().next().copied();

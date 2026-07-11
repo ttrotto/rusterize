@@ -50,7 +50,7 @@ else it will be internally casted.}
 
 \item{all_touched}{If True, every pixel touched by a geometry is burned.}
 
-\item{tap}{Target Align Pixel: aligns the extent to the pixel resolution.}
+\item{tap}{Target Aligned Pixel: aligns the extent to the pixel resolution.}
 
 \item{dtype}{Output data type: \code{"integer"} or \code{"double"}.}
 }

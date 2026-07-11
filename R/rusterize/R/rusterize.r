@@ -16,7 +16,7 @@
 #' @param background Value assigned to pixels not covered by any geometry. Defaults to NA.
 #' @param encoding The format of the returned object: `"dense"` or `"sparse"`.
 #' @param all_touched If True, every pixel touched by a geometry is burned.
-#' @param tap Target Align Pixel: aligns the extent to the pixel resolution.
+#' @param tap Target Aligned Pixel: aligns the extent to the pixel resolution.
 #' @param dtype Output data type: `"integer"` or `"double"`.
 #'
 #' @return A `terra` object or a `SparseArray` in COOrdinate format.

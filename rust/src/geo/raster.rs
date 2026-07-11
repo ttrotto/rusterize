@@ -170,7 +170,7 @@ impl RasterInfoBuilder {
         self
     }
 
-    pub fn with_target_align_pixel(mut self) -> Self {
+    pub fn with_target_aligned_pixel(mut self) -> Self {
         self.tap = true;
         self
     }

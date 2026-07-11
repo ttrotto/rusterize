@@ -30,7 +30,7 @@ impl RawRasterInfo {
         }
 
         if self.tap {
-            builder = builder.with_target_align_pixel();
+            builder = builder.with_target_aligned_pixel();
         }
 
         if let Some(extent) = self.extent {
