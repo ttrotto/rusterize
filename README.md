@@ -11,8 +11,8 @@ Inspired by the [fasterize](https://github.com/ecohealthalliance/fasterize.git) 
 Check out the latest documentations:
 
 - [Rust](https://docs.rs/rusterize-rs)
-- [Python](ttrotto.github.io/rusterize/python)
-- [R](ttrotto.github.io/rusterize/r)
+- [Python](https://ttrotto.github.io/rusterize/python/)
+- [R](https://ttrotto.github.io/rusterize/r/)
 
 <br>
 
