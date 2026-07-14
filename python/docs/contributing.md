@@ -36,6 +36,8 @@ maturin develop --uv
 pytest
 ```
 
+This will build it with an unoptimized profile. Pass `--profile dist-release` to maturin to build the release distribution.
+
 ## R
 
 The R port of **rusterize** is built with [`savvy`](https://yutannihilation.github.io/savvy/guide/), so you'll need to have it installed, as well as `devtools`.
@@ -51,4 +53,4 @@ testthat::test_local()
 ```
 
 Alternatively, run [savvy-update.sh](https://github.com/ttrotto/rusterize/blob/c3f60249e213753e45e721fb25ebe6519050a884/R/rusterize/tools/savvy-update.sh)
-in a bash shell to update and rebuild the docs.
+in a bash shell to update and rebuild the docs. This will build it with an unoptimized profile. To build the release distribution, run `SAVVY_PROFILE=dist-release R CMD INSTALL .`
