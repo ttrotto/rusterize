@@ -142,20 +142,21 @@ output.to_frame()
 You can run this with [pytest](https://docs.pytest.org/en/stable/) and [pytest-benchmark](https://pytest-benchmark.readthedocs.io/en/stable/):
 
 ```
-pytest <python file> --benchmark-min-rounds=10 --benchmark-time-unit='s'
+pytest <python_file> --benchmark-min-rounds=10 --benchmark-time-unit='s'
 
---------------------------------------------- benchmark: 8 tests -------------------------------------------------
-Name (time in s)               Min     Max    Mean  StdDev  Median     IQR  Outliers       OPS  Rounds  Iterations
-------------------------------------------------------------------------------------------------------------------
-test_water_small_f64_numpy  0.0038  0.0045  0.0040  0.0001  0.0040  0.0002      56;3  248.7981     181           1
-test_water_small_f64        0.0048  0.0057  0.0050  0.0001  0.0050  0.0001      21;9  198.8759     158           1
-test_water_small_gdal_f64   0.0053  0.0057  0.0054  0.0001  0.0054  0.0001     28;14  184.3595     160           1
-test_water_large_f64_numpy  1.2628  1.3610  1.3133  0.0314  1.3193  0.0498       5;0    0.7614      10           1
-test_water_large_f64        1.2762  1.4723  1.3342  0.0628  1.3149  0.0165       2;4    0.7495      10           1
-test_water_large_gdal_f64   1.4128  1.4229  1.4178  0.0029  1.4180  0.0040       3;0    0.7053      10           1
-test_roads_uint8            3.3184  3.5184  3.4021  0.0578  3.3849  0.0527       3;1    0.2939      10           1
-test_roads_gdal_uint8       9.0672  9.1040  9.0901  0.0109  9.0920  0.0125       2;0    0.1100      10           1
-------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------- benchmark: 8 tests ----------------------------------------------------
+Name (time in s)                  Min      Max     Mean   StdDev   Median      IQR Outliers       OPS   Rounds   Iterations
+---------------------------------------------------------------------------------------------------------------------------
+test_water_small_f64_numpy     0.0035   0.0043   0.0036   0.0001   0.0035   0.0002    34;1   279.6455      196            1
+test_water_small_f64           0.0043   0.0057   0.0045   0.0002   0.0044   0.0003    19;4   221.4534      170            1
+test_water_small_gdal_f64      0.0050   0.0053   0.0050   0.0001   0.0050   0.0000   14;13   198.2172      169            1
+test_water_large_f64_numpy     1.1843   1.2668   1.2302   0.0263   1.2288   0.0322     4;0     0.8128       10            1
+test_water_large_f64           1.1843   1.2516   1.2270   0.0206   1.2270   0.0272     3;0     0.8150       10            1
+test_water_large_gdal_f64      1.2955   1.3051   1.3009   0.0031   1.3015   0.0041     3;0     0.7687       10            1
+test_roads_uint8               1.9457   2.0719   1.9922   0.0390   1.9876   0.0486     3;0     0.5019       10            1
+test_roads_gdal_uint8          4.7064   4.7561   4.7278   0.0161   4.7214   0.0265     3;0     0.2115       10            1
+----------------------------------------------------------------------------------------------------------------------------
+
 ```
 
 ### Comparison with other tools
@@ -167,7 +168,7 @@ processing with ample control over resolution, shape, extent, data type, and enc
 The following is a time comparison of 10 runs (median) on the same large water bodies dataset used earlier (dtype is `float64`) ([run_others.py](https://github.com/ttrotto/rusterize/blob/c3f60249e213753e45e721fb25ebe6519050a884/python/benchmarks/run_others.py)).
 
 ```
-rusterize: 1.3 sec
+rusterize: 1.2 sec
 rasterio:  14.5 sec
 geocube:   124.9 sec
 ```

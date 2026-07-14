@@ -27,9 +27,9 @@ rv add rusterize --repository "rusterize"
 
 Other ways to install **rusterize**:
 
-- `install.packages("rusterize", repo="https://ttrotto.r-universe.dev")`
+- `install.packages("rusterize", repos = "https://ttrotto.r-universe.dev")`
 - `pak::repo_add("https://ttrotto.r-universe.dev")` -> `pak::pkg_install("rusterize")`
-- `renv::install("rusterize", repo="https://ttrotto.r-universe.dev")`.
+- `renv::install("rusterize", repos = "https://ttrotto.r-universe.dev")`.
 
 ### Usage
 
@@ -112,13 +112,27 @@ sparse$to_raster()
 
 ## Benchmarks
 
-Check out the Python [benchmarks](python.md#benchmarks) for a proper comparison with `GDAL`.
+Check out the Python [benchmarks](python.md#benchmarks) for a comparison with GDAL.
 
-Benchmark against `fasterize` [benchmark_fasterize.r](https://github.com/ttrotto/rusterize/blob/c3f60249e213753e45e721fb25ebe6519050a884/R/rusterize/benchmarks/benchmark.r) with dtype "double".
+Benchmark against `fasterize` ([benchmark_rusterize.r](https://github.com/ttrotto/rusterize/blob/c3f60249e213753e45e721fb25ebe6519050a884/R/rusterize/benchmarks/benchmark.r)) with dtype "double".
+`fasterize` requires a template `raster::RasterLayer` to be built before rasterization, so these benchmarks include the time to generate this template.
 
-```
+```r
 Unit: seconds
-            expr              min           lq        mean       median          uq         max neval
- fasterize_small_f64   0.05764281   0.06274373   0.1286875   0.06520358   0.1128432   0.6000182    10
- fasterize_large_f64  36.91321005  37.71877265  41.0140303  40.81343803  43.9201820  46.5596799    10
+                expr         min          lq        mean      median          uq         max neval
+ rusterize_large_f64  1.51818793  1.66960548  1.78801887  1.71947791  1.84290258  2.26121972    10
+ rusterize_small_f64  0.01544157  0.01549703  0.01670145  0.01616975  0.01824702  0.01928829    10
+ fasterize_large_f64 36.75667095 37.33715239 40.80729938 40.78636142 44.06979276 45.36614083    10
+ fasterize_small_f64  0.06376405  0.06484535  0.08900962  0.07315597  0.07809348  0.25425766    10
+```
+
+And without the template creation time (**rusterize** still needs to create the array internally):
+
+```r
+Unit: seconds
+                expr      min       lq     mean   median       uq      max neval
+ rusterize_large_f64 1.583420 1.723896 1.906175 1.913970 2.006997 2.377668    10
+ rusterize_small_f64 0.013093 0.013721 0.020528 0.014113 0.014475 0.078459    10
+ fasterize_large_f64 2.149883 2.684711 3.122519 3.036046 3.461804 4.139388    10
+ fasterize_large_f64 0.004977 0.005224 0.005533 0.005357 0.005896 0.006376    10
 ```

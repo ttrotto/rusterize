@@ -13,8 +13,8 @@ fn_r <- function(v) {
 }
 
 fn_f <- function(v) {
-  r <- raster(v, res = 1 / 6, field = "perm")
-  fasterize(v, r)
+  r <- raster(v, res = 1 / 6)
+  fasterize(v, r, field = "perm")
 }
 
 microbenchmark(

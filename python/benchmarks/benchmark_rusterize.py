@@ -6,7 +6,6 @@ import requests
 from osgeo import gdal
 from pyogrio import read_dataframe
 from rusterize import rusterize
-import rioxarray
 
 # POLYGONS (~468MB)
 if not os.path.exists("canvec_50K_BC_Hydro/waterbody_2.shp"):
@@ -41,9 +40,7 @@ src_roads = _mem.CreateCopy("", gdal.OpenEx("lrnf000r25p_e/lrnf000r25p_e.gpkg"))
 
 src_water_small = _mem.Create("", 0, 0, 0, gdal.GDT_Unknown)
 _src_layer = src_water.GetLayer(0)
-_dst_layer = src_water_small.CreateLayer(
-    _src_layer.GetName(), _src_layer.GetSpatialRef(), _src_layer.GetGeomType()
-)
+_dst_layer = src_water_small.CreateLayer(_src_layer.GetName(), _src_layer.GetSpatialRef(), _src_layer.GetGeomType())
 for _i, _feat in enumerate(_src_layer):
     if _i >= 1000:
         break
@@ -69,7 +66,7 @@ def test_water_small_f64_numpy(benchmark):
 
 
 def test_roads_uint8(benchmark):
-    benchmark(rusterize, roads, res=(50, 50), dtype="uint8")
+    benchmark(rusterize, roads, res=(100, 100), dtype="uint8")
 
 
 def test_water_large_gdal_f64(benchmark):
@@ -103,8 +100,8 @@ def test_roads_gdal_uint8(benchmark):
         gdal.Rasterize,
         "",
         src_roads,
-        xRes=50,
-        yRes=50,
+        xRes=100,
+        yRes=100,
         format="MEM",
         outputType=gdal.GDT_Byte,
         burnValues=1,
