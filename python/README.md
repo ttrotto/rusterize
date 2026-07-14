@@ -11,4 +11,4 @@ It is designed to work on _all_ shapely geometries, even when they are nested in
 
 It returns a [xarray](https://docs.xarray.dev/en/stable/), a [numpy](https://numpy.org/), or a custom sparse array in COOrdinate format.
 
-Visit the full documentation [here](ttrotto.github.io/rusterize).
+Visit the full documentation [here](https://ttrotto.github.io/rusterize/python/).

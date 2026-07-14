@@ -7,4 +7,4 @@ Currently, it supports only `sf` dataframes as input.
 
 It returns a [`terra`](https://rspatial.github.io/terra/) object, or a custom sparse array in COOrdinate format.
 
-Visit the full documentation [here](ttrotto.github.io/rusterize).
+Visit the full documentation [here](https://ttrotto.github.io/rusterize/r/).
