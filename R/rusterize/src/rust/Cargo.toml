@@ -23,7 +23,7 @@ ndarray = { version = "0.17.2", features = ["rayon"] }
 num-traits = { workspace = true }
 
 # OS-specific allocators
-[target.'cfg(not(target_family = "unix"))'.dependencies]
+[target.'cfg(all(not(target_family = "unix"), not(target_arch = "wasm32")))'.dependencies]
 mimalloc = { version = "*", default-features = false }
 
 [target.'cfg(all(target_family = "unix", not(target_os = "macos")))'.dependencies]
