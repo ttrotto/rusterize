@@ -107,9 +107,9 @@ def rusterize(
     like : xarray.DataArray or xarray.Dataset (default: None)
         Template array used as a spatial blueprint (resolution, shape, extent). Mutually exclusive with `res`, `out_shape`, and `extent`. Requires xarray and rioxarray.
     res : tuple or list (default: None)
-        Pixel resolution defined as (xres, yres).
+        Pixel resolution defined as (xres, yres). Mutually exclusive with `out_shape`.
     out_shape : tuple or list (default: None)
-        Output raster dimensions defined as (nrows, ncols).
+        Output raster dimensions defined as (nrows, ncols). Mutually exclusive with `res`.
     extent : `tuple` or `list` (default: None)
         Spatial bounding box defined as (xmin, ymin, xmax, ymax).
     field : `str` (default: None)
