@@ -30,7 +30,7 @@ pip install 'rusterize[all]'
 
 ## Usage
 
-Visit the full [API reference](api.md).
+Visit the full [API reference](python_api.md).
 
 ```python
 from rusterize import rusterize
