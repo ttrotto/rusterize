@@ -25,11 +25,10 @@ pub(crate) fn build_raster_info(raw: ListSexp, geoms: &[Geometry<f64>]) -> Savvy
                 let maybe_epsg = i.iter().next().copied();
 
                 if let Some(epsg) = maybe_epsg {
-                    if epsg > 0 && epsg <= u16::MAX as i32 {
-                        builder = builder.epsg(epsg as u16);
-                    } else {
+                    if epsg <= 0 || epsg >= u16::MAX as i32 {
                         return Err(savvy_err!("Expected a positive integer, got {}", epsg));
                     }
+                    builder = builder.epsg(epsg as u16);
                 }
             }
             ("extent", TypedSexp::List(ls)) if !ls.is_empty() => {
