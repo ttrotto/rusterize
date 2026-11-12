@@ -4,6 +4,7 @@ use crate::{
     geo::{parse_geometry::parse_geometry, raster::build_raster_info},
 };
 use geo::Geometry;
+use num_traits::One;
 use rusterize::prelude::*;
 use savvy::{
     Error as SavvyError, ListSexp, NumericSexp, Sexp, StringSexp, savvy, savvy_err, sexp::na::NotAvailableValue,
@@ -22,16 +23,17 @@ where
         FromR::<A::Dtype>::try_from(ctx.rbackground)?.0
     };
 
-    let numeric_sexp = ctx
-        .rfield
-        .or(ctx.rburn)
-        .ok_or_else(|| savvy_err!("At least one of `field` or `burn` must be specified."))?;
-
-    let source = FromR::<Vec<A::Dtype>>::try_from(numeric_sexp)?.0;
-    let field = if source.len() == 1 {
-        FieldSource::Scalar(source[0])
-    } else {
-        FieldSource::from(&source)
+    let source;
+    let field = match ctx.rfield.or(ctx.rburn) {
+        Some(v) => {
+            source = FromR::<Vec<A::Dtype>>::try_from(v)?.0;
+            if source.len() == 1 {
+                FieldSource::Scalar(source[0])
+            } else {
+                FieldSource::from(&source)
+            }
+        }
+        None => FieldSource::Scalar(<A::Dtype>::one()),
     };
 
     let by = if let Some(ls) = ctx.rby {
