@@ -1,14 +1,12 @@
-use std::collections::BTreeMap;
-
 use crate::{
     encoding::{
         arrays::{DenseArray, SparseArray},
-        writers::{DenseArrayWriter, PixelWriter, SparseArrayWriter, ToSparseArray},
+        writers::{DenseArrayWriter, PixelWriter, SparseArrayWriter, finish_sparse},
     },
     error::{RusterizeError, RusterizeResult},
-    prelude::{RasterDtype, RasterizeContext},
+    prelude::{ByGroups, RasterDtype, RasterizeContext},
     rasterization::{
-        burn_geometry::Burn,
+        burn_geometry::{Buffers, Burn},
         burners::{AllTouched, AllTouchedCached, LineBurnStrategy, Standard},
     },
 };
@@ -81,7 +79,7 @@ where
 
         match ctx.by {
             Some(by) => {
-                let (groups, groups_idx) = group_keys(by);
+                let groups = group_codes(by)?;
                 let n_groups = groups.len();
                 let mut band_names = Vec::with_capacity(n_groups);
                 let mut raster = ctx.raster_info.build_raster(n_groups, ctx.background);
@@ -90,13 +88,12 @@ where
                     .outer_iter_mut()
                     .into_par_iter()
                     .zip(groups.into_par_iter())
-                    .zip(groups_idx.into_par_iter())
-                    .map(|((band, name), idxs)| {
-                        let mut writer = DenseArrayWriter::new(band, ctx.pixel_fn());
+                    .map(|(band, (name, idxs))| {
+                        let mut writer = DenseArrayWriter::new(band, ctx.pixel_fn);
 
                         dispatch!(ctx.all_touched, dedup, geoms, &ctx, &mut writer, idxs.iter().copied());
 
-                        name
+                        name.clone()
                     })
                     .collect_into_vec(&mut band_names);
 
@@ -105,7 +102,7 @@ where
             None => {
                 let band_names = vec![String::from("band_1")];
                 let mut raster = ctx.raster_info.build_raster(1, ctx.background);
-                let mut writer = DenseArrayWriter::new(raster.index_axis_mut(Axis(0), 0), ctx.pixel_fn());
+                let mut writer = DenseArrayWriter::new(raster.index_axis_mut(Axis(0), 0), ctx.pixel_fn);
 
                 dispatch!(ctx.all_touched, dedup, geoms, &ctx, &mut writer, 0..geoms.len());
 
@@ -128,14 +125,13 @@ where
 
         match ctx.by {
             Some(by) => {
-                let (groups, groups_idx) = group_keys(by);
+                let groups = group_codes(by)?;
                 let mut writers = Vec::with_capacity(groups.len());
 
                 groups
                     .into_par_iter()
-                    .zip(groups_idx.into_par_iter())
                     .map(|(name, idxs)| {
-                        let mut writer = SparseArrayWriter::new(name);
+                        let mut writer = SparseArrayWriter::new(name.clone());
 
                         dispatch!(ctx.all_touched, dedup, geoms, &ctx, &mut writer, idxs.iter().copied());
 
@@ -143,14 +139,14 @@ where
                     })
                     .collect_into_vec(&mut writers);
 
-                Ok(writers.finish(ctx))
+                Ok(finish_sparse(writers, ctx))
             }
             None => {
                 let mut writer = SparseArrayWriter::new(String::from("band_1"));
 
                 dispatch!(ctx.all_touched, dedup, geoms, &ctx, &mut writer, 0..geoms.len());
 
-                Ok(writer.finish(ctx))
+                Ok(finish_sparse(vec![writer], ctx))
             }
         }
     }
@@ -166,15 +162,17 @@ where
     S: LineBurnStrategy,
     I: Iterator<Item = usize>,
 {
+    // reused by every geometry in this band
+    let mut buffers = Buffers::default();
     match &ctx.field {
         FieldSource::Scalar(s) => {
             for i in indices {
-                geoms[i].burn::<S>(&ctx.raster_info, *s, writer, ctx.background);
+                geoms[i].burn::<S>(&ctx.raster_info, *s, writer, ctx.background, &mut buffers);
             }
         }
         FieldSource::Array(arr) => {
             for i in indices {
-                geoms[i].burn::<S>(&ctx.raster_info, arr[i], writer, ctx.background);
+                geoms[i].burn::<S>(&ctx.raster_info, arr[i], writer, ctx.background, &mut buffers);
             }
         }
         #[cfg(feature = "polars")]
@@ -182,12 +180,12 @@ where
             let ca = col.as_materialized_series().unpack::<N::ChunkedArrayType>().unwrap();
             if let Ok(slice) = ca.cont_slice() {
                 for i in indices {
-                    geoms[i].burn::<S>(&ctx.raster_info, slice[i], writer, ctx.background);
+                    geoms[i].burn::<S>(&ctx.raster_info, slice[i], writer, ctx.background, &mut buffers);
                 }
             } else {
                 for i in indices {
                     if let Some(fv) = ca.get(i) {
-                        geoms[i].burn::<S>(&ctx.raster_info, fv, writer, ctx.background);
+                        geoms[i].burn::<S>(&ctx.raster_info, fv, writer, ctx.background, &mut buffers);
                     }
                 }
             }
@@ -195,17 +193,28 @@ where
     }
 }
 
-/// Group `by` keys into (band name, geometry indexes) pairs, sorted by key.
-fn group_keys(by: &[String]) -> (Vec<String>, Vec<Vec<usize>>) {
-    let mut groups: BTreeMap<&String, Vec<usize>> = BTreeMap::new();
-    for (i, key) in by.iter().enumerate() {
-        groups.entry(key).or_default().push(i);
+/// Bucket geometry indexes by group code; labels without geometries get no band.
+fn group_codes(by: ByGroups<'_>) -> RusterizeResult<Vec<(&String, Vec<usize>)>> {
+    let mut buckets = vec![Vec::new(); by.labels.len()];
+    for (i, &code) in by.codes.iter().enumerate() {
+        // callers mark nulls with an out-of-range code
+        buckets
+            .get_mut(code as usize)
+            .ok_or(RusterizeError::ValueError(
+                "Found nulls in `by` column. Consider dropping them.",
+            ))?
+            .push(i);
     }
-    groups.into_iter().map(|(k, idxs)| (k.clone(), idxs)).unzip()
+    Ok(by
+        .labels
+        .iter()
+        .zip(buckets)
+        .filter(|(_, idxs)| !idxs.is_empty())
+        .collect())
 }
 
 /// Validate length of geometry, field, and by. Must match.
-fn assert_matching_len<N>(n_geoms: usize, field: &FieldSource<N>, by: Option<&[String]>) -> RusterizeResult<()> {
+fn assert_matching_len<N>(n_geoms: usize, field: &FieldSource<N>, by: Option<ByGroups>) -> RusterizeResult<()> {
     let field_len = match field {
         FieldSource::Array(arr) => Some(arr.len()),
         #[cfg(feature = "polars")]
@@ -220,7 +229,7 @@ fn assert_matching_len<N>(n_geoms: usize, field: &FieldSource<N>, by: Option<&[S
     }
 
     if let Some(by) = by
-        && by.len() != n_geoms
+        && by.codes.len() != n_geoms
     {
         return Err(RusterizeError::ValueError("Geometry and by lengths must match"));
     }
@@ -281,12 +290,15 @@ mod tests {
             Geometry::Point(Point::new(0.5, 0.5)),
             Geometry::Point(Point::new(3.5, 3.5)),
         ];
-        let by = [String::from("a"), String::from("b")];
+        let labels = [String::from("a"), String::from("b")];
         let vals = Array1::from(vec![1.0_f64, 2.0]);
         let ctx = RasterizeContext {
             raster_info: raster_4x4(),
             field: FieldSource::Array(vals.view()),
-            by: Some(by.as_ref()),
+            by: Some(ByGroups {
+                codes: &[0, 1],
+                labels: &labels,
+            }),
             pixel_fn: PixelFunction::Last,
             background: 0.0,
             all_touched: false,
@@ -304,11 +316,23 @@ mod tests {
     }
 
     #[test]
-    fn group_keys_groups_and_names() {
-        let by = [String::from("b"), String::from("a"), String::from("b")];
-        let (names, idx) = group_keys(&by);
-        let mut pairs: Vec<(String, Vec<usize>)> = names.into_iter().zip(idx).collect();
-        pairs.sort();
-        assert_eq!(pairs, vec![("a".to_string(), vec![1]), ("b".to_string(), vec![0, 2])]);
+    fn group_codes_groups_and_names() {
+        let labels = [String::from("b"), String::from("a"), String::from("unused")];
+        let by = ByGroups {
+            codes: &[0, 1, 0],
+            labels: &labels,
+        };
+        assert_eq!(
+            group_codes(by).unwrap(),
+            vec![(&labels[0], vec![0, 2]), (&labels[1], vec![1])]
+        );
+        // out-of-range code (a null) is an error
+        assert!(
+            group_codes(ByGroups {
+                codes: &[0, u32::MAX],
+                labels: &labels
+            })
+            .is_err()
+        );
     }
 }
