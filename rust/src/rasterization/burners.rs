@@ -260,6 +260,7 @@ where
 #[cfg_attr(feature = "hotpath", hotpath::measure)]
 pub(super) fn burn_polygon<N, W>(
     polyedges: &mut Vec<PolyEdge>,
+    active_edges: &mut Vec<PolyEdge>,
     raster_info: &RasterInfo,
     field_value: N,
     writer: &mut W,
@@ -278,7 +279,7 @@ pub(super) fn burn_polygon<N, W>(
     // start with first y line (polyedges is non-empty, checked above)
     let mut yline = polyedges[0].ystart;
 
-    let mut active_edges = Vec::new();
+    active_edges.clear();
 
     let ncols = raster_info.ncols as f64;
     while yline < raster_info.nrows && (!active_edges.is_empty() || !polyedges.is_empty()) {
