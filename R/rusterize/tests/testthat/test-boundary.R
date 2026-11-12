@@ -65,7 +65,7 @@ test_that("shape-only and resolution-only both derive a valid raster", {
   expect_identical(dim(b$to_raster()), c(5L, 5L, 1L))
 })
 
-test_that("missing CRS yields epsg 0", {
+test_that("missing CRS yields NA epsg", {
   r <- rusterize_r(
     wkb(sf::st_sfc(sq(0, 0, 4, 4))),
     list(shape = list(4, 4), tap = FALSE),
@@ -78,12 +78,12 @@ test_that("missing CRS yields epsg 0", {
     NULL,
     1
   )
-  expect_identical(r$epsg(), 0L)
+  expect_identical(r$epsg(), NA_integer_)
 })
 
 test_that("by grouping produces one band per group in (row, col, band) order", {
   geom <- sf::st_sfc(sq(0, 0, 2, 4), sq(2, 0, 4, 4), crs = 4326)
-  r <- rusterize_r(wkb(geom), raster_info(), "last", 0, FALSE, "dense", "double", c(10, 20), c("a", "b"), NULL)
+  r <- rusterize_r(wkb(geom), raster_info(), "last", 0, FALSE, "dense", "double", c(10, 20), unclass(factor(c("a", "b"))), NULL)
   m <- r$to_raster()
   expect_identical(dim(m), c(4L, 4L, 2L))
   expect_identical(r$names(), c("a", "b"))

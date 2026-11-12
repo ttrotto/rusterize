@@ -53,6 +53,24 @@ test_that("by grouping yields one named band per group", {
   expect_true(all(terra::values(r[["b"]], mat = FALSE) %in% c(0, 20)))
 })
 
+test_that("by bands follow first-seen order and factors group like text", {
+  d <- two_grp()
+  d$grp <- c("z", "a")
+  r <- rusterize(d, out_shape = c(4, 4), field = "value", by = "grp", background = 0)
+  expect_identical(names(r), c("z", "a"))
+  # unused factor levels get no band
+  d$grp <- factor(c("z", "a"), levels = c("unused", "a", "z"))
+  rf <- rusterize(d, out_shape = c(4, 4), field = "value", by = "grp", background = 0)
+  expect_identical(names(rf), c("z", "a"))
+  expect_equal(terra::values(rf), terra::values(r))
+})
+
+test_that("NA in by is an error", {
+  d <- two_grp()
+  d$grp <- c("a", NA)
+  expect_error(rusterize(d, out_shape = c(4, 4), by = "grp"), "Found nulls in `by` column")
+})
+
 test_that("burn writes a constant value across coverage", {
   r <- rusterize(poly4(), out_shape = c(4, 4), burn = 1, background = 0)
   expect_s4_class(r, "SpatRaster")
