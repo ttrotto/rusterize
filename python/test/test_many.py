@@ -82,13 +82,6 @@ class TestMissingDependencies:
             with pytest.raises(TypeError, match="`data` must be either geopandas.GeoDataFrame"):
                 rusterize(gdf, res=(1, 1), encoding="numpy")
 
-    def test_polars_missing(self):
-        # polars is only required for grouping (`by`) on a geopandas input
-        with patch("rusterize._check_for_geopandas", return_value=True):
-            with patch("rusterize._polars_available", return_value=False):
-                with pytest.raises(ModuleNotFoundError, match="polars must be installed when data is geopandas.GeoDataFrame."):
-                    rusterize(GDF, res=(1, 1), by="value", encoding="numpy")
-
     def test_polars_st_missing(self):
         import polars_st as st
 
@@ -260,6 +253,23 @@ class TestCoherence:
         ).squeeze()
 
         assert np.allclose(r, out_ds.ReadAsArray())
+
+
+class TestGrouping:
+    def test_by_category_matches_text(self):
+        # `by` reaches Rust as codes + labels, so a categorical column must group exactly like its text
+        gdf = GDF.assign(group=["a", "b", "a", "b", "a"])
+        text = rusterize(gdf, res=(1, 1), field="value", by="group", encoding="numpy")
+        cat = rusterize(gdf.assign(group=gdf["group"].astype("category")), res=(1, 1), field="value", by="group", encoding="numpy")
+        assert text.shape[0] == 2
+        assert np.array_equal(text, cat, equal_nan=True)
+
+    def test_by_nulls_raise(self):
+        groups = ["a", None, "a", "b", "a"]
+        with pytest.raises(RuntimeError, match="Found nulls in `by` column"):
+            rusterize(GDF.assign(group=groups), res=(1, 1), by="group", encoding="numpy")
+        with pytest.raises(RuntimeError, match="Found nulls in `by` column"):
+            rusterize(st.GeoDataFrame({"geometry": GEOMS, "group": groups}), res=(1, 1), by="group", encoding="numpy")
 
 
 class TestCustomRaster:

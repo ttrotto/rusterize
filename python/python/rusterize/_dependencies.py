@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     import xarray
 else:
     geopandas, GEOPANDAS_AVAILABLE = _lazy_import("geopandas")
-    polars, POLARS_AVAILABLE = _lazy_import("polars")
+    polars, _ = _lazy_import("polars")
     polars_st, POLARS_ST_AVAILABLE = _lazy_import("polars_st")
     xarray, XARRAY_AVAILABLE = _lazy_import("xarray")
     _, RIOXARRAY_AVAILABLE = _lazy_import("rioxarray")
@@ -53,10 +53,6 @@ else:
 
 def _xarray_available() -> bool:
     return XARRAY_AVAILABLE and RIOXARRAY_AVAILABLE
-
-
-def _polars_available() -> bool:
-    return POLARS_AVAILABLE
 
 
 @cache
