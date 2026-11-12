@@ -1,7 +1,7 @@
 use crate::{
     geo::raster::RasterInfo,
     prelude::{RasterDtype, RasterizeContext},
-    rasterization::pixel_functions::PixelFn,
+    rasterization::pixel_functions::PixelFunction,
 };
 use ndarray::Array3;
 use num_traits::Num;
@@ -65,7 +65,7 @@ pub struct SparseArray<N> {
     triplets: Triplets<N>,
     offsets: Vec<usize>,
     raster_info: RasterInfo,
-    pxfn: PixelFn<N>,
+    pxfn: PixelFunction,
     background: N,
 }
 
@@ -81,7 +81,7 @@ where
         offsets: Vec<usize>,
         ctx: RasterizeContext<N>,
     ) -> Self {
-        let pxfn = ctx.pixel_fn();
+        let pxfn = ctx.pixel_fn;
         let background = ctx.background;
 
         Self {
@@ -130,7 +130,7 @@ where
                 let band_data = &data[off..end];
 
                 for ((band_row, band_col), band_value) in band_rows.iter().zip(band_cols).zip(band_data) {
-                    (self.pxfn)(
+                    self.pxfn.apply(
                         &mut band,
                         *band_row as usize,
                         *band_col as usize,

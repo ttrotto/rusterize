@@ -1,4 +1,3 @@
-use crate::rasterization::pixel_functions::PixelFn;
 use num_traits::Num;
 use std::ops::AddAssign;
 
@@ -113,13 +112,6 @@ pub struct RasterizeContext<'a, N> {
 }
 
 impl<'a, N> RasterizeContext<'a, N> {
-    pub(crate) fn pixel_fn(&self) -> PixelFn<N>
-    where
-        N: Num + Copy + AddAssign + PartialOrd + NaNAware,
-    {
-        self.pixel_fn.to_function()
-    }
-
     pub(crate) fn requires_dedup(&self) -> bool {
         self.all_touched && matches!(self.pixel_fn, PixelFunction::Sum | PixelFunction::Count)
     }

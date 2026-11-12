@@ -4,7 +4,7 @@ use num_traits::Num;
 use std::{ops::AddAssign, str::FromStr};
 
 /// Supported functions to apply to overlapping pixels.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum PixelFunction {
     Sum,
     First,
@@ -33,24 +33,23 @@ impl FromStr for PixelFunction {
 }
 
 impl PixelFunction {
-    pub(crate) fn to_function<N>(&self) -> PixelFn<N>
+    /// Apply to the pixel at (y, x). A `match` instead of a fn pointer so it inlines into the burn loops.
+    #[inline(always)]
+    pub(crate) fn apply<N>(self, array: &mut ArrayViewMut2<N>, y: usize, x: usize, value: N, bg: N)
     where
         N: Num + Copy + AddAssign + PartialOrd + NaNAware,
     {
         match self {
-            Self::Sum => sum_values,
-            Self::First => first_values,
-            Self::Last => last_values,
-            Self::Min => min_values,
-            Self::Max => max_values,
-            Self::Count => count_values,
-            Self::Any => any_values,
+            Self::Sum => sum_values(array, y, x, value, bg),
+            Self::First => first_values(array, y, x, value, bg),
+            Self::Last => last_values(array, y, x, value, bg),
+            Self::Min => min_values(array, y, x, value, bg),
+            Self::Max => max_values(array, y, x, value, bg),
+            Self::Count => count_values(array, y, x, value, bg),
+            Self::Any => any_values(array, y, x, value, bg),
         }
     }
 }
-
-/// On-demand function for overlapping pixels.
-pub(crate) type PixelFn<N> = fn(&mut ArrayViewMut2<N>, usize, usize, N, N);
 
 /// Sum values or NaN/background.
 fn sum_values<N>(array: &mut ArrayViewMut2<N>, y: usize, x: usize, value: N, bg: N)

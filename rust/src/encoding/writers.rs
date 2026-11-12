@@ -1,7 +1,7 @@
 use crate::{
     encoding::arrays::SparseArray,
     prelude::{RasterDtype, RasterizeContext},
-    rasterization::{pixel_cache::PixelCache, pixel_functions::PixelFn},
+    rasterization::{pixel_cache::PixelCache, pixel_functions::PixelFunction},
 };
 use ndarray::ArrayViewMut2;
 use num_traits::Num;
@@ -62,17 +62,18 @@ impl<'a, W> FillWriter<'a, W> {
 /// Writer for a [`DenseArray`].
 pub struct DenseArrayWriter<'a, N> {
     band: ArrayViewMut2<'a, N>,
-    pxfn: PixelFn<N>,
+    pxfn: PixelFunction,
 }
 
-impl<'a, N: Num> PixelWriter<N> for DenseArrayWriter<'a, N> {
+impl<'a, N: RasterDtype> PixelWriter<N> for DenseArrayWriter<'a, N> {
+    #[inline(always)]
     fn write(&mut self, y: usize, x: usize, value: N, background: N) {
-        (self.pxfn)(&mut self.band, y, x, value, background);
+        self.pxfn.apply(&mut self.band, y, x, value, background);
     }
 }
 
 impl<'a, N: Num> DenseArrayWriter<'a, N> {
-    pub fn new(band: ArrayViewMut2<'a, N>, pxfn: PixelFn<N>) -> Self {
+    pub fn new(band: ArrayViewMut2<'a, N>, pxfn: PixelFunction) -> Self {
         Self { band, pxfn }
     }
 }
