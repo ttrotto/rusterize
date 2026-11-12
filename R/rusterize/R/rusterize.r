@@ -8,7 +8,7 @@
 #' @param extent Spatial bounding box as `c(xmin, ymin, xmax, ymax)` (or a list).
 #' @param field Column name to use for pixel values. Mutually exclusive with `burn`.
 #' @param by Column used for grouping. Each group is rasterized into a distinct band in the output.
-#' @param burn A static value or a list of values to apply to each geometries. If a vector, it must match the
+#' @param burn A static value or a numeric vector to apply to each geometries. If a vector, it must match the
 #' length of the geometry data. Mutually exclusive with `field`. If a vector, its dtype should match the output dtype,
 #' else it will be internally casted.
 #' @param fun Pixel function to use when burning geometries. Available options: `sum`, `first`, `last`, `min`, `max`,
@@ -37,8 +37,12 @@ rusterize <- function(
   tap = FALSE,
   dtype = "double"
 ) {
-  if (!("sf" %in% class(data)) && !("sfc" %in% class(data))) {
+  if (!inherits(data, c("sf", "sfc"))) {
     stop("`data` must be a `sf` object of type `sf` or `sfc`.")
+  }
+
+  if (!is.null(like) && !inherits(like, "SpatRaster")) {
+    stop("`like` must be a `terra::SpatRaster` object.")
   }
 
   if (!encoding %in% c("dense", "sparse")) {
@@ -53,12 +57,12 @@ rusterize <- function(
     stop("`out_shape` and `resolution` are mutually exclusive; provide only one.")
   }
 
-  n_geom <- if ("sf" %in% class(data)) nrow(data) else length(data)
-  if (length(burn) > 1 && length(burn) != n_geom) {
+  if (length(burn) > 1 && length(burn) != NROW(data)) {
     stop("If `burn` is a vector of numeric values, it must have the same length as `data`.")
   }
 
   epsg <- sf::st_crs(data)$epsg
+  if (is.na(epsg)) epsg <- NULL
   bounds <- NULL
   res <- NULL
   shape <- NULL
@@ -111,19 +115,31 @@ rusterize <- function(
     }
   }
 
-  field <- if (!is.null(field)) data[[field]]
-  by <- if (!is.null(by)) as.character(data[[by]])
-
-  raw_raster_info <- list(shape = shape, extent = bounds, resolution = res, tap = tap, epsg = as.integer(epsg))
-
-  geometry <- if ("sf" %in% class(data)) {
-    if (!("geometry" %in% names(data))) {
-      stop("No geometry column found for sf object.")
+  field <- if (!is.null(field)) {
+    if (!(field %in% names(data))) {
+      stop(sprintf("Column `%s` not found in dataframe.", field))
     }
-    data$geometry
-  } else {
-    data
+    data[[field]]
   }
+  by <- if (!is.null(by)) {
+    if (!(by %in% names(data))) {
+      stop(sprintf("Column `%s` not found in dataframe.", by))
+    }
+    # integer codes + `levels` in first-seen order (same band order as Python); NAs stay NA and are rejected in Rust.
+    # match() instead of factor(): factor() converts every value to a string first
+    x <- data[[by]]
+    lv <- NULL
+    if (is.factor(x)) {
+      lv <- levels(x)
+      x <- as.integer(x)
+    }
+    u <- unique(x[!is.na(x)])
+    structure(match(x, u), levels = as.character(if (is.null(lv)) u else lv[u]))
+  }
+
+  raw_raster_info <- list(shape = shape, extent = bounds, resolution = res, tap = tap, epsg = epsg)
+
+  geometry <- sf::st_geometry(data)
 
   r_array <- rusterize_r(
     sf::st_as_binary(geometry),
@@ -142,7 +158,7 @@ rusterize <- function(
     return(.array_to_rast(r_array$to_raster(), r_array))
   }
 
-  # rewire to_raster() for SparseArray and DenseArray to build a terra::rast object instead of returning a plain array.
+  # rewire to_raster() for SparseArray to build a terra::rast object instead of returning a plain array.
   to_raster_fn <- r_array$to_raster
   assign("to_raster", function() .array_to_rast(to_raster_fn(), r_array), envir = r_array)
   r_array
@@ -164,6 +180,7 @@ rusterize <- function(
     names = r_array$names(),
     vals = array
   )
-  terra::crs(out) <- paste0("EPSG:", r_array$epsg())
+  epsg <- r_array$epsg()
+  if (!is.na(epsg)) terra::crs(out) <- paste0("EPSG:", epsg)
   out
 }
