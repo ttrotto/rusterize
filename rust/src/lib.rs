@@ -29,7 +29,7 @@ pub use crate::{
     encoding::arrays::{DenseArray, SparseArray},
     error::{RusterizeError, RusterizeResult},
     geo::raster::{RasterInfo, RasterInfoBuilder},
-    prelude::{NaNAware, RasterDtype, RasterizeContext},
+    prelude::{ByGroups, NaNAware, RasterDtype, RasterizeContext},
     rasterization::pixel_functions::PixelFunction,
     rasterize::{ArrayBuilder, FieldSource, Rasterize},
 };

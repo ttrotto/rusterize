@@ -9,7 +9,6 @@ import numpy as np
 from ._dependencies import (
     _check_for_geopandas,
     _check_for_polars_st,
-    _polars_available,
     _xarray_available,
 )
 from ._dependencies import geopandas as gpd
@@ -239,7 +238,12 @@ def rusterize(
 
         try:
             # extent + shape fully determines resolution; passing res too trips the shape/res mutex
-            _shape = like.squeeze().shape
+            if isinstance(like, xr.Dataset):
+                _shape = tuple(like.sizes[d] for d in ('y', 'x'))
+                if not _shape:
+                    raise ValueError("`like` object has no known spatial dimensions.")
+            else:
+                _shape = like.squeeze().shape
             _bounds = like.rio.bounds()
         except Exception as e:
             raise AttributeError("No spatial dimension found for like object") from e
@@ -269,33 +273,35 @@ def rusterize(
             _shape = out_shape
 
     # extract columns of interest, if any
-    cols = list(set([col for col in (field, by) if col and col != "geometry"]))
     df = None
     epsg = None
+    # `by` goes to Rust as integer codes + one label per group; nulls get an out-of-range code that Rust rejects
+    by_codes = None
+    by_labels = None
 
     # data-specific feature extraction
     match data_type:
         case "geopandas":
             epsg = data.crs.to_epsg() if data.crs else None
 
-            if cols:
-                if field and not by:
-                    # optimization for a single column
-                    try:
-                        burn = data[field].to_numpy()
-                        field = None
-                    except KeyError as e:
-                        raise KeyError("Column not found in GeoDataFrame.") from e
-                else:
-                    if not _polars_available():
-                        raise ModuleNotFoundError("polars must be installed when data is geopandas.GeoDataFrame.")
+            # plain numpy/lists, no polars needed
+            try:
+                if field:
+                    burn = data[field].to_numpy()
+                    field = None
+                if by:
+                    by_col = data[by]
+            except KeyError as e:
+                raise KeyError("Column not found in GeoDataFrame.") from e
 
-                    try:
-                        df = pl.from_pandas(data[cols])
-                    except KeyError as e:
-                        raise KeyError("Column not found in GeoDataFrame.") from e
+            if by:
+                # nulls are -1, which wraps to an out-of-range uint32
+                codes, labels = by_col.factorize()
+                by_codes = codes.astype(np.uint32)
+                by_labels = labels.astype(str).tolist()
 
-            geometries = data.geometry
+            # plain object array: avoids GeoSeries.geom_type, which computes the type of every row
+            geometries = np.asarray(data.geometry)
 
         case "polars":
             # check if geometry has SRID. If 0, then None, else assume first SRID is equal for all geometries
@@ -306,17 +312,26 @@ def rusterize(
 
             epsg = None if srid == 0 else srid
 
-            if cols:
-                try:
-                    df = data.select(pl.col([*cols, "geometry"]))
-                except pl.exceptions.ColumnNotFoundError as e:
-                    raise KeyError("Column not found in polars DataFrame.") from e
+            try:
+                if field:
+                    df = data.select(pl.col(field))
+                if by:
+                    by_col = data.get_column(by).cast(pl.String)
+            except pl.exceptions.ColumnNotFoundError as e:
+                raise KeyError("Column not found in polars DataFrame.") from e
+
+            if by:
+                # Enum codes index the labels in first-seen order; Categorical codes point into a global cache
+                labels = by_col.unique(maintain_order=True).drop_nulls()
+                by_codes = by_col.cast(pl.Enum(labels)).to_physical().cast(pl.UInt32).fill_null(len(labels)).to_numpy()
+                by_labels = labels.to_list()
 
             # geometries are extracted directly on the Rust side
             geometries = data.select(pl.col("geometry")).to_series()
 
         case "geoseries":
-            geometries = data.geometry
+            # plain object array: avoids GeoSeries.geom_type, which computes the type of every row
+            geometries = np.asarray(data.geometry)
             burn = burn if burn is not None else data.index.to_numpy()
 
             try:
@@ -347,7 +362,8 @@ def rusterize(
         fun,
         df,
         field,
-        by,
+        by_codes,
+        by_labels,
         burn,
         background,
         all_touched,

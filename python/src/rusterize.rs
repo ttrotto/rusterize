@@ -37,7 +37,8 @@ struct Context<'py> {
     pybackground: Option<&'py Bound<'py, PyAny>>,
     df: Option<DataFrame>,
     pyfield: Option<&'py str>,
-    pyby: Option<&'py str>,
+    pyby_codes: Option<PyReadonlyArray1<'py, u32>>,
+    pyby_labels: Option<Vec<String>>,
     pyburn: Option<&'py Bound<'py, PyAny>>,
     opt_flags: OptionalFlags,
 }
@@ -57,9 +58,6 @@ where
             let mut exprs: Vec<Expr> = Vec::new();
             if let Some(field) = ctx.pyfield {
                 exprs.push(col(field).cast(<A::Dtype>::polars_dtype()).alias("field"));
-            }
-            if let Some(by) = ctx.pyby {
-                exprs.push(col(by).cast(DataType::String).alias("by"));
             }
             Some(
                 df.clone()
@@ -88,31 +86,19 @@ where
         },
     };
 
-    // force every geometry to have a corresponding by value, errors if nulls
-    let by = match (&prepared, ctx.pyby) {
-        (Some(df), Some(_)) => {
-            let ca = df.column("by").unwrap().str().unwrap();
-
-            if ca.null_count() > 0 {
-                return Err(PyRuntimeError::new_err(
-                    "Found nulls in `by` column. Consider droppping them.",
-                ));
-            }
-
-            let by_vec = ca
-                .downcast_iter()
-                .flat_map(|a| a.values_iter())
-                .map(str::to_owned)
-                .collect::<Vec<String>>();
-            Some(by_vec)
-        }
+    // nulls arrive as out-of-range codes and are rejected by the core
+    let by = match (&ctx.pyby_codes, &ctx.pyby_labels) {
+        (Some(codes), Some(labels)) => Some(ByGroups {
+            codes: codes.as_slice()?,
+            labels,
+        }),
         _ => None,
     };
 
     let rctx = RasterizeContext {
         raster_info: ctx.raster_info,
         field,
-        by: by.as_deref(),
+        by,
         pixel_fn: ctx.pixel_fn,
         background,
         all_touched: ctx.opt_flags.all_touched,
@@ -126,7 +112,7 @@ where
 
 #[pyfunction]
 #[pyo3(name = "_rusterize")]
-#[pyo3(signature = (geometry, raw_raster_info, pypixel_fn, pydf=None, pyfield=None, pyby=None, pyburn=None, pybackground=None, pytouched=false, pyencoding="xarray", pydtype="float64"))]
+#[pyo3(signature = (geometry, raw_raster_info, pypixel_fn, pydf=None, pyfield=None, pyby_codes=None, pyby_labels=None, pyburn=None, pybackground=None, pytouched=false, pyencoding="xarray", pydtype="float64"))]
 #[allow(clippy::too_many_arguments)]
 fn rusterize_py<'py>(
     py: Python<'py>,
@@ -135,7 +121,8 @@ fn rusterize_py<'py>(
     pypixel_fn: &'py str,
     pydf: Option<PyDataFrame>,
     pyfield: Option<&'py str>,
-    pyby: Option<&'py str>,
+    pyby_codes: Option<PyReadonlyArray1<'py, u32>>,
+    pyby_labels: Option<Vec<String>>,
     pyburn: Option<&'py Bound<PyAny>>,
     pybackground: Option<&'py Bound<PyAny>>,
     pytouched: bool,
@@ -158,7 +145,8 @@ fn rusterize_py<'py>(
         pybackground,
         df,
         pyfield,
-        pyby,
+        pyby_codes,
+        pyby_labels,
         pyburn,
         opt_flags,
     };

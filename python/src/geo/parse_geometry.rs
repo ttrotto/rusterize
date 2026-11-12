@@ -6,14 +6,18 @@ use pyo3::{
     exceptions::{PyTypeError, PyValueError},
     intern,
     prelude::*,
-    pybacked::PyBackedBytes,
+    pybacked::{PyBackedBytes, PyBackedStr},
     types::{PyAny, PyBytes, PyDict, PyList, PyString},
 };
 use pyo3_polars::PySeries;
-use rayon::iter::ParallelIterator;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rusterize::prelude::{RusterizeError, RusterizeResult};
 use wkb::reader::read_wkb;
 use wkt::TryFromWkt;
+
+const WKB_ERR: &str = "Cannot parse geometry. Check that WKB is valid. \
+    This may happen when you convert a list of WKB stored as python 'object' into a numpy array.";
+const WKT_ERR: &str = "Cannot parse geometry. Check that the WKT is valid.";
 
 macro_rules! bail_if_empty_geoms {
     ($identity:ident) => {
@@ -37,12 +41,6 @@ impl FromPyObject<'_, '_> for ParsedGeometry {
     type Error = PyErr;
 
     fn extract(obj: Borrowed<'_, '_, PyAny>) -> PyResult<Self> {
-        // geopandas.GeoDataFrame or GeoSeries
-        if obj.hasattr("geom_type")? {
-            let wkb_result = to_wkb(&obj)?;
-            return parse_sequence_wkb(&wkb_result);
-        }
-
         if obj.is_instance_of::<PyList>() || obj.get_type().name()? == "ndarray" {
             if obj.is_empty()? {
                 return Err(PyValueError::new_err("No geometries found."));
@@ -67,24 +65,32 @@ impl FromPyObject<'_, '_> for ParsedGeometry {
 
         if let Ok(pyseries) = obj.extract::<PySeries>() {
             let series: Series = pyseries.into();
-            return parse_polars_series(series).map_err(|e| PyTypeError::new_err(e.to_string()));
+            return obj
+                .py()
+                .detach(|| parse_polars_series(series))
+                .map_err(|e| PyTypeError::new_err(e.to_string()));
         }
 
         Err(PyTypeError::new_err("Unsupported geometry input type."))
     }
 }
 
+/// Parse `items` in parallel, `None` if any fails.
+/// Collecting into `Vec<Option<_>>` lets rayon write in place; collecting into `Option<Vec<_>>`
+/// directly gathers chunks in a linked list and copies every geometry again.
+fn par_parse<T: Sync>(
+    items: &[T],
+    parse: impl Fn(&T) -> Option<Geometry<f64>> + Sync + Send,
+) -> Option<Vec<Geometry<f64>>> {
+    items.par_iter().map(parse).collect::<Vec<_>>().into_iter().collect()
+}
+
 fn try_parse_wkb_to_geometry(wkb: &[u8]) -> Option<Geometry<f64>> {
-    read_wkb(wkb)
-        .expect(
-            "Cannot parse geometry. Check that the WKB bytes are valid. \
-       This may happen when you convert a list of WKB stored as python 'object' into a numpy array.",
-        )
-        .try_to_geometry()
+    read_wkb(wkb).ok()?.try_to_geometry()
 }
 
 fn try_parse_wkt_to_geometry(wkt: &str) -> Option<Geometry<f64>> {
-    Some(Geometry::try_from_wkt_str(wkt).expect("Cannot parse geometry. Check that the WKT is valid."))
+    Geometry::try_from_wkt_str(wkt).ok()
 }
 
 fn to_wkb<'a>(input: &Bound<'a, PyAny>) -> PyResult<Bound<'a, PyAny>> {
@@ -107,26 +113,30 @@ fn to_wkb<'a>(input: &Bound<'a, PyAny>) -> PyResult<Bound<'a, PyAny>> {
 }
 
 fn parse_sequence_wkb(input: &Bound<PyAny>) -> PyResult<ParsedGeometry> {
-    let mut geoms = Vec::with_capacity(input.len()?);
-    for item in input.try_iter()? {
-        let buf = item?.extract::<PyBackedBytes>()?;
-        if let Some(parsed) = try_parse_wkb_to_geometry(&buf) {
-            geoms.push(parsed);
-        }
-    }
+    // borrow every buffer while holding the GIL, then parse in parallel without it
+    let bufs = input
+        .try_iter()?
+        .map(|item| Ok(item?.extract::<PyBackedBytes>()?))
+        .collect::<PyResult<Vec<PyBackedBytes>>>()?;
+    let geoms = input
+        .py()
+        .detach(|| par_parse(&bufs, |buf| try_parse_wkb_to_geometry(buf)))
+        .ok_or_else(|| PyValueError::new_err(WKB_ERR))?;
 
     bail_if_empty_geoms!(geoms);
     Ok(ParsedGeometry(geoms))
 }
 
 fn parse_sequence_wkt(input: &Bound<'_, PyAny>) -> PyResult<ParsedGeometry> {
-    let mut geoms = Vec::with_capacity(input.len().unwrap_or(0));
-    for item in input.try_iter()? {
-        let s = item?.extract::<String>()?;
-        if let Some(parsed) = try_parse_wkt_to_geometry(&s) {
-            geoms.push(parsed);
-        }
-    }
+    // borrow every string while holding the GIL, then parse in parallel without it
+    let strs = input
+        .try_iter()?
+        .map(|item| Ok(item?.extract::<PyBackedStr>()?))
+        .collect::<PyResult<Vec<PyBackedStr>>>()?;
+    let geoms = input
+        .py()
+        .detach(|| par_parse(&strs, |s| try_parse_wkt_to_geometry(s)))
+        .ok_or_else(|| PyValueError::new_err(WKT_ERR))?;
 
     bail_if_empty_geoms!(geoms);
     Ok(ParsedGeometry(geoms))
@@ -134,16 +144,14 @@ fn parse_sequence_wkt(input: &Bound<'_, PyAny>) -> PyResult<ParsedGeometry> {
 
 fn parse_polars_series(input: Series) -> RusterizeResult<ParsedGeometry> {
     let wkb_output = match input.dtype() {
-        DataType::Binary => input
-            .binary()?
-            .iter()
-            .filter_map(|item| item.and_then(try_parse_wkb_to_geometry))
-            .collect(),
-        DataType::String => input
-            .str()?
-            .par_iter()
-            .filter_map(|item| item.and_then(try_parse_wkt_to_geometry))
-            .collect(),
+        DataType::Binary => par_parse(&input.binary()?.iter().collect::<Vec<_>>(), |item| {
+            item.and_then(try_parse_wkb_to_geometry)
+        })
+        .ok_or_else(|| RusterizeError::ValueError(WKB_ERR))?,
+        DataType::String => par_parse(&input.str()?.iter().collect::<Vec<_>>(), |item| {
+            item.and_then(try_parse_wkt_to_geometry)
+        })
+        .ok_or_else(|| RusterizeError::ValueError(WKT_ERR))?,
         _ => return Err(RusterizeError::ValueError("Unsupported dtype for geometry column")),
     };
     Ok(ParsedGeometry(wkb_output))

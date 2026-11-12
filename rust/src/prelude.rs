@@ -88,6 +88,13 @@ pub trait RasterDtype: Num + Copy + AddAssign + PartialOrd + NaNAware + Send + S
 #[cfg(not(feature = "polars"))]
 impl<N: Num + Copy + AddAssign + PartialOrd + NaNAware + Send + Sync> RasterDtype for N {}
 
+/// Group of every geometry: `codes[i]` indexes `labels`. Each label with geometries becomes one band, in label order.
+#[derive(Clone, Copy)]
+pub struct ByGroups<'a> {
+    pub codes: &'a [u32],
+    pub labels: &'a [String],
+}
+
 /// Spatial + value context handed to the rasterization engine.
 #[derive(Clone)]
 pub struct RasterizeContext<'a, N> {
@@ -97,7 +104,7 @@ pub struct RasterizeContext<'a, N> {
     pub field: FieldSource<'a, N>,
     /// Specify the grouping of the geometries into multiple bands in the final raster. None is no grouping.
     /// For this to work, `by` has to have the same length of the geometries.
-    pub by: Option<&'a [String]>,
+    pub by: Option<ByGroups<'a>>,
     /// Describes what happens to overlapping pixels.
     pub pixel_fn: PixelFunction,
     pub background: N,

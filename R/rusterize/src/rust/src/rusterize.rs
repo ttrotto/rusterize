@@ -7,7 +7,7 @@ use geo::Geometry;
 use num_traits::One;
 use rusterize::prelude::*;
 use savvy::{
-    Error as SavvyError, ListSexp, NumericSexp, Sexp, StringSexp, savvy, savvy_err, sexp::na::NotAvailableValue,
+    Error as SavvyError, IntegerSexp, ListSexp, NumericSexp, Sexp, savvy, savvy_err, sexp::na::NotAvailableValue,
 };
 
 fn rusterize_r_impl<A>(ctx: Context) -> savvy::Result<RArray>
@@ -36,16 +36,26 @@ where
         None => FieldSource::Scalar(<A::Dtype>::one()),
     };
 
-    let by = if let Some(ls) = ctx.rby {
-        Some(FromR::<Vec<String>>::try_from(ls)?.0)
-    } else {
-        None
+    // `by` is an unclassed factor: 1-based integer codes + `levels`. NA becomes an out-of-range code, rejected by the core
+    let by = match ctx.rby {
+        Some(f) => {
+            let labels = f
+                .get_attrib("levels")?
+                .ok_or_else(|| savvy_err!("`by` must be integer codes with a `levels` attribute."))?;
+            let labels = FromR::<Vec<String>>::try_from(labels)?.0;
+            let codes: Vec<u32> = IntegerSexp::try_from(f)?
+                .iter()
+                .map(|&c| c.checked_sub(1).map_or(u32::MAX, |c| c as u32))
+                .collect();
+            Some((codes, labels))
+        }
+        None => None,
     };
 
     let rctx = RasterizeContext {
         raster_info: ctx.raster_info,
         field,
-        by: by.as_deref(),
+        by: by.as_ref().map(|(codes, labels)| ByGroups { codes, labels }),
         pixel_fn: ctx.pixel_fn,
         background,
         all_touched: ctx.all_touched,
@@ -61,7 +71,7 @@ struct Context {
     pixel_fn: PixelFunction,
     rbackground: Sexp,
     rfield: Option<NumericSexp>,
-    rby: Option<StringSexp>,
+    rby: Option<Sexp>,
     rburn: Option<NumericSexp>,
     all_touched: bool,
 }
@@ -77,7 +87,7 @@ fn rusterize_r(
     encoding: &str,
     dtype: &str,
     rfield: Option<NumericSexp>,
-    rby: Option<StringSexp>,
+    rby: Option<Sexp>,
     rburn: Option<NumericSexp>,
 ) -> savvy::Result<RArray> {
     let parsed_geometry = parse_geometry(geometry)?;
