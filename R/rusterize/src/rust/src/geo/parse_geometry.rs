@@ -9,15 +9,14 @@ pub(crate) fn parse_geometry(geoms: ListSexp) -> SavvyResult<Vec<Geometry<f64>>>
         return Err(savvy_err!("Geometry list is empty."));
     }
 
-    let parsed = geoms
+    geoms
         .values_iter()
-        .filter_map(|sexp| {
+        .map(|sexp| {
             let TypedSexp::Raw(bytes) = sexp.into_typed() else {
                 return None;
             };
             read_wkb(bytes.as_slice()).ok()?.try_to_geometry()
         })
-        .collect::<Vec<Geometry<f64>>>();
-
-    Ok(parsed)
+        .collect::<Option<Vec<Geometry<f64>>>>()
+        .ok_or_else(|| savvy_err!("Cannot parse goemetry. Check that WKB is valid."))
 }
