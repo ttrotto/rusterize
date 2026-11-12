@@ -1,4 +1,7 @@
-use savvy::{Error as SavvyError, NumericScalar, NumericSexp, Result as SavvyResult, Sexp, StringSexp};
+use savvy::{
+    Error as SavvyError, NotAvailableValue, NumericScalar, NumericSexp, Result as SavvyResult, Sexp, StringSexp,
+    savvy_err,
+};
 
 /// A generic structure wrapping a type extracted from a generic [`savvy::Sexp`].
 pub(crate) struct FromR<T>(pub(crate) T);
@@ -71,8 +74,17 @@ impl TryFrom<StringSexp> for FromR<Vec<String>> {
     type Error = SavvyError;
 
     fn try_from(value: StringSexp) -> SavvyResult<FromR<Vec<String>>> {
-        let strings = value.to_vec().into_iter().map(|s| s.to_string()).collect();
-        Ok(FromR(strings))
+        value
+            .iter()
+            .map(|v| {
+                if v.is_na() {
+                    Err(savvy_err!("Found NA in `by` column. Consider dropping them."))
+                } else {
+                    Ok(v.to_string())
+                }
+            })
+            .collect::<SavvyResult<Vec<String>>>()
+            .map(FromR)
     }
 }
 
