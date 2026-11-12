@@ -15,7 +15,7 @@ use num_traits::Num;
 const EPSILON_INTERSECT: f64 = 1e-4;
 const TOLERANCE: f64 = 1e-9;
 
-pub struct Standard<const DEDUP: bool = false>;
+pub struct Standard;
 pub struct AllTouchedBase<const DEDUP: bool>;
 pub type AllTouched = AllTouchedBase<false>;
 pub type AllTouchedCached = AllTouchedBase<true>;
@@ -32,9 +32,9 @@ pub(crate) trait LineBurnStrategy {
         W: PixelWriter<N>;
 }
 
-impl<const DEDUP: bool> LineBurnStrategy for Standard<DEDUP> {
+impl LineBurnStrategy for Standard {
     const IS_ALL_TOUCHED: bool = false;
-    const REQUIRES_DEDUP: bool = DEDUP;
+    const REQUIRES_DEDUP: bool = false;
 
     #[cfg_attr(feature = "hotpath", hotpath::measure)]
     fn burn_line<N, W>(linedges: &[LineEdge], raster_info: &RasterInfo, field_value: N, writer: &mut W, background: N)

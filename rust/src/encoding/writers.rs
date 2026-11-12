@@ -78,11 +78,6 @@ impl<'a, N: Num> DenseArrayWriter<'a, N> {
     }
 }
 
-/// Convert a [`SparseArrayWriter`] into a [`SparseArray`].
-pub trait ToSparseArray<N: Num> {
-    fn finish(self, ctx: RasterizeContext<N>) -> SparseArray<N>;
-}
-
 /// Writer for a [`SparseArray`].
 pub struct SparseArrayWriter<N> {
     pub band_name: String,
@@ -99,36 +94,28 @@ impl<N: Num> PixelWriter<N> for SparseArrayWriter<N> {
     }
 }
 
-impl<N> ToSparseArray<N> for SparseArrayWriter<N>
-where
-    N: RasterDtype,
-{
-    fn finish(self, ctx: RasterizeContext<N>) -> SparseArray<N> {
-        let offsets = vec![self.values.len()];
-        let band_names = vec![self.band_name];
-        SparseArray::new(band_names, self.rows, self.cols, self.values, offsets, ctx)
+/// Merge per-band writers into one [`SparseArray`], bands in order.
+pub(crate) fn finish_sparse<N: RasterDtype>(
+    writers: Vec<SparseArrayWriter<N>>,
+    ctx: RasterizeContext<N>,
+) -> SparseArray<N> {
+    let mut band_names = Vec::with_capacity(writers.len());
+    let mut offsets = Vec::with_capacity(writers.len());
+    let (mut rows, mut cols, mut data) = (Vec::new(), Vec::new(), Vec::new());
+    for writer in writers {
+        offsets.push(writer.values.len());
+        band_names.push(writer.band_name);
+        if rows.is_empty() {
+            // take the first non-empty band's buffers instead of copying them
+            (rows, cols, data) = (writer.rows, writer.cols, writer.values);
+        } else {
+            rows.extend(writer.rows);
+            cols.extend(writer.cols);
+            data.extend(writer.values);
+        }
     }
-}
 
-impl<N> ToSparseArray<N> for Vec<SparseArrayWriter<N>>
-where
-    N: RasterDtype,
-{
-    fn finish(self, ctx: RasterizeContext<N>) -> SparseArray<N> {
-        let (band_names, rows, cols, data, offsets) = self.into_iter().fold(
-            (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()),
-            |(mut band_names, mut rows, mut cols, mut data, mut offsets), writer| {
-                offsets.push(writer.values.len());
-                band_names.push(writer.band_name);
-                rows.extend(writer.rows);
-                cols.extend(writer.cols);
-                data.extend(writer.values);
-                (band_names, rows, cols, data, offsets)
-            },
-        );
-
-        SparseArray::new(band_names, rows, cols, data, offsets, ctx)
-    }
+    SparseArray::new(band_names, rows, cols, data, offsets, ctx)
 }
 
 impl<N: Num> SparseArrayWriter<N> {
