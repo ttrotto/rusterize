@@ -1,18 +1,21 @@
-use crate::geo::edges::LineEdge;
+use crate::geo::{edges::LineEdge, raster::RasterInfo};
 use fixedbitset::FixedBitSet;
 
 /// Cache pixels when `all_touched` is the burn strategy and [`PixelFunction`] is `Sum` or `Count`.
 /// Pass 1 -> burn interior and exterior lines and record visited pixels.
 /// Pass 2 -> fill inner values and skip visited from pass 1.
+#[derive(Default)]
 pub(crate) struct PixelCache {
     bits: FixedBitSet,
     width: usize,
-    xmin: isize,
-    ymin: isize,
+    height: usize,
+    xmin: usize,
+    ymin: usize,
 }
 
 impl PixelCache {
-    pub(crate) fn new(linedges: &[LineEdge]) -> Self {
+    /// Resize to the bbox of `linedges` and clear all visited pixels.
+    pub(crate) fn reset(&mut self, linedges: &[LineEdge], raster_info: &RasterInfo) {
         let (xmin, ymin, xmax, ymax) = linedges.iter().fold(
             (f64::MAX, f64::MAX, f64::MIN, f64::MIN),
             |(xmin, ymin, xmax, ymax), edge| {
@@ -25,35 +28,36 @@ impl PixelCache {
             },
         );
 
-        let width = (xmax.floor() - xmin.floor()) as usize + 1;
-        let length = (ymax.floor() - ymin.floor()) as usize + 1;
+        // only pixels inside the raster are ever burned, so never size the bitset past it
+        let xmin = xmin.floor().max(0.0) as usize;
+        let ymin = ymin.floor().max(0.0) as usize;
+        let xmax = (xmax.floor().max(0.0) as usize).min(raster_info.ncols.saturating_sub(1));
+        let ymax = (ymax.floor().max(0.0) as usize).min(raster_info.nrows.saturating_sub(1));
+        let width = (xmax + 1).saturating_sub(xmin);
+        let height = (ymax + 1).saturating_sub(ymin);
 
-        Self {
-            bits: FixedBitSet::with_capacity(width * length),
-            width,
-            xmin: xmin as isize,
-            ymin: ymin as isize,
+        // never shrink, and only zero the blocks this geometry uses (fill is a memset; set_range goes word by word)
+        let len = width * height;
+        if self.bits.len() < len {
+            self.bits.grow(len);
         }
+        self.bits.as_mut_slice()[..len.div_ceil(usize::BITS as usize)].fill(0);
+        (self.width, self.height, self.xmin, self.ymin) = (width, height, xmin, ymin);
     }
 
+    /// Bit index of a pixel, `None` if it is outside the cached box.
     #[inline]
-    fn unravel_index(&self, x: usize, y: usize) -> usize {
-        let local_x = (x as isize - self.xmin) as usize;
-        let local_y = (y as isize - self.ymin) as usize;
-        local_y * self.width + local_x
+    fn index(&self, x: usize, y: usize) -> Option<usize> {
+        let (local_x, local_y) = (x.wrapping_sub(self.xmin), y.wrapping_sub(self.ymin));
+        (local_x < self.width && local_y < self.height).then(|| local_y * self.width + local_x)
     }
 
+    /// Record a pixel. Returns `true` if it was not visited yet (pixels outside the box are never cached).
     pub(crate) fn insert(&mut self, x: usize, y: usize) -> bool {
-        let idx = self.unravel_index(x, y);
-        if self.bits.contains(idx) {
-            return false;
-        }
-        self.bits.insert(idx);
-        true
+        self.index(x, y).is_none_or(|idx| !self.bits.put(idx))
     }
 
     pub(crate) fn contains(&self, x: usize, y: usize) -> bool {
-        let idx = self.unravel_index(x, y);
-        self.bits.contains(idx)
+        self.index(x, y).is_some_and(|idx| self.bits.contains(idx))
     }
 }
