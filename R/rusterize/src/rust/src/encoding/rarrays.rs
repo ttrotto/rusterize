@@ -1,6 +1,6 @@
 use ndarray::Array3;
 use rusterize::{DenseArray, RasterDtype, SparseArray, prelude::RasterInfo};
-use savvy::{OwnedIntegerSexp, OwnedRealSexp, OwnedStringSexp, Sexp, savvy, savvy_err};
+use savvy::{NotAvailableValue, OwnedIntegerSexp, OwnedRealSexp, OwnedStringSexp, Sexp, savvy, savvy_err};
 
 /// Convert the underlying array in [`rusterize::ArrayBuilder`] to a [`savvy::Sexp`] object.
 /// Note that the returned array from [`rusterize::ArrayBuilder`] has a (band, row, col)
@@ -96,7 +96,7 @@ impl RArray {
     }
 
     fn epsg(&self) -> savvy::Result<Sexp> {
-        let code = self.0.info().epsg.map(|e| e as i32).unwrap_or(0_i32);
+        let code = self.0.info().epsg.map(|e| e as i32).unwrap_or(i32::na());
         OwnedIntegerSexp::try_from_scalar(code)?.into()
     }
 }
