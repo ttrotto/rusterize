@@ -1,4 +1,4 @@
-from osgeo import gdal
+from osgeo import gdal, ogr
 
 import os
 import re
@@ -446,3 +446,76 @@ class TestCustomRaster:
         ).squeeze()
 
         assert np.allclose(r, out_ds.ReadAsArray())
+
+
+# Lines that exercise segment joints, self-crossings, part ends and raster edges. Reference: GDAL with MERGE_ALG=ADD.
+LINE_CASES = {
+    "mls_connected": "MULTILINESTRING ((0.5 9.5, 3.5 9.5), (3.5 9.5, 3.5 6.5))",
+    "mls_disjoint": "MULTILINESTRING ((0.5 9.5, 3.5 9.5), (0.5 5.5, 3.5 5.5))",
+    "ls_corner": "LINESTRING (0.5 9.5, 3.5 9.5, 3.5 6.5)",
+    "ls_self_crossing": "LINESTRING (0.5 0.5, 8.5 8.5, 8.5 0.5, 0.5 8.5)",
+    "ls_diagonal_offset": "LINESTRING (0.2 0.7, 9.3 6.1)",
+    "mls_connected_offset": "MULTILINESTRING ((0.2 0.7, 4.1 3.3), (4.1 3.3, 9.6 9.1))",
+    "ls_closed_ring": "LINESTRING (1.5 1.5, 7.5 1.5, 7.5 7.5, 1.5 7.5, 1.5 1.5)",
+    "ls_degenerate": "LINESTRING (2.5 2.5, 2.5 2.5)",
+    "ls_on_pixel_boundary": "LINESTRING (1 5, 6 5)",
+    "ls_exit_reenter": "LINESTRING (2.5 2.5, 14.5 6.5, 7.5 8.5)",
+    "mls_chain": "MULTILINESTRING ((0.5 0.5, 3.2 4.7), (3.2 4.7, 6.9 2.1), (6.9 2.1, 9.4 9.4))",
+    "mls_cross": "MULTILINESTRING ((0.5 0.5, 9.5 9.5), (0.5 9.5, 9.5 0.5))",
+}
+
+
+def gdal_sum(wkt_geom: str, xres: float, yres: float, all_touched: bool) -> np.ndarray:
+    """Burn 1 with MERGE_ALG=ADD onto a 10x10 world-unit grid"""
+    ds = gdal.GetDriverByName("MEM").Create("", round(10 / xres), round(10 / yres), 1, gdal.GDT_Int32)
+    ds.SetGeoTransform((0, xres, 0, 10, 0, -yres))
+    src = gdal.GetDriverByName("MEM").Create("", 0, 0, 0, gdal.GDT_Unknown)
+    layer = src.CreateLayer("lines")
+    feature = ogr.Feature(layer.GetLayerDefn())
+    feature.SetGeometry(ogr.CreateGeometryFromWkt(wkt_geom))
+    layer.CreateFeature(feature)
+    gdal.RasterizeLayer(ds, [1], layer, burn_values=[1], options=["MERGE_ALG=ADD", f"ALL_TOUCHED={all_touched}"])
+    return ds.ReadAsArray()
+
+
+class TestLines:
+    @pytest.mark.parametrize("all_touched", [False, True])
+    @pytest.mark.parametrize("res", [(1, 1), (1, 0.5), (0.5, 1)], ids=["square", "tall", "wide"])
+    @pytest.mark.parametrize("name", LINE_CASES)
+    def test_sum_matches_gdal(self, name, res, all_touched):
+        # each pixel counts once per geometry, whatever the pixel shape
+        wkt_geom = LINE_CASES[name]
+        xres, yres = res
+        r = rusterize(
+            [wkt_geom],
+            res=res,
+            extent=(0, 0, 10, 10),
+            fun="sum",
+            dtype="int32",
+            background=0,
+            all_touched=all_touched,
+            encoding="numpy",
+        ).squeeze()
+        assert np.array_equal(r, gdal_sum(wkt_geom, xres, yres, all_touched))
+
+
+class TestValues:
+    def test_nan_field_values_are_skipped(self):
+        # second polygon overlaps the first and has a NaN value: it must not burn
+        square = "POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0))"
+        values = [5.0, np.nan]
+        gdf = gpd.GeoDataFrame({"value": values}, geometry=[wkt.loads(square)] * 2)
+        plst = st.GeoDataFrame({"value": values, "geometry": [square] * 2})
+        for data in (gdf, plst):
+            for fun in ("last", "sum"):
+                r = rusterize(data, res=(1, 1), field="value", fun=fun, background=0, encoding="numpy")
+                assert not np.isnan(r).any() and np.max(r) == 5.0, f"{type(data).__name__} {fun}"
+
+    @pytest.mark.parametrize("burn", [np.array([1.0, np.nan, 1.0, 1.0, 1.0]), np.array([1, 300, 1, 1, 1])])
+    def test_unrepresentable_burn_values_raise(self, burn):
+        with pytest.raises(ValueError, match="cannot be represented as uint8"):
+            rusterize(GDF, res=(1, 1), burn=burn, dtype="uint8", encoding="numpy")
+
+    def test_invalid_dtype_raises(self):
+        with pytest.raises(ValueError, match="Invalid dtype"):
+            rusterize(GDF, res=(1, 1), dtype="int128", encoding="numpy")
