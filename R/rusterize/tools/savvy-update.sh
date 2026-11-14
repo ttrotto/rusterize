@@ -4,5 +4,5 @@
 set -euo pipefail
 
 pkg="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-
+cd "$pkg"
 Rscript -e "savvy::savvy_update('${pkg}'); devtools::document('${pkg}')"
