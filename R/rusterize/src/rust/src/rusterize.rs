@@ -3,7 +3,7 @@ use crate::{
     encoding::rarrays::{RArray, RArrayTraits},
     geo::{parse_geometry::parse_geometry, raster::build_raster_info},
 };
-use geo::Geometry;
+use geo::{Geometry, GeometryCollection};
 use num_traits::One;
 use rusterize::prelude::*;
 use savvy::{
@@ -24,19 +24,27 @@ where
     };
 
     let source;
+    let mut geometry = ctx.geometry;
     let field = match ctx.rfield.or(ctx.rburn) {
         Some(v) => {
             source = FromR::<Vec<A::Dtype>>::try_from(v)?.0;
             if source.len() == 1 {
                 FieldSource::Scalar(source[0])
             } else {
+                for (geom, value) in geometry.iter_mut().zip(&source) {
+                    // do not burn geometries that have empty field value (e.g. integer output and field value NA)
+                    if value.is_na() {
+                        // replace the geometry with an empty one so raster extent remains
+                        *geom = Geometry::GeometryCollection(GeometryCollection::empty());
+                    }
+                }
                 FieldSource::from(&source)
             }
         }
         None => FieldSource::Scalar(<A::Dtype>::one()),
     };
 
-    // `by` is an unclassed factor: 1-based integer codes + `levels`. NA becomes an out-of-range code, rejected by the core
+    // `by` is an unclassed factor if 1-based integer codes + `levels`. NA becomes an out-of-range code
     let by = match ctx.rby {
         Some(f) => {
             let labels = f
@@ -45,7 +53,7 @@ where
             let labels = FromR::<Vec<String>>::try_from(labels)?.0;
             let codes: Vec<u32> = IntegerSexp::try_from(f)?
                 .iter()
-                .map(|&c| c.checked_sub(1).map_or(u32::MAX, |c| c as u32))
+                .map(|&c| if c.is_na() { u32::MAX } else { (c - 1) as u32 })
                 .collect();
             Some((codes, labels))
         }
@@ -61,7 +69,7 @@ where
         all_touched: ctx.all_touched,
     };
 
-    let array = ctx.geometry.rasterize::<A>(rctx).map_err(|e| savvy_err!("{}", e))?;
+    let array = geometry.rasterize::<A>(rctx).map_err(|e| savvy_err!("{}", e))?;
     Ok(RArray(Box::new(array)))
 }
 

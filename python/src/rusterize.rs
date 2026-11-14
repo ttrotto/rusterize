@@ -4,7 +4,7 @@ use crate::{
     prelude::*,
 };
 use num_traits::One;
-use numpy::{Element, PyReadonlyArray1};
+use numpy::{Element, PyArray1, PyArrayMethods, PyReadonlyArray1};
 use polars::prelude::*;
 use pyo3::{
     conversion::FromPyObject,
@@ -12,7 +12,7 @@ use pyo3::{
     prelude::*,
     types::PyAny,
 };
-use pyo3_polars::PyDataFrame;
+use pyo3_polars::PySeries;
 use rusterize::prelude::*;
 
 macro_rules! dispatch_rusterize {
@@ -25,7 +25,7 @@ macro_rules! dispatch_rusterize {
                 ($str_val, "xarray" | "numpy") => rusterize_py_impl::<DenseArray<$rust_type>>($py, $ctx),
                 ($str_val, "sparse") => rusterize_py_impl::<SparseArray<$rust_type>>($py, $ctx),
             )*
-            _ => unimplemented!("Invalid dtype or encoding provided."),
+            _ => return Err(PyValueError::new_err("Invalid dtype or encoding provided.")),
         }
     };
 }
@@ -35,8 +35,7 @@ struct Context<'py> {
     raster_info: RasterInfo,
     pixel_fn: PixelFunction,
     pybackground: Option<&'py Bound<'py, PyAny>>,
-    df: Option<DataFrame>,
-    pyfield: Option<&'py str>,
+    pycolumn: Option<PySeries>,
     pyby_codes: Option<PyReadonlyArray1<'py, u32>>,
     pyby_labels: Option<Vec<String>>,
     pyburn: Option<&'py Bound<'py, PyAny>>,
@@ -53,37 +52,30 @@ where
         .and_then(|inner| inner.extract().ok())
         .unwrap_or_default();
 
-    let prepared = match &ctx.df {
-        Some(df) => {
-            let mut exprs: Vec<Expr> = Vec::new();
-            if let Some(field) = ctx.pyfield {
-                exprs.push(col(field).cast(<A::Dtype>::polars_dtype()).alias("field"));
-            }
-            Some(
-                df.clone()
-                    .lazy()
-                    .select(exprs)
-                    .collect()
-                    .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
-            )
-        }
-        _ => None,
-    };
-
     let arr: PyReadonlyArray1<A::Dtype>;
-
-    let field = match (&prepared, ctx.pyfield) {
-        (Some(df), Some(_)) => FieldSource::Column(df.column("field").unwrap().clone()),
-        _ => match ctx.pyburn {
-            None => FieldSource::Scalar(<A::Dtype>::one()),
-            Some(b) => match b.extract::<A::Dtype>() {
-                Ok(scalar) => FieldSource::Scalar(scalar),
-                Err(_) => {
-                    arr = b.extract::<PyReadonlyArray1<A::Dtype>>()?;
-                    FieldSource::Array(arr.as_array())
-                }
-            },
+    let field = match (ctx.pycolumn, ctx.pyburn) {
+        (Some(s), _) => {
+            let ca = Series::from(s)
+                .strict_cast(&<A::Dtype>::polars_dtype())
+                .map_err(|e| PyValueError::new_err(e.to_string()))?
+                .unpack::<<A::Dtype as PolarsHandler>::ChunkedArrayType>()
+                .map_err(|e| PyValueError::new_err(e.to_string()))?
+                .clone();
+            FieldSource::Polars(ca)
+        }
+        (None, Some(b)) => match b.cast::<PyArray1<A::Dtype>>() {
+            Ok(a) => {
+                arr = a.readonly();
+                FieldSource::Array(arr.as_array())
+            }
+            Err(_) => {
+                let scalar = b
+                    .extract::<A::Dtype>()
+                    .map_err(|_| PyValueError::new_err("`burn` must be a scalar or 1D array matching `dtype`"))?;
+                FieldSource::Scalar(scalar)
+            }
         },
+        (None, None) => FieldSource::Scalar(<A::Dtype>::one()),
     };
 
     // nulls arrive as out-of-range codes and are rejected by the core
@@ -112,15 +104,14 @@ where
 
 #[pyfunction]
 #[pyo3(name = "_rusterize")]
-#[pyo3(signature = (geometry, raw_raster_info, pypixel_fn, pydf=None, pyfield=None, pyby_codes=None, pyby_labels=None, pyburn=None, pybackground=None, pytouched=false, pyencoding="xarray", pydtype="float64"))]
+#[pyo3(signature = (geometry, raw_raster_info, pypixel_fn, pycolumn=None, pyby_codes=None, pyby_labels=None, pyburn=None, pybackground=None, pytouched=false, pyencoding="xarray", pydtype="float64"))]
 #[allow(clippy::too_many_arguments)]
 fn rusterize_py<'py>(
     py: Python<'py>,
     geometry: ParsedGeometry,
     raw_raster_info: RawRasterInfo,
     pypixel_fn: &'py str,
-    pydf: Option<PyDataFrame>,
-    pyfield: Option<&'py str>,
+    pycolumn: Option<PySeries>,
     pyby_codes: Option<PyReadonlyArray1<'py, u32>>,
     pyby_labels: Option<Vec<String>>,
     pyburn: Option<&'py Bound<PyAny>>,
@@ -129,7 +120,6 @@ fn rusterize_py<'py>(
     pyencoding: &str,
     pydtype: &str,
 ) -> PyResult<PyOutput<'py>> {
-    let df: Option<DataFrame> = pydf.map(|inner| inner.into());
     let raster_info = raw_raster_info
         .build(geometry.as_ref())
         .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -143,8 +133,7 @@ fn rusterize_py<'py>(
         raster_info,
         pixel_fn,
         pybackground,
-        df,
-        pyfield,
+        pycolumn,
         pyby_codes,
         pyby_labels,
         pyburn,
