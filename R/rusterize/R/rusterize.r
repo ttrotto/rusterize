@@ -62,7 +62,9 @@ rusterize <- function(
   }
 
   epsg <- sf::st_crs(data)$epsg
-  if (is.na(epsg)) epsg <- NULL
+  if (is.na(epsg)) {
+    epsg <- NULL
+  }
   bounds <- NULL
   res <- NULL
   shape <- NULL
@@ -125,16 +127,16 @@ rusterize <- function(
     if (!(by %in% names(data))) {
       stop(sprintf("Column `%s` not found in dataframe.", by))
     }
-    # integer codes + `levels` in first-seen order (same band order as Python); NAs stay NA and are rejected in Rust.
-    # match() instead of factor(): factor() converts every value to a string first
+    # integer codes + `levels` in first-seen order. NAs stay NA and are rejected in Rust.
+    # match() instead of factor() because it converts every value to a string first
     x <- data[[by]]
-    lv <- NULL
+    levs <- NULL
     if (is.factor(x)) {
-      lv <- levels(x)
+      levs <- levels(x)
       x <- as.integer(x)
     }
     u <- unique(x[!is.na(x)])
-    structure(match(x, u), levels = as.character(if (is.null(lv)) u else lv[u]))
+    structure(match(x, u), levels = as.character(if (is.null(levs)) u else levs[u]))
   }
 
   raw_raster_info <- list(shape = shape, extent = bounds, resolution = res, tap = tap, epsg = epsg)
@@ -181,6 +183,8 @@ rusterize <- function(
     vals = array
   )
   epsg <- r_array$epsg()
-  if (!is.na(epsg)) terra::crs(out) <- paste0("EPSG:", epsg)
+  if (!is.na(epsg)) {
+    terra::crs(out) <- paste0("EPSG:", epsg)
+  }
   out
 }
