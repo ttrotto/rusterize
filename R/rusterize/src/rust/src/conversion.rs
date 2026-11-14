@@ -6,21 +6,6 @@ use savvy::{
 /// A generic structure wrapping a type extracted from a generic [`savvy::Sexp`].
 pub(crate) struct FromR<T>(pub(crate) T);
 
-impl<T> TryFrom<Sexp> for FromR<Option<T>>
-where
-    T: TryFrom<Sexp, Error = SavvyError>,
-{
-    type Error = SavvyError;
-
-    fn try_from(value: Sexp) -> SavvyResult<FromR<Option<T>>> {
-        if value.is_null() {
-            Ok(FromR(None))
-        } else {
-            T::try_from(value).map(|v| FromR(Some(v)))
-        }
-    }
-}
-
 impl TryFrom<NumericSexp> for FromR<Vec<i32>> {
     type Error = SavvyError;
 
@@ -34,17 +19,6 @@ impl TryFrom<NumericSexp> for FromR<Vec<f64>> {
 
     fn try_from(value: NumericSexp) -> SavvyResult<FromR<Vec<f64>>> {
         Ok(FromR(value.as_slice_f64().to_vec()))
-    }
-}
-
-impl<T> TryFrom<NumericScalar> for FromR<Option<T>>
-where
-    FromR<T>: TryFrom<NumericScalar, Error = SavvyError>,
-{
-    type Error = SavvyError;
-
-    fn try_from(value: NumericScalar) -> SavvyResult<FromR<Option<T>>> {
-        FromR::<T>::try_from(value).map(|w| FromR(Some(w.0)))
     }
 }
 
