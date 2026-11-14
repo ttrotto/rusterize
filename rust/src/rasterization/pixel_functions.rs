@@ -56,7 +56,7 @@ fn sum_values<N>(array: &mut ArrayViewMut2<N>, y: usize, x: usize, value: N, bg:
 where
     N: Num + AddAssign + NaNAware + Copy,
 {
-    if array[[y, x]] == bg || array[[y, x]].is_nan() || value.is_nan() {
+    if array[[y, x]] == bg || array[[y, x]].is_nan() {
         array[[y, x]] = value;
     } else {
         array[[y, x]] += value;
