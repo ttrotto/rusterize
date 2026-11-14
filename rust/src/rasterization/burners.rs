@@ -15,12 +15,15 @@ use num_traits::Num;
 const EPSILON_INTERSECT: f64 = 1e-4;
 const TOLERANCE: f64 = 1e-9;
 
-pub struct Standard;
+pub struct StandardBase<const DEDUP: bool>;
+pub type Standard = StandardBase<false>;
+pub type StandardCached = StandardBase<true>;
+
 pub struct AllTouchedBase<const DEDUP: bool>;
 pub type AllTouched = AllTouchedBase<false>;
 pub type AllTouchedCached = AllTouchedBase<true>;
 
-/// Strategy for burning a single [`geo::Linestring`].
+/// Strategy for burning a single [`geo::LineString`].
 /// `all_touched` burns all pixels that are touched by the line.
 pub(crate) trait LineBurnStrategy {
     const IS_ALL_TOUCHED: bool;
@@ -32,9 +35,9 @@ pub(crate) trait LineBurnStrategy {
         W: PixelWriter<N>;
 }
 
-impl LineBurnStrategy for Standard {
+impl<const DEDUP: bool> LineBurnStrategy for StandardBase<DEDUP> {
     const IS_ALL_TOUCHED: bool = false;
-    const REQUIRES_DEDUP: bool = false;
+    const REQUIRES_DEDUP: bool = DEDUP;
 
     #[cfg_attr(feature = "hotpath", hotpath::measure)]
     fn burn_line<N, W>(linedges: &[LineEdge], raster_info: &RasterInfo, field_value: N, writer: &mut W, background: N)
@@ -48,9 +51,8 @@ impl LineBurnStrategy for Standard {
 
         let nrows = raster_info.nrows as isize;
         let ncols = raster_info.ncols as isize;
-        let last_idx = linedges.len() - 1;
 
-        for (idx, edge) in linedges.iter().enumerate() {
+        for edge in linedges {
             let mut ix0 = edge.x0.floor() as isize;
             let ix1 = edge.x1.floor() as isize;
             let mut iy0 = edge.y0.floor() as isize;
@@ -83,8 +85,8 @@ impl LineBurnStrategy for Standard {
                 }
             }
 
-            // rasterize last pixel if very last and geometry is not closed
-            if idx == last_idx && !edge.is_closed && ix0 >= 0 && ix0 < ncols && iy0 >= 0 && iy0 < nrows {
+            // the loop stops before the end pixel: burn it for every segment, dedup handles shared vertices
+            if ix0 >= 0 && ix0 < ncols && iy0 >= 0 && iy0 < nrows {
                 writer.write(iy0 as usize, ix0 as usize, field_value, background);
             }
         }

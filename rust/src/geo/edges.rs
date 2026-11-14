@@ -55,24 +55,17 @@ impl PolyEdge {
     }
 }
 
-/// Represent the edges of a single [`geo::Linestring`].
+/// Represent the edges of a single [`geo::LineString`].
 pub(crate) struct LineEdge {
     pub x0: f64,
     pub y0: f64,
     pub x1: f64,
     pub y1: f64,
-    pub is_closed: bool,
 }
 
 impl LineEdge {
-    fn new(x0: f64, y0: f64, x1: f64, y1: f64, is_closed: bool) -> Self {
-        Self {
-            x0,
-            y0,
-            x1,
-            y1,
-            is_closed,
-        }
+    fn new(x0: f64, y0: f64, x1: f64, y1: f64) -> Self {
+        Self { x0, y0, x1, y1 }
     }
 }
 
@@ -112,7 +105,6 @@ pub(crate) fn extract_ring(edges: &mut Vec<PolyEdge>, line: &LineString<f64>, ra
 pub(crate) fn extract_line(edges: &mut Vec<LineEdge>, line: &LineString<f64>, raster_info: &RasterInfo) {
     let rows = raster_info.nrows as f64;
     let cols = raster_info.ncols as f64;
-    let is_closed = line.is_closed();
 
     for w in line.0.windows(2) {
         // world-to-pixel conversion
@@ -128,7 +120,7 @@ pub(crate) fn extract_line(edges: &mut Vec<LineEdge>, line: &LineString<f64>, ra
 
         // only keep if inside the raster
         if min_x < cols && max_x >= 0.0 && min_y < rows && max_y >= 0.0 {
-            edges.push(LineEdge::new(x0, y0, x1, y1, is_closed));
+            edges.push(LineEdge::new(x0, y0, x1, y1));
         }
     }
 }

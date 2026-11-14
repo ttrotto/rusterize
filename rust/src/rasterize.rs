@@ -7,7 +7,7 @@ use crate::{
     prelude::{ByGroups, RasterDtype, RasterizeContext},
     rasterization::{
         burn_geometry::{Buffers, Burn},
-        burners::{AllTouched, AllTouchedCached, LineBurnStrategy, Standard},
+        burners::{AllTouched, AllTouchedCached, LineBurnStrategy, Standard, StandardCached},
     },
 };
 use geo::Geometry;
@@ -61,9 +61,10 @@ impl<'a, N: RasterDtype> TryFrom<Column> for FieldSource<'a, N> {
 macro_rules! dispatch {
     ($all_touched:expr, $dedup:expr, $geoms:expr, $ctx:expr, $writer:expr, $idx:expr) => {
         match ($all_touched, $dedup) {
-            (true, true) => process::<N, _, AllTouchedCached, _>($geoms, $ctx, $writer, $idx),
-            (true, false) => process::<N, _, AllTouched, _>($geoms, $ctx, $writer, $idx),
-            (false, _) => process::<N, _, Standard, _>($geoms, $ctx, $writer, $idx),
+            (true, true) => process::<_, _, AllTouchedCached, _>($geoms, $ctx, $writer, $idx),
+            (true, false) => process::<_, _, AllTouched, _>($geoms, $ctx, $writer, $idx),
+            (false, true) => process::<_, _, StandardCached, _>($geoms, $ctx, $writer, $idx),
+            (false, false) => process::<_, _, Standard, _>($geoms, $ctx, $writer, $idx),
         }
     };
 }

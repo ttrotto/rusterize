@@ -111,8 +111,8 @@ pub struct RasterizeContext<'a, N: RasterDtype> {
     pub all_touched: bool,
 }
 
-impl<'a, N> RasterizeContext<'a, N> {
+impl<'a, N: RasterDtype> RasterizeContext<'a, N> {
     pub(crate) fn requires_dedup(&self) -> bool {
-        self.all_touched && matches!(self.pixel_fn, PixelFunction::Sum | PixelFunction::Count)
+        matches!(self.pixel_fn, PixelFunction::Sum | PixelFunction::Count)
     }
 }

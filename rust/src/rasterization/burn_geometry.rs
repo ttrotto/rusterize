@@ -22,7 +22,7 @@ pub(crate) struct Buffers {
     pixel_cache: PixelCache,
 }
 
-/// Burn a single [`geo::Geometry`] onto a [`DenseArray`] or [`SparseArray`].
+/// Burn a single [`geo::Geometry`] onto a [`DenseArray`](crate::DenseArray) or [`SparseArray`](crate::SparseArray).
 pub(crate) trait Burn<N, W>
 where
     N: Num + Copy,
@@ -229,8 +229,7 @@ where
         linedges, pixel_cache, ..
     } = buffers;
 
-    // handle cases when pixels are not squares
-    if raster_info.xres != raster_info.yres || S::REQUIRES_DEDUP {
+    if S::REQUIRES_DEDUP {
         pixel_cache.reset(linedges, raster_info);
         let mut line_writer = LineWriter::new(writer, pixel_cache);
         S::burn_line(linedges, raster_info, field_value, &mut line_writer, background)
