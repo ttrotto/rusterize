@@ -41,7 +41,7 @@ impl_maybe_nan_for_int!(u8, u16, u32, u64, i8, i16, i32, i64);
 /// Handle polars dtypes and conversions.
 #[cfg(feature = "polars")]
 pub trait PolarsHandler: polars::prelude::Literal + Send + Sync {
-    type ChunkedArrayType: polars::prelude::PolarsNumericType<Native = Self> + 'static;
+    type ChunkedArrayType: polars::prelude::PolarsNumericType<Native = Self> + Clone + 'static;
     fn polars_dtype() -> polars::prelude::DataType;
     fn from_named_vec(name: &str, vec: &[Self]) -> polars::prelude::Column
     where
@@ -96,7 +96,7 @@ pub struct ByGroups<'a> {
 
 /// Spatial + value context handed to the rasterization engine.
 #[derive(Clone)]
-pub struct RasterizeContext<'a, N> {
+pub struct RasterizeContext<'a, N: RasterDtype> {
     /// The spatial information of the final raster.
     pub raster_info: RasterInfo,
     /// The values to burn.

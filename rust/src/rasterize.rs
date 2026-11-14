@@ -18,22 +18,43 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterato
 use polars::prelude::*;
 
 /// Source of values to burn onto a [`DenseArray`] or [`SparseArray`].
+///
+/// NaN values (and nulls in a polars array) are skipped: their geometry burns nothing but still counts toward
+/// the raster extent when that is derived from the geometries.
 #[derive(Clone)]
-pub enum FieldSource<'a, N> {
+pub enum FieldSource<'a, N: RasterDtype> {
     /// A single constant value to burn.
     Scalar(N),
-    /// An array of values each associated to a unique geometry.
+    /// An [`ndarray::Array`] of values each associated to a unique geometry.
     Array(ArrayView1<'a, N>),
+    /// A typed [`polars::chunked_array::ChunkedArray`] of values each associated to a unique geometry.
     #[cfg(feature = "polars")]
-    Column(Column),
+    Polars(ChunkedArray<N::ChunkedArrayType>),
 }
 
 impl<'a, N, T> From<&'a T> for FieldSource<'a, N>
 where
+    N: RasterDtype,
     T: AsRef<[N]> + ?Sized,
 {
     fn from(v: &'a T) -> Self {
-        Self::Array(ArrayView1::from(v.as_ref()))
+        Self::Array(ArrayView1::from(v))
+    }
+}
+
+#[cfg(feature = "polars")]
+impl<'a, N: RasterDtype> TryFrom<Series> for FieldSource<'a, N> {
+    type Error = RusterizeError;
+    fn try_from(v: Series) -> RusterizeResult<Self> {
+        Ok(Self::Polars(v.unpack::<N::ChunkedArrayType>()?.clone()))
+    }
+}
+
+#[cfg(feature = "polars")]
+impl<'a, N: RasterDtype> TryFrom<Column> for FieldSource<'a, N> {
+    type Error = RusterizeError;
+    fn try_from(c: Column) -> RusterizeResult<Self> {
+        c.take_materialized_series().try_into()
     }
 }
 
@@ -73,7 +94,7 @@ where
     type Dtype = N;
 
     fn build(geoms: &[Geometry<f64>], ctx: RasterizeContext<Self::Dtype>) -> RusterizeResult<Self> {
-        assert_matching_len(geoms.len(), &ctx.field, ctx.by)?;
+        validate_inputs(geoms.len(), &ctx.field, ctx.by)?;
 
         let dedup = ctx.requires_dedup();
 
@@ -119,7 +140,7 @@ where
     type Dtype = N;
 
     fn build(geoms: &[Geometry<f64>], ctx: RasterizeContext<Self::Dtype>) -> RusterizeResult<Self> {
-        assert_matching_len(geoms.len(), &ctx.field, ctx.by)?;
+        validate_inputs(geoms.len(), &ctx.field, ctx.by)?;
 
         let dedup = ctx.requires_dedup();
 
@@ -172,19 +193,26 @@ where
         }
         FieldSource::Array(arr) => {
             for i in indices {
-                geoms[i].burn::<S>(&ctx.raster_info, arr[i], writer, ctx.background, &mut buffers);
+                let field_value = arr[i];
+                if !field_value.is_nan() {
+                    geoms[i].burn::<S>(&ctx.raster_info, field_value, writer, ctx.background, &mut buffers);
+                }
             }
         }
         #[cfg(feature = "polars")]
-        FieldSource::Column(col) => {
-            let ca = col.as_materialized_series().unpack::<N::ChunkedArrayType>().unwrap();
+        FieldSource::Polars(ca) => {
             if let Ok(slice) = ca.cont_slice() {
                 for i in indices {
-                    geoms[i].burn::<S>(&ctx.raster_info, slice[i], writer, ctx.background, &mut buffers);
+                    let fv = slice[i];
+                    if !fv.is_nan() {
+                        geoms[i].burn::<S>(&ctx.raster_info, fv, writer, ctx.background, &mut buffers);
+                    }
                 }
             } else {
                 for i in indices {
-                    if let Some(fv) = ca.get(i) {
+                    if let Some(fv) = ca.get(i)
+                        && !fv.is_nan()
+                    {
                         geoms[i].burn::<S>(&ctx.raster_info, fv, writer, ctx.background, &mut buffers);
                     }
                 }
@@ -193,7 +221,7 @@ where
     }
 }
 
-/// Bucket geometry indexes by group code; labels without geometries get no band.
+/// Bucket geometry indexes by group code. Labels without geometries get no band.
 fn group_codes(by: ByGroups<'_>) -> RusterizeResult<Vec<(&String, Vec<usize>)>> {
     let mut buckets = vec![Vec::new(); by.labels.len()];
     for (i, &code) in by.codes.iter().enumerate() {
@@ -214,11 +242,15 @@ fn group_codes(by: ByGroups<'_>) -> RusterizeResult<Vec<(&String, Vec<usize>)>> 
 }
 
 /// Validate length of geometry, field, and by. Must match.
-fn assert_matching_len<N>(n_geoms: usize, field: &FieldSource<N>, by: Option<ByGroups>) -> RusterizeResult<()> {
+fn validate_inputs<N: RasterDtype>(
+    n_geoms: usize,
+    field: &FieldSource<N>,
+    by: Option<ByGroups>,
+) -> RusterizeResult<()> {
     let field_len = match field {
         FieldSource::Array(arr) => Some(arr.len()),
         #[cfg(feature = "polars")]
-        FieldSource::Column(col) => Some(col.len()),
+        FieldSource::Polars(ca) => Some(ca.len()),
         FieldSource::Scalar(_) => None,
     };
 
