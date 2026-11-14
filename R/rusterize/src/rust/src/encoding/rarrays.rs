@@ -3,16 +3,11 @@ use rusterize::{DenseArray, RasterDtype, SparseArray, prelude::RasterInfo};
 use savvy::{NotAvailableValue, OwnedIntegerSexp, OwnedRealSexp, OwnedStringSexp, Sexp, savvy, savvy_err};
 
 /// Convert the underlying array in [`rusterize::ArrayBuilder`] to a [`savvy::Sexp`] object.
-/// Note that the returned array from [`rusterize::ArrayBuilder`] has a (band, row, col)
-/// memory layout, while `terra` reads (row, col, band), which requires reshaping the
-/// array, potentially cloning data.
 fn array_as_sexp<N: ArrayAsSexp + RasterDtype>(array: &Array3<N>) -> savvy::Result<Sexp> {
     let (nbands, nrows, ncols) = array.dim();
-    let dim = vec![nrows as i32, ncols as i32, nbands as i32];
+    let dim = vec![ncols as i32, nrows as i32, nbands as i32];
 
-    let permuted = array.view().permuted_axes([0, 2, 1]);
-    let contiguous = permuted.as_standard_layout();
-    let slice = contiguous.as_slice().ok_or(savvy_err!(r"No array found ¯\_(ツ)_/¯."))?;
+    let slice = array.as_slice().ok_or(savvy_err!(r"No array found ¯\_(ツ)_/¯."))?;
     N::slice_as_sexp(slice, &dim)
 }
 

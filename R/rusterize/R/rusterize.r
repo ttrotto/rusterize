@@ -169,19 +169,21 @@ rusterize <- function(
 # Build a terra::rast from a SparseArray or DenseArray
 .array_to_rast <- function(array, r_array) {
   shape <- dim(array)
+  dim(array) <- NULL
   extent <- r_array$extent()
   out <- terra::rast(
-    nrows = shape[1],
-    ncols = shape[2],
+    nrows = shape[2],
+    ncols = shape[1],
     nlyrs = shape[3],
     xmin = extent[1],
     xmax = extent[3],
     ymin = extent[2],
     ymax = extent[4],
     resolution = r_array$resolution(),
-    names = r_array$names(),
-    vals = array
+    names = r_array$names()
   )
+  # set values after the names because assigning names on a raster that already holds values triggers a full copy
+  terra::values(out) <- array
   epsg <- r_array$epsg()
   if (!is.na(epsg)) {
     terra::crs(out) <- paste0("EPSG:", epsg)
