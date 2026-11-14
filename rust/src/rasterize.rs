@@ -176,7 +176,6 @@ where
 
 /// Burn the geometries at `indices` onto `writer`.
 /// `indices` is `0..len` for a single band, or the group's geometry indexes for multiband.
-#[cfg_attr(feature = "hotpath", hotpath::measure)]
 fn process<N, W, S, I>(geoms: &[Geometry<f64>], ctx: &RasterizeContext<N>, writer: &mut W, indices: I)
 where
     N: RasterDtype,
