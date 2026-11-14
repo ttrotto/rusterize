@@ -85,9 +85,9 @@ test_that("by grouping produces one band per group in (row, col, band) order", {
   geom <- sf::st_sfc(sq(0, 0, 2, 4), sq(2, 0, 4, 4), crs = 4326)
   r <- rusterize_r(wkb(geom), raster_info(), "last", 0, FALSE, "dense", "double", c(10, 20), unclass(factor(c("a", "b"))), NULL)
   m <- r$to_raster()
-  expect_identical(dim(m), c(4L, 4L, 2L))
+  expect_identical(dim(m), c(4L, 4L, 2L)) # (ncols, nrows, nbands)
   expect_identical(r$names(), c("a", "b"))
   # each band equals the single-geometry rasterization of its group
-  expect_equal(m[,, 1], matrix(c(rep(10, 8), rep(0, 8)), 4, 4))
-  expect_equal(m[,, 2], matrix(c(rep(0, 8), rep(20, 8)), 4, 4))
+  expect_equal(t(m[,, 1]), matrix(c(rep(10, 8), rep(0, 8)), 4, 4))
+  expect_equal(t(m[,, 2]), matrix(c(rep(0, 8), rep(20, 8)), 4, 4))
 })

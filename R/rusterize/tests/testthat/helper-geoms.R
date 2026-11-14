@@ -21,8 +21,8 @@ make_two_polys <- function(crs = 4326) {
 # WKB encoding of a geometry column
 wkb <- function(x) sf::st_as_binary(if (inherits(x, "sf")) x$geometry else x)
 
-# Single-band matrix view of a RArray
-r_mat <- function(r) r$to_raster()[,, 1]
+# Single-band (row, col) matrix view of a RArray, whose raw array is indexed [x, y, band]
+r_mat <- function(r) t(r$to_raster()[,, 1])
 
 # RawRasterInfo
 raster_info <- function() {

@@ -107,3 +107,20 @@ test_that("a bare sfc (no attribute table) works with burn", {
   expect_s4_class(r, "SpatRaster")
   expect_true(all(terra::values(r) == 1))
 })
+
+test_that("NA field and burn values burn nothing but keep the extent", {
+  with_na <- two_grp()
+  with_na$value <- c(10L, NA)
+  full <- rusterize(two_grp(), resolution = c(1, 1), field = "value", background = 0)
+  burned <- function(r) sort(unique(as.vector(terra::values(r))), na.last = TRUE)
+
+  for (dtype in c("integer", "double")) {
+    for (fun in c("last", "sum")) {
+      r <- rusterize(with_na, resolution = c(1, 1), field = "value", fun = fun, background = 0, dtype = dtype)
+      expect_equal(as.vector(terra::ext(r)), as.vector(terra::ext(full)))
+      expect_equal(burned(r), c(0, 10))
+    }
+    r <- rusterize(two_grp(), resolution = c(1, 1), burn = c(10, NA), background = 0, dtype = dtype)
+    expect_equal(burned(r), c(0, 10))
+  }
+})
