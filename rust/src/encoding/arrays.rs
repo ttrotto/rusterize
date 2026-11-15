@@ -9,9 +9,12 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, IntoParallelRef
 
 /// A materialized 3-dimensional array containing the burned geometries and spatial information.
 pub struct DenseArray<N> {
-    array: Array3<N>,
-    band_names: Vec<String>,
-    raster_info: RasterInfo,
+    /// Inner array containing the burned geometries
+    pub array: Array3<N>,
+    /// Sorted band names for the array. Defaults to "band_1" for a single band.
+    pub band_names: Vec<String>,
+    /// Spatial information associated with the array.
+    pub raster_info: RasterInfo,
 }
 
 impl<N: Num> DenseArray<N> {
@@ -21,26 +24,6 @@ impl<N: Num> DenseArray<N> {
             band_names,
             raster_info,
         }
-    }
-
-    /// Consume self and extract all fields of the DenseArray.
-    pub fn into_parts(self) -> (Array3<N>, Vec<String>, RasterInfo) {
-        (self.array, self.band_names, self.raster_info)
-    }
-
-    /// Inner array containing the burned geometries
-    pub fn array(&self) -> &Array3<N> {
-        &self.array
-    }
-
-    /// Sorted band names for the array. Defaults to "band_1" for a single band.
-    pub fn band_names(&self) -> &[String] {
-        &self.band_names
-    }
-
-    /// Spatial information associated with the array.
-    pub fn raster_info(&self) -> &RasterInfo {
-        &self.raster_info
     }
 }
 
@@ -61,10 +44,12 @@ impl<N: Num> Triplets<N> {
 /// A sparse array in COOordinate format storing the band/row/col value triplets.
 /// of all burned [`geo::Geometry`].
 pub struct SparseArray<N> {
-    band_names: Vec<String>,
+    /// Band names associated with this array in order of first occurrence.
+    pub band_names: Vec<String>,
     triplets: Triplets<N>,
     offsets: Vec<usize>,
-    raster_info: RasterInfo,
+    /// Spatial information associated with this array
+    pub raster_info: RasterInfo,
     pxfn: PixelFunction,
     background: N,
 }
@@ -92,11 +77,6 @@ where
             pxfn,
             background,
         }
-    }
-
-    /// Get the band names associated with this array.
-    pub fn band_names(&self) -> &[String] {
-        &self.band_names
     }
 
     /// Materialize a [`ndarray::Array3`] from this. Drops spatial information.
@@ -157,11 +137,6 @@ where
 
     pub fn resolution(&self) -> (f64, f64) {
         (self.raster_info.xres, self.raster_info.yres)
-    }
-
-    /// Get spatial information associated with this array.
-    pub fn raster_info(&self) -> &RasterInfo {
-        &self.raster_info
     }
 
     pub fn epsg(&self) -> Option<u16> {

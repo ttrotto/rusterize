@@ -22,41 +22,52 @@ rusterize(
 )
 }
 \arguments{
-\item{data}{An \code{sf} or \code{sfc} object of geometries.}
+\item{data}{An \code{sf} or \code{sfc} object of geometries. All \code{sf}-supported geometries are accepted, including nested
+geometry collections.}
 
-\item{like}{A \code{terra} template used as a spatial blueprint (resolution, dimension, extent).
+\item{like}{A \code{terra::SpatRaster} template used as a spatial blueprint (resolution, dimension, extent).
 Mutually exclusive with \code{resolution}, \code{out_shape}, and \code{extent}.}
 
-\item{resolution}{Pixel resolution as \code{c(xres, yres)} (or a list).}
+\item{resolution}{Pixel resolution as \code{c(xres, yres)} (or a list). Mutually exclusive with \code{out_shape}.}
 
-\item{out_shape}{Output raster dimensions as \code{c(nrows, ncols)} (or a list).}
+\item{out_shape}{Output raster dimensions as \code{c(nrows, ncols)} (or a list). Mutually exclusive with \code{resolution}.}
 
-\item{extent}{Spatial bounding box as \code{c(xmin, ymin, xmax, ymax)} (or a list).}
+\item{extent}{Spatial bounding box as \code{c(xmin, ymin, xmax, ymax)} (or a list). Requires \code{resolution} or
+\code{out_shape} to also be set.}
 
 \item{field}{Column name to use for pixel values. Mutually exclusive with \code{burn}.}
 
-\item{by}{Column used for grouping. Each group is rasterized into a distinct band in the output.}
+\item{by}{Column used for grouping. Each group is rasterized into a distinct band in the output. \code{NA} values
+raise an error; drop them first.}
 
-\item{burn}{A static value or a list of values to apply to each geometries. If a vector, it must match the
-length of the geometry data. Mutually exclusive with \code{field}. If a vector, its dtype should match the output dtype,
-else it will be internally casted.}
+\item{burn}{A static value or a numeric vector of values, one per geometry. If a vector, it must match the
+length of the geometry data. Mutually exclusive with \code{field}. Values are converted to the output \code{dtype};
+with \code{dtype = "integer"}, a value that is not a whole number or is out of range raises an error.}
 
-\item{fun}{Pixel function to use when burning geometries. Available options: \code{sum}, \code{first}, \code{last}, \code{min}, \code{max},
-\code{count}, or \code{any}.}
+\item{fun}{Pixel function to use when burning geometries. Available options: \code{"sum"}, \code{"first"}, \code{"last"},
+\code{"min"}, \code{"max"}, \code{"count"}, or \code{"any"}. \code{"sum"} and \code{"count"} add each pixel at most once per geometry
+(like GDAL's \code{MERGE_ALG=ADD}), even where a line crosses itself. With \code{dtype = "integer"} they wrap around on
+overflow past 2^31 - 1, so use \code{"double"} for very large totals.}
 
-\item{background}{Value assigned to pixels not covered by any geometry. Defaults to NA.}
+\item{background}{Value assigned to pixels not covered by any geometry.}
 
 \item{encoding}{The format of the returned object: \code{"dense"} or \code{"sparse"}.}
 
-\item{all_touched}{If True, every pixel touched by a geometry is burned.}
+\item{all_touched}{If \code{TRUE}, every pixel touched by a geometry is burned.}
 
 \item{tap}{Target Aligned Pixels: aligns the extent to the pixel resolution.}
 
 \item{dtype}{Output data type: \code{"integer"} or \code{"double"}.}
 }
 \value{
-A \code{terra} object or a \code{SparseArray} in COOrdinate format.
+A \code{terra::SpatRaster} when \code{encoding = "dense"}, or a \code{SparseArray} in COOrdinate format when
+\code{encoding = "sparse"}. The raster is always 3-dimensional (band, row, col), even with a single band.
 }
 \description{
-Extremely fast rasterization engine built in Rust for R
+The output grid is defined either from a \code{like} template, or from a combination of \code{resolution},
+\code{out_shape}, and \code{extent}. When no \code{extent} is given, it is derived from the bounding box of \code{data}.
+}
+\details{
+\code{NA} values in a \code{field} column or a \code{burn} vector are skipped: their geometry burns
+nothing, but still counts toward the extent when it is derived from \code{data}.
 }

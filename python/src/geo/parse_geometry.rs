@@ -23,7 +23,7 @@ macro_rules! bail_if_empty_geoms {
     ($identity:ident) => {
         if $identity.is_empty() {
             return Err(PyValueError::new_err(
-                "Could not parse geometry. Only WKT or WKB formats are supported.",
+                "Could not parse geometry. Only shapely.Geometry, WKT, or WKB formats are supported.",
             ));
         }
     };
@@ -75,9 +75,17 @@ impl FromPyObject<'_, '_> for ParsedGeometry {
     }
 }
 
-/// Parse `items` in parallel, `None` if any fails.
-/// Collecting into `Vec<Option<_>>` lets rayon write in place; collecting into `Option<Vec<_>>`
-/// directly gathers chunks in a linked list and copies every geometry again.
+/// Parse `items` in parallel, returning `None` if any item fails to parse.
+///
+/// Collects into `Vec<Option<_>>` first and converts to `Option<Vec<_>>` afterwards is
+/// 1.6–3× faster than collecting into `Option<Vec<_>>`:
+/// - `par_iter().map()` knows its length, so rayon allocates the output once and every
+///   thread writes its results into its own slots.
+/// - Collecting into `Option<Vec<_>>` must stop at the first `None`, so the length is no
+///   longer known. Rayon then has each thread fill its own `Vec`, chains them in a linked
+///   list, and copies every geometry again into the final `Vec`.
+/// - The final `into_iter().collect()` runs on one thread but is cheap: `Option<Geometry>` has the
+///   same size as `Geometry`, so Rust reuses the same allocation and moves each geometry once.
 fn par_parse<T: Sync>(
     items: &[T],
     parse: impl Fn(&T) -> Option<Geometry<f64>> + Sync + Send,
@@ -131,7 +139,7 @@ fn parse_sequence_wkt(input: &Bound<'_, PyAny>) -> PyResult<ParsedGeometry> {
     // borrow every string while holding the GIL, then parse in parallel without it
     let strs = input
         .try_iter()?
-        .map(|item| Ok(item?.extract::<PyBackedStr>()?))
+        .map(|item| item?.extract::<PyBackedStr>())
         .collect::<PyResult<Vec<PyBackedStr>>>()?;
     let geoms = input
         .py()

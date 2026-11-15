@@ -22,6 +22,19 @@ if TYPE_CHECKING:
 __version__ = importlib.metadata.version("rusterize")
 
 
+def _strict_astype(a: np.ndarray, dtype: str) -> np.ndarray:
+    """Check for numpy-path cast to avoid burning values that would naturally fall out of range for the dtype."""
+
+    dt = np.dtype(dtype)
+    if a.dtype == dt:
+        return a
+    if dt.kind in "iu" and a.size:
+        info = np.iinfo(dt)
+        if not (a.min() >= info.min and a.max() <= info.max):
+            raise ValueError(f"`burn`/`field` has values that cannot be represented as {dt} (out of range or NaN).")
+    return a.astype(dt)
+
+
 @overload
 def rusterize(
     data: gpd.GeoDataFrame | gpd.GeoSeries | pl.DataFrame | list | np.ndarray,
@@ -90,7 +103,7 @@ def rusterize(
     burn: int | float | np.ndarray | None = None,
     fun: str = "last",
     background: int | float | None = np.nan,
-    encoding: str = "xarray",
+    encoding: Literal["xarray", "numpy", "sparse"] = "xarray",
     all_touched: bool = False,
     tap: bool = False,
     dtype: str = "float64",
@@ -101,7 +114,7 @@ def rusterize(
     data : geopandas.GeoDataFrame, geopandas.GeoSeries, polars.DataFrame, list, numpy.ndarray
         Input data to rasterize.
 
-        - If polars.DataFrame, it must be have a "geometry" column with geometries stored in WKB or WKT format.
+        - If polars.DataFrame, it must have a "geometry" column with geometries stored in WKB or WKT format.
         - If list or numpy.ndarray, geometries must be in WKT, WKB, or shapely formats (EPSG is not inferred and defaults to None).
     like : xarray.DataArray or xarray.Dataset (default: None)
         Template array used as a spatial blueprint (resolution, shape, extent). Mutually exclusive with `res`, `out_shape`, and `extent`. Requires xarray and rioxarray.
@@ -113,16 +126,20 @@ def rusterize(
         Spatial bounding box defined as (xmin, ymin, xmax, ymax).
     field : `str` (default: None)
         Column name to use for pixel values. Mutually exclusive with `burn`. Not considered when input is list or numpy.ndarray.
+        Values are cast to the output `dtype` like `burn`.
     by : `str` (default: None)
         Column used for grouping. Each group is rasterized into a distinct band in the output. Not considered when input is list or numpy.ndarray.
     burn : `int`, `float`, or `numpy.ndarray` (default: None)
-        A static value or a list of values to apply to each geometries. If a `numpy.ndarray`, it must match the length of the geometry data. Mutually exclusive with `field`.
-        If `burn` is a `numpy.ndarray`, its dtype should match the output `dtype`, otherwise it is internally casted. If `data` is a `geopandas.GeoSeries`, its index is used as `burn` value,
-        unless otherwise specified.
+        A static value or an array of values, one per geometry. If a `numpy.ndarray`, it must match the length of the geometry data. Mutually exclusive with `field`.
+        Values are cast to the output `dtype`; a value that cannot be represented in it (out of range, or NaN for an integer dtype) raises an error.
+        If `data` is a `geopandas.GeoSeries`, its index is used as `burn` value, unless otherwise specified.
     fun : `str` (default: "last")
         Pixel function to use when burning geometries. Available options: `sum`, `first`, `last`, `min`, `max`, `count`, or `any`.
+        `sum` and `count` add each pixel at most once per geometry (like GDAL's `MERGE_ALG=ADD`), even where a line crosses itself.
+        With integer dtypes they wrap around on overflow (e.g. 300 overlaps with `uint8` give 44), so pick a dtype wide enough for the expected totals.
     background : `int` or `float` (default: numpy.nan)
-        Value assigned to pixels not covered by any geometry.
+        Value assigned to pixels not covered by any geometry. A value that is invalid for the output `dtype` (e.g. NaN for `uint8`)
+        falls back to that dtype's default (0).
     encoding : `str` (default: "xarray")
         The format of the returned object: `"xarray"`, `"numpy"`, or `"sparse"`.
     all_touched : `bool` (default: False)
@@ -130,7 +147,7 @@ def rusterize(
     tap : `bool` (default: False)
         Target Aligned Pixels: aligns the extent to the pixel resolution.
     dtype : `str` (default: "float64")
-        Output data type (e.g., `uint8`, `int32`, `float32`).
+        Output data type: `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, or `float64`.
 
     Returns
     -------
@@ -145,10 +162,10 @@ def rusterize(
     Unless `extent` is specified, a half-pixel buffer is applied to avoid missing points on the border.
     The logics dictating the final spatial properties of the rasterized geometries follow those of GDAL.
 
-    If `field` is not in `data`, then a default `burn` value of 1 is rasterized.
+    If neither `field` nor `burn` is given, a value of 1 is burned.
 
-    A `None` value for `dtype` corresponds to the default of that dtype. An illegal value for a dtype will be replaced with the default of that dtype.
-    For example, a `background=np.nan` for `dtype="uint8"` will become `background=0`, where `0` is the default for `uint8`.
+    NaN or null values in a `field` column or a `burn` array are skipped: their geometry burns nothing, but still counts toward the extent when it is
+    inferred from `data`. Null values in the `by` column raise an error; drop them first.
     """
 
     if isinstance(data, (list, np.ndarray)):
@@ -239,7 +256,7 @@ def rusterize(
         try:
             # extent + shape fully determines resolution; passing res too trips the shape/res mutex
             if isinstance(like, xr.Dataset):
-                _shape = tuple(like.sizes[d] for d in ('y', 'x'))
+                _shape = tuple(like.sizes[d] for d in ("y", "x"))
                 if not _shape:
                     raise ValueError("`like` object has no known spatial dimensions.")
             else:
@@ -273,9 +290,10 @@ def rusterize(
             _shape = out_shape
 
     # extract columns of interest, if any
-    df = None
+    column = None
     epsg = None
-    # `by` goes to Rust as integer codes + one label per group; nulls get an out-of-range code that Rust rejects
+
+    # `by` goes to Rust as integer codes + one label per group
     by_codes = None
     by_labels = None
 
@@ -284,11 +302,9 @@ def rusterize(
         case "geopandas":
             epsg = data.crs.to_epsg() if data.crs else None
 
-            # plain numpy/lists, no polars needed
             try:
                 if field:
                     burn = data[field].to_numpy()
-                    field = None
                 if by:
                     by_col = data[by]
             except KeyError as e:
@@ -300,7 +316,7 @@ def rusterize(
                 by_codes = codes.astype(np.uint32)
                 by_labels = labels.astype(str).tolist()
 
-            # plain object array: avoids GeoSeries.geom_type, which computes the type of every row
+            # plain numpy array to match GeoSeries construct
             geometries = np.asarray(data.geometry)
 
         case "polars":
@@ -314,14 +330,17 @@ def rusterize(
 
             try:
                 if field:
-                    df = data.select(pl.col(field))
+                    column = data.get_column(field)
                 if by:
-                    by_col = data.get_column(by).cast(pl.String)
+                    by_col = data.get_column(by)
+                    if by_col.dtype.is_float():
+                        by_col = by_col.fill_nan(None)
+                    by_col = by_col.cast(pl.String)
             except pl.exceptions.ColumnNotFoundError as e:
                 raise KeyError("Column not found in polars DataFrame.") from e
 
             if by:
-                # Enum codes index the labels in first-seen order; Categorical codes point into a global cache
+                # Enum codes index the labels in first-seen order
                 labels = by_col.unique(maintain_order=True).drop_nulls()
                 by_codes = by_col.cast(pl.Enum(labels)).to_physical().cast(pl.UInt32).fill_null(len(labels)).to_numpy()
                 by_labels = labels.to_list()
@@ -330,7 +349,7 @@ def rusterize(
             geometries = data.select(pl.col("geometry")).to_series()
 
         case "geoseries":
-            # plain object array: avoids GeoSeries.geom_type, which computes the type of every row
+            # plain numpy array: avoids GeoSeries.geom_type, which computes the type of every row
             geometries = np.asarray(data.geometry)
             burn = burn if burn is not None else data.index.to_numpy()
 
@@ -344,8 +363,8 @@ def rusterize(
             geometries = data
 
     # check that burn matches the output dtype
-    if isinstance(burn, np.ndarray) and burn.dtype != dtype:
-        burn = np.ascontiguousarray(burn, dtype=dtype)
+    if isinstance(burn, np.ndarray):
+        burn = _strict_astype(burn, dtype)
 
     # RawRasterInfo
     raw_raster_info = {
@@ -360,8 +379,7 @@ def rusterize(
         geometries,
         raw_raster_info,
         fun,
-        df,
-        field,
+        column,
         by_codes,
         by_labels,
         burn,

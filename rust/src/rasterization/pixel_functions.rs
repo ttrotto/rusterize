@@ -4,14 +4,25 @@ use num_traits::Num;
 use std::{ops::AddAssign, str::FromStr};
 
 /// Supported functions to apply to overlapping pixels.
+///
+/// `Sum` and `Count` add each pixel at most once per geometry, even where a line
+/// crosses itself or where the parts of a multi-geometry meet. With integer types they wrap around on overflow
+/// (e.g. 300 overlaps in a `u8` raster give 44), so pick a type wide enough for the expected totals.
 #[derive(Clone, Copy)]
 pub enum PixelFunction {
+    /// Sum of the values of all geometries covering the pixel.
     Sum,
+    /// Value of the first geometry covering the pixel.
     First,
+    /// Value of the last geometry covering the pixel.
     Last,
+    /// Smallest value covering the pixel.
     Min,
+    /// Largest value covering the pixel.
     Max,
+    /// Number of geometries covering the pixel.
     Count,
+    /// 1 if any geometry covers the pixel.
     Any,
 }
 
@@ -33,7 +44,8 @@ impl FromStr for PixelFunction {
 }
 
 impl PixelFunction {
-    /// Apply to the pixel at (y, x). A `match` instead of a fn pointer so it inlines into the burn loops.
+    /// Apply to the pixel at (y, x).
+    /// Note: A `match` instead of a fn pointer so it inlines into the burn hot loops.
     #[inline(always)]
     pub(crate) fn apply<N>(self, array: &mut ArrayViewMut2<N>, y: usize, x: usize, value: N, bg: N)
     where
@@ -51,7 +63,6 @@ impl PixelFunction {
     }
 }
 
-/// Sum values or NaN/background.
 fn sum_values<N>(array: &mut ArrayViewMut2<N>, y: usize, x: usize, value: N, bg: N)
 where
     N: Num + AddAssign + NaNAware + Copy,
@@ -63,7 +74,6 @@ where
     }
 }
 
-/// Set first value only if currently NaN/background.
 fn first_values<N>(array: &mut ArrayViewMut2<N>, y: usize, x: usize, value: N, bg: N)
 where
     N: Num + NaNAware + Copy,
@@ -73,7 +83,6 @@ where
     }
 }
 
-/// Always set last value.
 fn last_values<N>(array: &mut ArrayViewMut2<N>, y: usize, x: usize, value: N, _bg: N)
 where
     N: Num + Copy,
@@ -81,7 +90,6 @@ where
     array[[y, x]] = value;
 }
 
-/// Set value if smaller than current.
 fn min_values<N>(array: &mut ArrayViewMut2<N>, y: usize, x: usize, value: N, bg: N)
 where
     N: Num + NaNAware + PartialOrd + Copy,
@@ -91,7 +99,6 @@ where
     }
 }
 
-/// Set value if larger than current.
 fn max_values<N>(array: &mut ArrayViewMut2<N>, y: usize, x: usize, value: N, bg: N)
 where
     N: Num + NaNAware + PartialOrd + Copy,
@@ -101,7 +108,6 @@ where
     }
 }
 
-/// Count values at position.
 fn count_values<N>(array: &mut ArrayViewMut2<N>, y: usize, x: usize, _value: N, bg: N)
 where
     N: Num + AddAssign + NaNAware + Copy,
@@ -113,7 +119,6 @@ where
     }
 }
 
-/// Mark presence.
 fn any_values<N>(array: &mut ArrayViewMut2<N>, y: usize, x: usize, _value: N, _bg: N)
 where
     N: Num,

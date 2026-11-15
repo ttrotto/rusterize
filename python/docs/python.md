@@ -92,7 +92,7 @@ output = rusterize(
 ).squeeze()
 ```
 
-Finally, you can also create a [`SparseArray`](api.md#sparsearray), that is an object storing the band/row/col value triplets of all pixels that will be materialized in a final raster.
+Finally, you can also create a [`SparseArray`](python_api.md#sparsearray), that is an object storing the band/row/col value triplets of all pixels that will be materialized in a final raster.
 
 ```python
 output = rusterize(
@@ -104,7 +104,7 @@ output = rusterize(
 )
 output
 # SparseArray:
-# - Shape: (131, 361)
+# - Shape: (1, 131, 361)
 # - Extent: (-180.5, -70.5, 180.5, 60.5)
 # - Resolution: (1.0, 1.0)
 # - EPSG: 32619
@@ -138,26 +138,31 @@ output.to_frame()
 
 ## Benchmarks
 
-**rusterize** is fast! Let’s try it on small and large datasets in comparison to GDAL ([benchmark_rusterize.py](https://github.com/ttrotto/rusterize/blob/c3f60249e213753e45e721fb25ebe6519050a884/python/benchmarks/benchmark_rusterize.py)).
+**rusterize** is fast! Let's compare it with GDAL, `rasterio`, and `geocube` on small and large datasets ([benchmark_rusterize.py](https://github.com/ttrotto/rusterize/blob/main/python/benchmarks/benchmark_rusterize.py)):
+
+- **water**: 458,295 lake polygons from CanVec (British Columbia), burned as `float64` at 1/600° (~185 × 105 m). `small` is the first 1,000 lakes, `large` is all of them.
+- **roads**: 2.25M road lines from the Canadian road network, burned as `uint8` at 100 m.
+
 You can run this with [pytest](https://docs.pytest.org/en/stable/) and [pytest-benchmark](https://pytest-benchmark.readthedocs.io/en/stable/):
 
 ```
-pytest <python_file> --benchmark-min-rounds=10 --benchmark-time-unit='s'
-
---------------------------------------------------- benchmark: 8 tests ----------------------------------------------------
-Name (time in s)                  Min      Max     Mean   StdDev   Median      IQR Outliers       OPS   Rounds   Iterations
----------------------------------------------------------------------------------------------------------------------------
-test_water_small_f64_numpy     0.0035   0.0043   0.0036   0.0001   0.0035   0.0002    34;1   279.6455      196            1
-test_water_small_f64           0.0043   0.0057   0.0045   0.0002   0.0044   0.0003    19;4   221.4534      170            1
-test_water_small_gdal_f64      0.0050   0.0053   0.0050   0.0001   0.0050   0.0000   14;13   198.2172      169            1
-test_water_large_f64_numpy     1.1843   1.2668   1.2302   0.0263   1.2288   0.0322     4;0     0.8128       10            1
-test_water_large_f64           1.1843   1.2516   1.2270   0.0206   1.2270   0.0272     3;0     0.8150       10            1
-test_water_large_gdal_f64      1.2955   1.3051   1.3009   0.0031   1.3015   0.0041     3;0     0.7687       10            1
-test_roads_uint8               1.9457   2.0719   1.9922   0.0390   1.9876   0.0486     3;0     0.5019       10            1
-test_roads_gdal_uint8          4.7064   4.7561   4.7278   0.0161   4.7214   0.0265     3;0     0.2115       10            1
-----------------------------------------------------------------------------------------------------------------------------
-
+pytest python/benchmarks/benchmark_rusterize.py --benchmark-min-rounds=10 --benchmark-time-unit='s'
 ```
+
+| Name (time in s)                     |     Min |     Max |    Mean | StdDev |  Median |    IQR | Outliers |     OPS | Rounds | Iterations |
+| ------------------------------------ | ------: | ------: | ------: | -----: | ------: | -----: | -------: | ------: | -----: | ---------: |
+| test_water_small_rusterize_f64_numpy |  0.0234 |  0.0261 |  0.0245 | 0.0010 |  0.0240 | 0.0019 |      7;0 | 40.8730 |     17 |          1 |
+| test_water_small_rusterize_f64       |  0.0572 |  0.1102 |  0.0783 | 0.0220 |  0.0767 | 0.0375 |      1;0 | 12.7754 |     10 |          1 |
+| test_water_small_rasterio_f64        |  0.1614 |  0.1755 |  0.1644 | 0.0047 |  0.1618 | 0.0048 |      2;1 |  6.0846 |     10 |          1 |
+| test_water_small_gdal_f64            |  0.2003 |  0.2062 |  0.2023 | 0.0022 |  0.2014 | 0.0032 |      2;0 |  4.9422 |     10 |          1 |
+| test_water_small_geocube_f64         |  0.2018 |  0.2054 |  0.2027 | 0.0010 |  0.2024 | 0.0004 |      1;1 |  4.9336 |     10 |          1 |
+| test_water_large_rusterize_f64_numpy |  1.5394 |  1.8718 |  1.6995 | 0.0978 |  1.6744 | 0.0257 |      3;3 |  0.5884 |     10 |          1 |
+| test_roads_rusterize_uint8           |  1.5993 |  1.8498 |  1.6906 | 0.0986 |  1.6509 | 0.1911 |      3;0 |  0.5915 |     10 |          1 |
+| test_water_large_rusterize_f64       |  1.6421 |  1.7928 |  1.7359 | 0.0502 |  1.7507 | 0.0106 |      3;3 |  0.5761 |     10 |          1 |
+| test_water_large_gdal_f64            |  2.6929 |  2.9174 |  2.7478 | 0.0729 |  2.7103 | 0.0651 |      2;1 |  0.3639 |     10 |          1 |
+| test_roads_gdal_uint8                |  4.9994 |  5.2544 |  5.1429 | 0.1032 |  5.1632 | 0.1852 |      5;0 |  0.1944 |     10 |          1 |
+| test_water_large_rasterio_f64        | 14.3940 | 14.7211 | 14.5387 | 0.1042 | 14.5063 | 0.1438 |      3;0 |  0.0688 |     10 |          1 |
+| test_water_large_geocube_f64         | 15.1772 | 15.5589 | 15.3685 | 0.1309 | 15.3336 | 0.2235 |      3;0 |  0.0651 |     10 |          1 |
 
 ### Comparison with other tools
 
@@ -165,10 +170,14 @@ While **rusterize** is fast, there are other fast alternatives out there, includ
 Rust-native processing with similar or lower memory footprint that **does not** require you to install GDAL and returns the geoinformation you need for downstream
 processing with ample control over resolution, shape, extent, data type, and encoding.
 
-The following is a time comparison of 10 runs (median) on the same large water bodies dataset used earlier (dtype is `float64`) ([run_others.py](https://github.com/ttrotto/rusterize/blob/c3f60249e213753e45e721fb25ebe6519050a884/python/benchmarks/run_others.py)).
+On the large water bodies dataset, **rusterize** returns a georeferenced `xarray` in 1.75 s (median of 10 runs): **1.5×** faster than GDAL, and **8.3×** and **8.8×**
+faster than `rasterio` and `geocube`. On the 2.25M road lines it is **3.1×** faster than GDAL, and on the small dataset it is **2.1–2.6×** faster than all three.
+Returning a plain `numpy` array instead of an `xarray` is faster still.
 
-```
-rusterize: 1.2 sec
-rasterio:  14.5 sec
-geocube:   124.9 sec
-```
+| Speedup of **rusterize** (median) | vs GDAL | vs rasterio | vs geocube |
+| --------------------------------- | ------: | ----------: | ---------: |
+| water small                       |    2.6× |        2.1× |       2.6× |
+| water large                       |    1.5× |        8.3× |       8.8× |
+| roads                             |    3.1× |           – |          – |
+
+For a fair comparison, every tool burns a value of 1 onto a single band over the same grid, and `geocube` is given a single column to rasterize.

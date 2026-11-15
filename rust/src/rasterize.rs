@@ -306,7 +306,7 @@ mod tests {
         };
 
         let out: DenseArray<f64> = geoms.rasterize(ctx).unwrap();
-        let (raster, _, _) = out.into_parts();
+        let raster = out.array;
         assert_eq!(raster.shape(), &[1, 4, 4]);
         assert!(
             raster.iter().any(|&v| v == 1.0),
@@ -337,7 +337,7 @@ mod tests {
         };
 
         let out: DenseArray<f64> = geoms.rasterize(ctx).unwrap();
-        let (raster, _, _) = out.into_parts();
+        let raster = out.array;
         assert_eq!(raster.shape(), &[2, 4, 4]);
 
         for band in raster.outer_iter() {

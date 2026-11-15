@@ -32,7 +32,7 @@ given, it is derived from the bounding box of `data`.
 geometry collections.
 
 **`like`**
-: A `terra` template used as a spatial blueprint (resolution, dimension, extent). Mutually exclusive
+: A `terra::SpatRaster` template used as a spatial blueprint (resolution, dimension, extent). Mutually exclusive
 with `resolution`, `out_shape`, and `extent`.
 
 **`resolution`**
@@ -49,16 +49,19 @@ with `resolution`, `out_shape`, and `extent`.
 : Column name to use for pixel values. Mutually exclusive with `burn`.
 
 **`by`**
-: Column used for grouping. Each group is rasterized into a distinct band in the output.
+: Column used for grouping. Each group is rasterized into a distinct band in the output. `NA` values
+raise an error.
 
 **`burn`**
-: A static value or a vector of values to apply to each geometry. If a vector, it must match the
-length of the geometry data. Mutually exclusive with `field`. If a vector, its dtype should match the
-output dtype, else it will be internally casted.
+: A static value or a numeric vector of values, one per geometry. If a vector, it must match the
+length of the geometry data. Mutually exclusive with `field`. Values are converted to the output `dtype`;
+with `dtype = "integer"`, a value that is not a whole number or is out of range raises an error.
 
 **`fun`**
 : Pixel function to use when burning geometries. Available options: `"sum"`, `"first"`, `"last"`,
-`"min"`, `"max"`, `"count"`, or `"any"`. Defaults to `"last"`.
+`"min"`, `"max"`, `"count"`, or `"any"`. Defaults to `"last"`. `"sum"` and `"count"` add each pixel at
+most once per geometry, even where a line crosses itself. With `dtype = "integer"` they wrap around on
+overflow past 2^31 - 1, so use `"double"` for very large totals.
 
 **`background`**
 : Value assigned to pixels not covered by any geometry. Defaults to `NA`.
@@ -75,6 +78,11 @@ output dtype, else it will be internally casted.
 
 **`dtype`**
 : Output data type: `"integer"` or `"double"`. Defaults to `"double"`.
+
+### Details
+
+`NA` values in a `field` column or a `burn` vector are skipped: their geometry burns nothing, but
+still counts toward the extent when it is derived from `data`.
 
 ### Returns
 

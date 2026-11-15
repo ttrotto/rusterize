@@ -41,15 +41,15 @@ pub trait RArrayTraits {
 
 impl<N: ArrayAsSexp + RasterDtype> RArrayTraits for DenseArray<N> {
     fn to_raster(&self) -> savvy::Result<Sexp> {
-        array_as_sexp(self.array())
+        array_as_sexp(&self.array)
     }
 
     fn names(&self) -> &[String] {
-        self.band_names()
+        &self.band_names
     }
 
     fn info(&self) -> &RasterInfo {
-        self.raster_info()
+        &self.raster_info
     }
 }
 
@@ -59,11 +59,11 @@ impl<N: ArrayAsSexp + RasterDtype> RArrayTraits for SparseArray<N> {
     }
 
     fn names(&self) -> &[String] {
-        self.band_names()
+        &self.band_names
     }
 
     fn info(&self) -> &RasterInfo {
-        self.raster_info()
+        &self.raster_info
     }
 }
 

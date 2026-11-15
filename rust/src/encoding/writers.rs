@@ -6,12 +6,13 @@ use crate::{
 use ndarray::ArrayViewMut2;
 use num_traits::Num;
 
-/// Trait in charge of writing a pixel onto a [`DenseArray`] or [`SparseArray`].
+/// Trait in charge of writing a pixel onto a [`DenseArray`](crate::DenseArray) or [`SparseArray`].
 pub(crate) trait PixelWriter<N: Num> {
     fn write(&mut self, y: usize, x: usize, value: N, background: N);
 }
 
-/// Writer for interior and exterior [`geo::Linestring`] when `all_touched` is true (pass 1).
+/// Writer that records each pixel and skips repeats within a geometry, used when the pixel function needs
+/// dedup: lines with any strategy, and polygon rings with `all_touched` (pass 1).
 pub struct LineWriter<'a, W> {
     inner: &'a mut W,
     cache: &'a mut PixelCache,
@@ -35,7 +36,8 @@ impl<'a, W> LineWriter<'a, W> {
     }
 }
 
-/// Writer for filling pixels after burning a [`geo::Linestring`] when `all_touched` is true (pass 2).
+/// Writer for the interior of a polygon with `all_touched` when dedup is required (pass 2): skips the pixels
+/// already burned by its rings in pass 1.
 pub struct FillWriter<'a, W> {
     inner: &'a mut W,
     cache: &'a mut PixelCache,
@@ -59,7 +61,7 @@ impl<'a, W> FillWriter<'a, W> {
     }
 }
 
-/// Writer for a [`DenseArray`].
+/// Writer for a [`DenseArray`](crate::DenseArray).
 pub struct DenseArrayWriter<'a, N> {
     band: ArrayViewMut2<'a, N>,
     pxfn: PixelFunction,

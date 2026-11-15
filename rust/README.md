@@ -10,14 +10,14 @@ until it's actually needed.
 
 ```toml
 [dependencies]
-rusterize-rs = "0.1.1"
+rusterize-rs = "0.2.0"
 ```
 
 To include [`polars`](https://docs.rs/polars/latest/polars/) support:
 
 ```toml
 [dependencies]
-rusterize-rs = { version = "0.1.1", features = ["polars"] }
+rusterize-rs = { version = "0.2.0", features = ["polars"] }
 ```
 
 ### Example
@@ -54,4 +54,4 @@ fn example() -> RusterizeResult<()> {
 
 ### Feature flags
 
-- `polars`: Adds `FieldSource::Column` for burning a [`polars`](https://docs.rs/polars/latest/polars/) column.
+- `polars`: Adds `FieldSource::Polars` for burning a typed [`polars`](https://docs.rs/polars/latest/polars/) `ChunkedArray`.

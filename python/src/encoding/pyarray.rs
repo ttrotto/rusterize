@@ -24,7 +24,7 @@ where
     N: Num + Element,
 {
     fn pythonize(self, py: Python, opt_flags: OptionalFlags) -> PyResult<PyOutput> {
-        let (array, band_names, raster_info) = self.into_parts();
+        let (array, band_names, raster_info) = (self.array, self.band_names, self.raster_info);
         let data = array.into_pyarray(py);
 
         if opt_flags.xarray {
@@ -92,7 +92,7 @@ where
     fn to_xarray<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let raster = self.build_array();
         let data = raster.into_pyarray(py);
-        build_xarray(py, self.raster_info(), data, self.band_names())
+        build_xarray(py, &self.raster_info, data, &self.band_names)
     }
 
     fn to_numpy<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {

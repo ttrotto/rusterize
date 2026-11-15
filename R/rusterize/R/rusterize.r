@@ -1,25 +1,37 @@
 #' Extremely fast rasterization engine built in Rust for R
 #'
-#' @param data An `sf` or `sfc` object of geometries.
-#' @param like A `terra` template used as a spatial blueprint (resolution, dimension, extent).
+#' The output grid is defined either from a `like` template, or from a combination of `resolution`,
+#' `out_shape`, and `extent`. When no `extent` is given, it is derived from the bounding box of `data`.
+#'
+#' @param data An `sf` or `sfc` object of geometries. All `sf`-supported geometries are accepted, including nested
+#' geometry collections.
+#' @param like A `terra::SpatRaster` template used as a spatial blueprint (resolution, dimension, extent).
 #' Mutually exclusive with `resolution`, `out_shape`, and `extent`.
-#' @param resolution Pixel resolution as `c(xres, yres)` (or a list).
-#' @param out_shape Output raster dimensions as `c(nrows, ncols)` (or a list).
-#' @param extent Spatial bounding box as `c(xmin, ymin, xmax, ymax)` (or a list).
+#' @param resolution Pixel resolution as `c(xres, yres)` (or a list). Mutually exclusive with `out_shape`.
+#' @param out_shape Output raster dimensions as `c(nrows, ncols)` (or a list). Mutually exclusive with `resolution`.
+#' @param extent Spatial bounding box as `c(xmin, ymin, xmax, ymax)` (or a list). Requires `resolution` or
+#' `out_shape` to also be set.
 #' @param field Column name to use for pixel values. Mutually exclusive with `burn`.
-#' @param by Column used for grouping. Each group is rasterized into a distinct band in the output.
-#' @param burn A static value or a numeric vector to apply to each geometries. If a vector, it must match the
-#' length of the geometry data. Mutually exclusive with `field`. If a vector, its dtype should match the output dtype,
-#' else it will be internally casted.
-#' @param fun Pixel function to use when burning geometries. Available options: `sum`, `first`, `last`, `min`, `max`,
-#' `count`, or `any`.
-#' @param background Value assigned to pixels not covered by any geometry. Defaults to NA.
+#' @param by Column used for grouping. Each group is rasterized into a distinct band in the output. `NA` values
+#' raise an error; drop them first.
+#' @param burn A static value or a numeric vector of values, one per geometry. If a vector, it must match the
+#' length of the geometry data. Mutually exclusive with `field`. Values are converted to the output `dtype`;
+#' with `dtype = "integer"`, a value that is not a whole number or is out of range raises an error.
+#' @param fun Pixel function to use when burning geometries. Available options: `"sum"`, `"first"`, `"last"`,
+#' `"min"`, `"max"`, `"count"`, or `"any"`. `"sum"` and `"count"` add each pixel at most once per geometry
+#' (like GDAL's `MERGE_ALG=ADD`), even where a line crosses itself. With `dtype = "integer"` they wrap around on
+#' overflow past 2^31 - 1, so use `"double"` for very large totals.
+#' @param background Value assigned to pixels not covered by any geometry.
 #' @param encoding The format of the returned object: `"dense"` or `"sparse"`.
-#' @param all_touched If True, every pixel touched by a geometry is burned.
+#' @param all_touched If `TRUE`, every pixel touched by a geometry is burned.
 #' @param tap Target Aligned Pixels: aligns the extent to the pixel resolution.
 #' @param dtype Output data type: `"integer"` or `"double"`.
 #'
-#' @return A `terra` object or a `SparseArray` in COOrdinate format.
+#' @details `NA` values in a `field` column or a `burn` vector are skipped: their geometry burns
+#' nothing, but still counts toward the extent when it is derived from `data`.
+#'
+#' @return A `terra::SpatRaster` when `encoding = "dense"`, or a `SparseArray` in COOrdinate format when
+#' `encoding = "sparse"`. The raster is always 3-dimensional (band, row, col), even with a single band.
 #' @export
 rusterize <- function(
   data,

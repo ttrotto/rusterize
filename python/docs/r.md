@@ -112,27 +112,28 @@ sparse$to_raster()
 
 ## Benchmarks
 
-Check out the Python [benchmarks](python.md#benchmarks) for a comparison with GDAL.
+Check out the Python [benchmarks](python.md#benchmarks) for a comparison with GDAL, `rasterio`, and `geocube`.
 
-Benchmark against `fasterize` ([benchmark_rusterize.r](https://github.com/ttrotto/rusterize/blob/c3f60249e213753e45e721fb25ebe6519050a884/R/rusterize/benchmarks/benchmark.r)) with dtype "double".
-`fasterize` requires a template `raster::RasterLayer` to be built before rasterization, so these benchmarks include the time to generate this template.
+Benchmark against `fasterize` ([benchmark_rusterize.r](https://github.com/ttrotto/rusterize/blob/main/R/rusterize/benchmarks/benchmark_rusterize.r)) on the same water bodies
+dataset and resolution as the Python benchmarks (1/600°, ~185 × 105 m), burning the `perm` field as dtype "double". `small` is the first 1,000 lakes, `large` is all 458,295.
+`fasterize` requires a template `raster::RasterLayer` to be built before rasterization, so these benchmarks include the time to generate this template:
 
-```r
-Unit: seconds
-                expr         min          lq        mean      median          uq         max neval
- rusterize_large_f64  1.51818793  1.66960548  1.78801887  1.71947791  1.84290258  2.26121972    10
- rusterize_small_f64  0.01544157  0.01549703  0.01670145  0.01616975  0.01824702  0.01928829    10
- fasterize_large_f64 36.75667095 37.33715239 40.80729938 40.78636142 44.06979276 45.36614083    10
- fasterize_small_f64  0.06376405  0.06484535  0.08900962  0.07315597  0.07809348  0.25425766    10
-```
+| expr                |     min |      lq |    mean |  median |      uq |     max | neval |
+| ------------------- | ------: | ------: | ------: | ------: | ------: | ------: | ----: |
+| rusterize_large_f64 |  3.2532 |  3.4713 |  4.2505 |  3.8292 |  5.4470 |  6.1742 |    10 |
+| rusterize_small_f64 |  0.2857 |  0.3841 |  0.7996 |  0.4817 |  0.8398 |  2.3760 |    10 |
+| fasterize_large_f64 | 36.9160 | 38.2534 | 40.9715 | 40.2552 | 44.3356 | 46.5481 |    10 |
+| fasterize_small_f64 |  0.1786 |  0.1816 |  0.2567 |  0.2031 |  0.3116 |  0.5180 |    10 |
 
-And without the template creation time (**rusterize** still needs to create the array internally):
+And without the template creation time (**rusterize** still needs to create the raster internally):
 
-```r
-Unit: seconds
-                expr      min       lq     mean   median       uq      max neval
- rusterize_large_f64 1.583420 1.723896 1.906175 1.913970 2.006997 2.377668    10
- rusterize_small_f64 0.013093 0.013721 0.020528 0.014113 0.014475 0.078459    10
- fasterize_large_f64 2.149883 2.684711 3.122519 3.036046 3.461804 4.139388    10
- fasterize_large_f64 0.004977 0.005224 0.005533 0.005357 0.005896 0.006376    10
-```
+| expr                |    min |     lq |   mean | median |     uq |    max | neval |
+| ------------------- | -----: | -----: | -----: | -----: | -----: | -----: | ----: |
+| rusterize_large_f64 | 3.2988 | 3.4865 | 3.6887 | 3.6269 | 3.8646 | 4.2427 |    10 |
+| rusterize_small_f64 | 0.3431 | 0.3463 | 0.6871 | 0.4465 | 1.0102 | 1.4237 |    10 |
+| fasterize_large_f64 | 2.4164 | 2.5119 | 2.9234 | 2.8285 | 2.8804 | 3.9946 |    10 |
+| fasterize_small_f64 | 0.1219 | 0.1231 | 0.2315 | 0.1464 | 0.2244 | 0.8348 |    10 |
+
+Including the template, **rusterize** is about **10×** faster than `fasterize` on the large dataset (3.8 s against 40.3 s, median). With a template already
+built, `fasterize` is faster: most of the time of **rusterize** in R goes into
+building the output `terra::SpatRaster`, while the rasterization itself is fast (see the Python benchmarks).

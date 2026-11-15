@@ -3,7 +3,7 @@ use geo_traits::to_geo::ToGeoGeometry;
 use savvy::{ListSexp, Result as SavvyResult, TypedSexp, savvy_err};
 use wkb::reader::read_wkb;
 
-/// Parse geometries from WKB. Silently drops if a geometry cannot be parsed.
+/// Parse geometries from WKB only
 pub(crate) fn parse_geometry(geoms: ListSexp) -> SavvyResult<Vec<Geometry<f64>>> {
     if geoms.is_empty() {
         return Err(savvy_err!("Geometry list is empty."));
