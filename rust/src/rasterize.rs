@@ -367,4 +367,148 @@ mod tests {
             .is_err()
         );
     }
+
+    // 10 world units square, with `nrows = 10 / yres` and `ncols = 10 / xres`
+    fn raster_10(xres: f64, yres: f64) -> RasterInfo {
+        RasterInfo {
+            ncols: (10.0 / xres) as usize,
+            nrows: (10.0 / yres) as usize,
+            xmin: 0.0,
+            xmax: 10.0,
+            ymin: 0.0,
+            ymax: 10.0,
+            xres,
+            yres,
+            epsg: None,
+        }
+    }
+
+    fn burn<'a>(
+        geoms: &[Geometry<f64>],
+        raster_info: RasterInfo,
+        field: FieldSource<'a, f64>,
+        pixel_fn: PixelFunction,
+        all_touched: bool,
+    ) -> ndarray::Array3<f64> {
+        let ctx = RasterizeContext {
+            raster_info,
+            field,
+            by: None,
+            pixel_fn,
+            background: 0.0,
+            all_touched,
+        };
+        geoms.rasterize::<DenseArray<f64>>(ctx).unwrap().array
+    }
+
+    fn self_crossing_line() -> Geometry<f64> {
+        Geometry::LineString(LineString::from(vec![(0.5, 0.5), (8.5, 8.5), (8.5, 0.5), (0.5, 8.5)]))
+    }
+
+    #[test]
+    fn sum_counts_each_pixel_once_per_geometry() {
+        // a self-crossing line and the shared vertices between segments must not add twice (GDAL MERGE_ALG=ADD)
+        for all_touched in [false, true] {
+            for (xres, yres) in [(1.0, 1.0), (1.0, 0.5), (0.5, 1.0)] {
+                let r = burn(
+                    &[self_crossing_line()],
+                    raster_10(xres, yres),
+                    FieldSource::Scalar(1.0),
+                    PixelFunction::Sum,
+                    all_touched,
+                );
+                let max = r.iter().copied().fold(0.0, f64::max);
+                assert_eq!(max, 1.0, "all_touched={all_touched} res=({xres}, {yres})");
+            }
+        }
+    }
+
+    #[test]
+    fn dedup_does_not_change_coverage() {
+        // `Sum` (deduplicated) and `Last` (not deduplicated) must burn the same pixels
+        for all_touched in [false, true] {
+            let raster = || raster_10(1.0, 0.5);
+            let sum = burn(
+                &[self_crossing_line()],
+                raster(),
+                FieldSource::Scalar(1.0),
+                PixelFunction::Sum,
+                all_touched,
+            );
+            let last = burn(
+                &[self_crossing_line()],
+                raster(),
+                FieldSource::Scalar(1.0),
+                PixelFunction::Last,
+                all_touched,
+            );
+            assert_eq!(sum, last, "all_touched={all_touched}");
+        }
+    }
+
+    #[test]
+    fn multilinestring_burns_end_pixel_of_every_part() {
+        // two disjoint parts, each ending in its own pixel
+        let mls = geo::MultiLineString::new(vec![
+            LineString::from(vec![(0.5, 9.5), (3.5, 9.5)]),
+            LineString::from(vec![(0.5, 5.5), (3.5, 5.5)]),
+        ]);
+        let r = burn(
+            &[Geometry::MultiLineString(mls)],
+            raster_10(1.0, 1.0),
+            FieldSource::Scalar(1.0),
+            PixelFunction::Last,
+            false,
+        );
+        // (x=3.5, y=9.5) -> (row 0, col 3); (x=3.5, y=5.5) -> (row 4, col 3)
+        assert_eq!(r[[0, 0, 3]], 1.0, "end pixel of first part");
+        assert_eq!(r[[0, 4, 3]], 1.0, "end pixel of second part");
+    }
+
+    fn two_overlapping_squares() -> Vec<Geometry<f64>> {
+        let square = || {
+            Geometry::Polygon(Polygon::new(
+                LineString::from(vec![(0.5, 0.5), (3.5, 0.5), (3.5, 3.5), (0.5, 3.5), (0.5, 0.5)]),
+                vec![],
+            ))
+        };
+        vec![square(), square()]
+    }
+
+    #[test]
+    fn nan_array_values_are_skipped() {
+        use ndarray::Array1;
+        let vals = Array1::from(vec![5.0_f64, f64::NAN]);
+        for (name, pixel_fn) in [("last", PixelFunction::Last), ("sum", PixelFunction::Sum)] {
+            let r = burn(
+                &two_overlapping_squares(),
+                raster_4x4(),
+                FieldSource::Array(vals.view()),
+                pixel_fn,
+                false,
+            );
+            assert!(r.iter().all(|v| !v.is_nan()), "{name} burned a NaN");
+            assert!(r.iter().any(|&v| v == 5.0), "{name} dropped the valid value");
+        }
+    }
+
+    #[cfg(feature = "polars")]
+    #[test]
+    fn nan_and_null_typed_array_values_are_skipped() {
+        // no nulls -> contiguous slice path; with a null -> per-item `get` path
+        let contiguous = Float64Chunked::from_slice("v".into(), &[5.0, f64::NAN]);
+        let with_null = Float64Chunked::from_slice_options("v".into(), &[Some(5.0), Some(f64::NAN), None]);
+        let mut geoms = two_overlapping_squares();
+        for (ca, n) in [(contiguous, 2), (with_null, 3)] {
+            geoms.resize(n, geoms[0].clone());
+            for (name, pixel_fn) in [("last", PixelFunction::Last), ("sum", PixelFunction::Sum)] {
+                let r = burn(&geoms, raster_4x4(), FieldSource::Polars(ca.clone()), pixel_fn, false);
+                assert!(r.iter().all(|v| !v.is_nan()), "{name} burned a NaN ({n} values)");
+                assert!(
+                    r.iter().any(|&v| v == 5.0),
+                    "{name} dropped the valid value ({n} values)"
+                );
+            }
+        }
+    }
 }
