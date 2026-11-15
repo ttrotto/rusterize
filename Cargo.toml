@@ -8,13 +8,12 @@ edition = "2024"
 authors = ["Tommaso Trotto <armityle@outlook.it>"]
 license = "MIT"
 repository = "https://github.com/ttrotto/rusterize"
-readme = "README.md"
 categories = ["science::geo"]
 keywords = ["fast", "raster", "geometry"]
 
 [workspace.dependencies]
 geo = "0.33.1"
-geo-types = "0.7.19"
+geo-types = "0.7.20"
 num-traits = "0.2.19"
 rayon = "1.12.0"
 

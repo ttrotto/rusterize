@@ -9,7 +9,7 @@ git clone https://github.com/ttrotto/rusterize.git
 cd rusterize
 
 # install Rust nightly toolchain
-rustup toolchain install nightly-2026-04-01
+rustup toolchain install nightly-2026-11-14
 ```
 
 Test the new contribution depending on the port you're working with.
@@ -18,7 +18,7 @@ Test the new contribution depending on the port you're working with.
 
 Test the codebase and the documentation.
 
-`cargo test -p rusterize-rs` and `cargo test -p rusterize-rs --doc`
+`cargo test -p rusterize-rs --features polars` and `cargo test -p rusterize-rs --doc`
 
 ## Python
 
@@ -31,6 +31,9 @@ uv pip install maturin
 
 # install editable version with unoptimized code
 maturin develop --uv
+
+# install the test dependencies (GDAL's Python bindings need a system GDAL)
+uv pip install pytest gdal geopandas polars-st xarray rioxarray
 
 # test the new contribution
 pytest
