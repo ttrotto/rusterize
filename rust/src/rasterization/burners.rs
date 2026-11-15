@@ -301,9 +301,9 @@ pub(super) fn burn_polygon<N, W>(
         active_edges.sort_unstable_by(|a, b| a.x_at_yline.total_cmp(&b.x_at_yline));
 
         // fill pixels
-        for chunk in active_edges.chunks_exact(2) {
-            let x1 = &chunk[0].x_at_yline;
-            let x2 = &chunk[1].x_at_yline;
+        for [left, right] in active_edges.as_chunks::<2>().0 {
+            let x1 = &left.x_at_yline;
+            let x2 = &right.x_at_yline;
 
             // round down
             let xstart = (x1 + 0.5).floor().clamp(0.0, ncols) as usize;
