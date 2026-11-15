@@ -12,6 +12,9 @@ keywords = { workspace = true }
 [lib]
 name = "rusterize"
 crate-type = ["staticlib", "lib"]
+# shares its library name with the core crate (`rusterize-rs`), which makes rustdoc see two `rusterize`
+# crates when compiling doctests. This crate has none, so skip them.
+doctest = false
 
 [dependencies]
 savvy = "0.11.0"
