@@ -1,0 +1,61 @@
+name: Zenodo
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to archive"
+        required: true
+
+permissions:
+  contents: read
+
+# a Zenodo concept can only have one open draft at a time
+concurrency:
+  group: zenodo
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    env:
+      ZENODO_API: https://zenodo.org/api
+      # concept record: always resolves to the latest version, so the DOI in the README never changes
+      CONCEPT_ID: "21042795"
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      ZENODO_TOKEN: ${{ secrets.ZENODO_TOKEN }}
+    steps:
+      - name: Download the tag's source archive
+        run: curl -sSfL -o "rusterize-${TAG}.zip" "https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${TAG}.zip"
+
+      - name: Publish a new Zenodo version
+        run: |
+          set -euo pipefail
+          api() { curl -sSf -H "Authorization: Bearer ${ZENODO_TOKEN}" "$@"; }
+
+          # the concept id redirects to its newest published version
+          latest=$(curl -sSfL "${ZENODO_API}/records/${CONCEPT_ID}" | jq -r .id)
+          echo "Latest version: ${latest}"
+
+          # open a draft for the new version
+          draft=$(api -X POST "${ZENODO_API}/deposit/depositions/${latest}/actions/newversion" \
+            | jq -r '.links.latest_draft // .links.self')
+          draft_json=$(api "${draft}")
+
+          # drop the files inherited from the previous version, then upload this tag's archive
+          for file_url in $(jq -r '.files[]?.links.self' <<< "${draft_json}"); do
+            api -X DELETE "${file_url}"
+          done
+          file="rusterize-${TAG}.zip"
+          api --upload-file "${file}" "$(jq -r .links.bucket <<< "${draft_json}")/${file}" > /dev/null
+
+          # keep the previous metadata, only bump version and date
+          jq --arg version "${TAG}" --arg date "$(date -u +%F)" \
+            '{metadata: (.metadata | del(.doi) | .version = $version | .publication_date = $date)}' \
+            <<< "${draft_json}" > metadata.json
+          api -X PUT -H "Content-Type: application/json" --data @metadata.json "${draft}" > /dev/null
+
+          doi=$(api -X POST "${draft}/actions/publish" | jq -r .doi)
+          echo "Published https://doi.org/${doi}" | tee -a "${GITHUB_STEP_SUMMARY}"

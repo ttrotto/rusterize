@@ -20,4 +20,4 @@ Check out the latest documentations:
 [![crates.io](https://img.shields.io/crates/v/rusterize-rs)](https://crates.io/crates/rusterize-rs)
 [![Latest version on PyPI](https://img.shields.io/pypi/v/rusterize)](https://pypi.org/project/rusterize)
 [![runiverse](https://ttrotto.r-universe.dev/rusterize/badges/version)](https://ttrotto.r-universe.dev/rusterize)
-[![Zenodo](https://zenodo.org/badge/DOI/10.5281/21042796.svg)](https://doi.org/10.5281/zenodo.21042796)
+[![Zenodo](https://zenodo.org/badge/DOI/10.5281/zenodo.21042795.svg)](https://doi.org/10.5281/zenodo.21042795)
